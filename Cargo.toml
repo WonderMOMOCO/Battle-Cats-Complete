@@ -4,8 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [features]
-# By default, decryption is OFF
-default = ["dev"]
+default = []
 dev = ["aes", "cbc", "ecb", "block-padding", "md5", "hex"]
 
 [dependencies]
