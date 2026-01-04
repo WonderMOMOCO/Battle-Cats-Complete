@@ -8,17 +8,6 @@ default = []
 dev = ["aes", "cbc", "ecb", "block-padding", "md5", "hex"]
 
 [dependencies]
-# Core encryption standard
-aes = { version = "0.8", optional = true }
-# Modes identified (CBC and ECB)
-cbc = { version = "0.1", optional = true }
-ecb = { version = "0.1", optional = true }
-# Handling padding removal
-block-padding = { version = "0.3", optional = true }
-# Key hashing ("pack", "battlecats")
-md5 = { version = "0.7", optional = true }
-# Reading hex strings
-hex = { version = "0.4", optional = true }
 # GUI framework
 eframe = { version = "0.29", features = ["persistence"] }
 # Handles icon/images
@@ -33,3 +22,16 @@ regex = "1"
 rayon = "1.10"
 # Handles persistance
 serde = { version = "1", features = ["derive"] }
+
+[target.'cfg(all())'.dependencies]
+# Core encryption standard
+aes = { version = "0.8", optional = true }
+# Modes identified (CBC and ECB)
+cbc = { version = "0.1", optional = true }
+ecb = { version = "0.1", optional = true }
+# Handling padding removal
+block-padding = { version = "0.3", optional = true }
+# Key hashing ("pack", "battlecats")
+md5 = { version = "0.7", optional = true }
+# Reading hex strings
+hex = { version = "0.4", optional = true }
