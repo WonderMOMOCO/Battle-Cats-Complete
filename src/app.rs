@@ -1,6 +1,5 @@
 use eframe::egui;
 use crate::{main_menu, import_data, cat_data, settings};
-use crate::functions::SoftReset; // <--- Updated import
 
 #[derive(PartialEq, Clone, Copy)]
 enum Page {
@@ -46,11 +45,52 @@ impl Default for BattleCatsApp {
 
 impl BattleCatsApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        if let Some(storage) = cc.storage {
-            return eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default();
-        }
-        Default::default()
+        let mut app: Self = if let Some(storage) = cc.storage {
+            eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default()
+        } else {
+            Default::default()
+        };
+
+        setup_custom_fonts(&cc.egui_ctx);
+
+        app.cat_list_state.restart_scan(&app.settings.game_language);
+
+        app
     }
+}
+
+fn setup_custom_fonts(ctx: &egui::Context) {
+    let mut fonts = egui::FontDefinitions::default();
+
+    fonts.font_data.insert(
+        "jp_font".to_owned(),
+        egui::FontData::from_static(include_bytes!("../assets/NotoSansJP-Regular.ttf")),
+    );
+    fonts.font_data.insert(
+        "kr_font".to_owned(),
+        egui::FontData::from_static(include_bytes!("../assets/NotoSansKR-Regular.ttf")),
+    );
+    fonts.font_data.insert(
+        "tc_font".to_owned(),
+        egui::FontData::from_static(include_bytes!("../assets/NotoSansTC-Regular.ttf")),
+    );
+    fonts.font_data.insert(
+        "thai_font".to_owned(),
+        egui::FontData::from_static(include_bytes!("../assets/NotoSansThai-Regular.ttf")),
+    );
+
+    // Set fallback priority for both Proportional (UI) and Monospace (Logs)
+    let families = [egui::FontFamily::Proportional, egui::FontFamily::Monospace];
+    for family in families {
+        if let Some(list) = fonts.families.get_mut(&family) {
+            list.push("jp_font".to_owned());
+            list.push("kr_font".to_owned());
+            list.push("tc_font".to_owned());
+            list.push("thai_font".to_owned());
+        }
+    }
+
+    ctx.set_fonts(fonts);
 }
 
 impl eframe::App for BattleCatsApp {
@@ -59,17 +99,17 @@ impl eframe::App for BattleCatsApp {
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        
         self.cat_list_state.update_data();
         if self.cat_list_state.scan_receiver.is_some() {
             ctx.request_repaint();
         }
 
-        let import_finished = self.import_state.update(ctx);
+        let import_finished = self.import_state.update(ctx, &mut self.settings);
         if import_finished {
-            self.cat_list_state.reset();
+            self.cat_list_state.restart_scan(&self.settings.game_language);
         }
 
+        // Apply Global UI Styling
         let mut style = (*ctx.style()).clone();
         style.visuals.window_rounding = egui::Rounding::same(10.0);
         style.visuals.widgets.noninteractive.rounding = egui::Rounding::same(10.0);
@@ -82,6 +122,7 @@ impl eframe::App for BattleCatsApp {
         style.visuals.override_text_color = Some(egui::Color32::WHITE);
         ctx.set_style(style);
 
+        // Page Routing
         match self.current_page {
             Page::MainMenu => main_menu::show(ctx),
             Page::ImportData => {
@@ -92,8 +133,10 @@ impl eframe::App for BattleCatsApp {
             },
             Page::Settings => {
                 let refresh_needed = settings::show(ctx, &mut self.settings);
+                
                 if refresh_needed {
                     self.cat_list_state.cat_list.clear_cache();
+                    self.cat_list_state.restart_scan(&self.settings.game_language);
                 }
             }
         }

@@ -37,7 +37,7 @@ impl Default for CatListState {
             cats: Vec::new(),
             selected_cat: None,
             cat_list: CatList::default(),
-            scan_receiver: Some(scanner::start_scan()),
+            scan_receiver: None,
             search_query: String::new(),
             selected_form: 0,
             
@@ -70,7 +70,7 @@ impl SoftReset for CatListState {
         self.sprite_sheet = SpriteSheet::default(); 
         self.multihit_texture = None; 
 
-        self.scan_receiver = Some(scanner::start_scan());
+        self.scan_receiver = None;
     }
 }
 
@@ -90,6 +90,11 @@ impl CatListState {
                 }
             }
         }
+    }
+
+    pub fn restart_scan(&mut self, language: &str) {
+        self.reset();
+        self.scan_receiver = Some(scanner::start_scan(language.to_string()));
     }
 }
 
