@@ -34,9 +34,15 @@ pub fn show(
 ) {
     let base_dir = std::path::Path::new("game/assets");
     
-    let texture_path = base_dir.join("img015/img015_en.png");
-    let cut_path = base_dir.join("img015/img015_en.imgcut");
-    sprite_sheet.load(ctx, &texture_path, &cut_path);
+    if !settings.game_language.is_empty() {
+        let tex_name = format!("img015/img015_{}.png", settings.game_language);
+        let cut_name = format!("img015/img015_{}.imgcut", settings.game_language);
+        
+        let texture_path = base_dir.join(tex_name);
+        let cut_path = base_dir.join(cut_name);
+        
+        sprite_sheet.load(ctx, &texture_path, &cut_path);
+    }
 
     if multihit_texture.is_none() {
         const MULTIHIT_BYTES: &[u8] = include_bytes!("../../../assets/multihit.png");

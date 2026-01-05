@@ -1,7 +1,8 @@
 # Rust Build Artifacts
 /target/
 
-# My stuff
+# Debugging
+Battle_Cats_Complete.exe
 /stuff/
 
 # Extracted Game Data
