@@ -76,24 +76,42 @@ impl SoftReset for CatListState {
 
 impl CatListState {
     pub fn update_data(&mut self) {
-        if let Some(rx) = &self.scan_receiver {
-            let mut new_data = false;
-            while let Ok(entry) = rx.try_recv() {
-                self.cats.push(entry);
-                new_data = true;
-            }
-            if new_data {
-                self.cats.sort_by_key(|c| c.id);
-                if self.selected_cat.is_none() && !self.cats.is_empty() {
-                    self.selected_cat = Some(self.cats[0].id);
-                    self.cat_list.reset_scroll();
-                }
-            }
+        let Some(rx) = &self.scan_receiver else { return };
+
+        let mut new_data = false;
+        while let Ok(entry) = rx.try_recv() {
+            self.cats.push(entry);
+            new_data = true;
         }
+
+        if !new_data { return; }
+
+        self.cats.sort_by_key(|c| c.id);
+
+        if self.selected_cat.is_some() { return; }
+
+        self.apply_default_selection();
+    }
+
+    fn apply_default_selection(&mut self) {
+        if self.cats.is_empty() { return; }
+
+        if let Some(cat_zero) = self.cats.iter().find(|c| c.id == 0) {
+            self.selected_cat = Some(cat_zero.id);
+            self.cat_list.reset_scroll();
+            return;
+        }
+
+        self.selected_cat = Some(self.cats[0].id);
+        self.cat_list.reset_scroll();
     }
 
     pub fn restart_scan(&mut self, language: &str) {
+        let current_selection = self.selected_cat;
+        
         self.reset();
+        
+        self.selected_cat = current_selection;
         self.scan_receiver = Some(scanner::start_scan(language.to_string()));
     }
 }
@@ -124,27 +142,25 @@ pub fn show(ctx: &egui::Context, state: &mut CatListState, settings: &crate::set
         });
 
     egui::CentralPanel::default().show(ctx, |ui| {
-        if let Some(selected_id) = state.selected_cat {
-            if let Some(cat) = state.cats.iter().find(|c| c.id == selected_id) {
-                
-                cat::show(
-                    ctx, 
-                    ui, 
-                    cat, 
-                    &mut state.selected_form,
-                    &mut state.level_input,   
-                    &mut state.current_level, 
-                    &mut state.detail_texture, 
-                    &mut state.detail_key,
-                    &mut state.sprite_sheet,
-                    &mut state.multihit_texture,
-                    settings
-                );
-            }
-        } else {
-            ui.centered_and_justified(|ui| {
-                ui.label("No Data Found");
-            });
-        }
+        let Some(selected_id) = state.selected_cat else {
+            ui.centered_and_justified(|ui| { ui.label("No Data Found"); });
+            return;
+        };
+
+        let Some(cat) = state.cats.iter().find(|c| c.id == selected_id) else { return };
+        
+        cat::show(
+            ctx, 
+            ui, 
+            cat, 
+            &mut state.selected_form,
+            &mut state.level_input,   
+            &mut state.current_level, 
+            &mut state.detail_texture, 
+            &mut state.detail_key,
+            &mut state.sprite_sheet,
+            &mut state.multihit_texture,
+            settings
+        );
     });
 }
