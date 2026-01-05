@@ -82,6 +82,7 @@ impl CatList {
         self.last_unit_count = 0; 
     }
 
+    #[allow(dead_code)] // Might use this at some point
     pub fn reset_scroll(&mut self) {
         self.scroll_to_top_needed = true;
     }

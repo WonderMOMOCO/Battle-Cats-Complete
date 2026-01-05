@@ -56,26 +56,23 @@ impl Default for CatListState {
 impl SoftReset for CatListState {
     fn reset(&mut self) {
         self.cats.clear();
-        
         self.cat_list.clear_cache();
         self.detail_texture = None;
         self.detail_key.clear();
-    
         self.selected_cat = None;
         self.selected_form = 0; 
         self.search_query.clear(); 
         self.level_input = "50".to_string();
         self.current_level = 50;
-
         self.sprite_sheet = SpriteSheet::default(); 
         self.multihit_texture = None; 
-
         self.scan_receiver = None;
     }
 }
 
 impl CatListState {
     pub fn update_data(&mut self) {
+        // Guard: Exit if no active scanner
         let Some(rx) = &self.scan_receiver else { return };
 
         let mut new_data = false;
@@ -88,30 +85,26 @@ impl CatListState {
 
         self.cats.sort_by_key(|c| c.id);
 
-        if self.selected_cat.is_some() { return; }
-
-        self.apply_default_selection();
-    }
-
-    fn apply_default_selection(&mut self) {
-        if self.cats.is_empty() { return; }
-
-        if let Some(cat_zero) = self.cats.iter().find(|c| c.id == 0) {
-            self.selected_cat = Some(cat_zero.id);
-            self.cat_list.reset_scroll();
-            return;
+        if self.selected_cat.is_none() {
+            self.selected_cat = Some(0);
         }
 
-        self.selected_cat = Some(self.cats[0].id);
-        self.cat_list.reset_scroll();
+        let target_id = self.selected_cat.unwrap();
+        let exists = self.cats.iter().any(|c| c.id == target_id);
+
+        if !exists {
+            return;
+        }
+        
     }
 
     pub fn restart_scan(&mut self, language: &str) {
-        let current_selection = self.selected_cat;
+        let current_selection = self.selected_cat.or(Some(0));
         
         self.reset();
         
         self.selected_cat = current_selection;
+        
         self.scan_receiver = Some(scanner::start_scan(language.to_string()));
     }
 }
@@ -147,7 +140,10 @@ pub fn show(ctx: &egui::Context, state: &mut CatListState, settings: &crate::set
             return;
         };
 
-        let Some(cat) = state.cats.iter().find(|c| c.id == selected_id) else { return };
+        let Some(cat) = state.cats.iter().find(|c| c.id == selected_id) else {
+            ui.centered_and_justified(|ui| { ui.spinner(); });
+            return;
+        };
         
         cat::show(
             ctx, 
