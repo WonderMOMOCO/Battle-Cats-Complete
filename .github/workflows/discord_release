@@ -1,0 +1,35 @@
+name: Notify Discord on Release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Rich Message to Discord
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          # Capture the release notes safely
+          MESSAGE_BODY=$(cat <<EOF
+          ${{ github.event.release.body }}
+          EOF
+          )
+
+          # Prepare body text for JSON
+          CLEAN_BODY=$(echo "$MESSAGE_BODY" | jq -aRs .)
+
+          curl -H "Content-Type: application/json" \
+          -d "{
+            \"content\": \"**${{ github.event.release.name }}**\",
+            \"embeds\": [{
+              \"title\": \"Changelog\",
+              \"url\": \"${{ github.event.release.html_url }}\",
+              \"description\": $CLEAN_BODY,
+              \"color\": 2058496,
+              \"footer\": { \"text\": \"Release Date: ${{ github.event.release.published_at }}\" }
+            }]
+          }" \
+          "$DISCORD_WEBHOOK"
