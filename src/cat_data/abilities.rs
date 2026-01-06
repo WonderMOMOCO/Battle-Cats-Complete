@@ -106,8 +106,10 @@ pub fn collect_ability_data(
     push_ab(&mut grp_body_1, is_omni, definitions::ICON_OMNI_STRIKE, range_desc.clone());
     push_ab(&mut grp_body_1, !is_omni && has_ld, definitions::ICON_LONG_DISTANCE, range_desc);
 
-    if !is_conjure {
-        push_ab(&mut grp_body_1, s.conjure_unit_id > 0, definitions::ICON_CONJURE, "Conjures a Spirit".into());
+if !is_conjure {
+        push_ab(&mut grp_body_1, s.conjure_unit_id > 0, definitions::ICON_CONJURE, 
+            "Conjures a Spirit to the battlefield when tapped\nThis Cat may only be deployed one at a time".into()
+        );
     }
 
     let wave_type = if s.mini_wave_flag > 0 { "Mini-Wave" } else { "Wave" };

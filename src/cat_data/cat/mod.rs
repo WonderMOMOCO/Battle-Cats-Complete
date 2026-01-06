@@ -219,7 +219,6 @@ pub fn show(
                     s.target_traitless > 0;
 
                 if has_any_trait {
-                    ui.add_space(settings.ability_padding_y); 
                     ui.horizontal_wrapped(|ui| {
                         ui.spacing_mut().item_spacing = egui::vec2(settings.ability_padding_x, settings.ability_padding_y);
                         for &line_num in definitions::UI_TRAIT_ORDER {
@@ -259,7 +258,10 @@ pub fn show(
                     });
                 }
 
-                ui.add_space(settings.ability_padding_y);
+                if has_any_trait {
+                    ui.add_space(settings.ability_padding_y); 
+                }
+                
                 render_abilities(ui, s, sprite_sheet, multihit_texture, *current_level, cat.curve.as_ref(), cat.id, settings); 
                 ui.add_space(20.0);
             }

@@ -122,7 +122,6 @@ impl eframe::App for BattleCatsApp {
         style.visuals.override_text_color = Some(egui::Color32::WHITE);
         ctx.set_style(style);
 
-        // Page Routing
         match self.current_page {
             Page::MainMenu => main_menu::show(ctx),
             Page::ImportData => {
@@ -132,7 +131,14 @@ impl eframe::App for BattleCatsApp {
                 cat_data::show(ctx, &mut self.cat_list_state, &self.settings);
             },
             Page::Settings => {
-                let refresh_needed = settings::show(ctx, &mut self.settings);
+                let mut tabs = vec!["General"];
+                for (page_enum, label) in PAGES {
+                    if *page_enum != Page::MainMenu {
+                        tabs.push(label);
+                    }
+                }
+
+                let refresh_needed = settings::show(ctx, &mut self.settings, &tabs);
                 
                 if refresh_needed {
                     self.cat_list_state.cat_list.clear_cache();

@@ -31,10 +31,8 @@ impl Default for SpriteSheet {
 
 impl SpriteSheet {
     pub fn load(&mut self, ctx: &egui::Context, image_path: &Path, cut_path: &Path) {
-        // Check if the thread finished
         self.check_loading_status(ctx);
 
-        // Start loading if needed
         if self.texture.is_none() && !self.loading {
             self.start_loading(ctx, image_path, cut_path);
         }

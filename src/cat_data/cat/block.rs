@@ -20,26 +20,34 @@ pub fn render_abilities(
 
     let (grp_hl1, grp_hl2, grp_b1, grp_b2, grp_footer) = abilities::collect_ability_data(s, level, curve, multihit_tex, false);
     
-    ui.add_space(settings.trait_padding_y);
+
     
+    let mut previous_content = false;
+
     if !grp_hl1.is_empty() { 
         render_icon_row(ui, &grp_hl1, sheet, settings); 
+        previous_content = true;
     }
     
     if !grp_hl2.is_empty() { 
-        ui.add_space(settings.ability_padding_y); 
+        if previous_content { ui.add_space(settings.ability_padding_y); }
         render_icon_row(ui, &grp_hl2, sheet, settings); 
+        previous_content = true;
     }
 
-    if (!grp_hl1.is_empty() || !grp_hl2.is_empty()) && (!grp_b1.is_empty() || !grp_b2.is_empty()) {
-       ui.add_space(settings.ability_padding_y);
+    let has_body = !grp_b1.is_empty() || !grp_b2.is_empty();
+    if has_body {
+       if previous_content { ui.add_space(settings.ability_padding_y); }
+       
+       render_list_view(ui, &grp_b1, sheet, multihit_tex, cat_id, level, curve, s, settings);
+       render_list_view(ui, &grp_b2, sheet, multihit_tex, cat_id, level, curve, s, settings);
+       previous_content = true;
     }
-
-    render_list_view(ui, &grp_b1, sheet, multihit_tex, cat_id, level, curve, s, settings);
-    render_list_view(ui, &grp_b2, sheet, multihit_tex, cat_id, level, curve, s, settings);
 
     if !grp_footer.is_empty() {
-        if grp_b1.is_empty() && grp_b2.is_empty() {
+        let padding_needed = previous_content && !has_body;
+
+        if padding_needed { 
             ui.add_space(settings.ability_padding_y);
         }
         render_icon_row(ui, &grp_footer, sheet, settings); 
@@ -81,7 +89,7 @@ pub fn render_list_view(
         let id = ui.make_persistent_id(format!("conjure_expand_{}", cat_id));
 
         ui.horizontal(|ui| {
-            ui.spacing_mut().item_spacing.x = settings.ability_padding_x;
+            ui.spacing_mut().item_spacing.x = 8.0;
             
             let icon_size = egui::vec2(stats::ICON_SIZE, stats::ICON_SIZE);
             let (rect, _) = ui.allocate_exact_size(icon_size, egui::Sense::hover());
@@ -93,8 +101,8 @@ pub fn render_list_view(
             }
 
             if is_conjure_item {
-                ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x = 8.0;
+                ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                    ui.spacing_mut().item_spacing.x = 7.0;
 
                     expanded = ui.data(|d| d.get_temp::<bool>(id).unwrap_or(settings.expand_spirit_details));
                     text_with_superscript(ui, &item.text);
@@ -118,7 +126,7 @@ pub fn render_list_view(
         }); 
 
         if is_conjure_item && expanded {
-            ui.add_space(settings.ability_padding_y);
+            ui.add_space(3.0);
             
             egui::Frame::none()
                 .fill(egui::Color32::from_black_alpha(220)) 
@@ -134,7 +142,7 @@ pub fn render_list_view(
 
                         let range_txt = format!("Damage: {}\nRange: {}", dmg, conjure_stats.standing_range);
                         ui.horizontal(|ui| {
-                            ui.spacing_mut().item_spacing.x = settings.ability_padding_x;
+                            ui.spacing_mut().item_spacing.x = 8.0;
                             if let Some(sprite) = sheet.get_sprite_by_line(definitions::ICON_AREA_ATTACK) {
                                 ui.add(sprite.fit_to_exact_size(egui::vec2(stats::ICON_SIZE, stats::ICON_SIZE)));
                             }
