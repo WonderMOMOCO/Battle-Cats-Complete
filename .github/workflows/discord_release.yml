@@ -34,12 +34,12 @@ jobs:
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             REL_NAME="${{ steps.latest_release.outputs.name }}"
             REL_URL="${{ steps.latest_release.outputs.url }}"
-            REL_DATE="${{ steps.latest_release.outputs.date }}"
+            REL_DATE=(echo "${{ steps.latest_release.outputs.date }}" | cut -c1-10)
             MESSAGE_BODY=$(cat release_body.txt)
           else
             REL_NAME="${{ github.event.release.name }}"
             REL_URL="${{ github.event.release.html_url }}"
-            REL_DATE="${{ github.event.release.published_at }}"
+            REL_DATE=$(echo "${{ github.event.release.published_at }}" | cut -c1-10)
             MESSAGE_BODY=$(cat <<EOF
           ${{ github.event.release.body }}
           EOF
