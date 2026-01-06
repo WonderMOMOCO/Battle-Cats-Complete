@@ -72,7 +72,7 @@ impl ImportState {
         }
 
         if finished_just_now && self.status_message.contains("Success") {
-            settings.validate_and_update_language();
+            settings.rx_lang = Some(crate::settings::lang::start_scan());
         }
 
         if let Some(trigger_time) = self.reset_trigger {
