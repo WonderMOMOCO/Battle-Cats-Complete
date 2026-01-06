@@ -17,6 +17,7 @@ pub const ICON_SINGLE_ATTACK: usize = 222;
 pub const ICON_AREA_ATTACK: usize = 216;
 pub const ICON_OMNI_STRIKE: usize = 117;
 pub const ICON_LONG_DISTANCE: usize = 217;
+pub const ICON_MULTIHIT: usize = 9999; // Mocking a real icon
 
 
 // Target Abiltiies
@@ -56,7 +57,7 @@ pub const ICON_SURGE: usize = 244;
 pub const ICON_ZOMBIE_KILLER: usize = 265;
 pub const ICON_BARRIER_BREAKER: usize = 269;
 pub const ICON_MINI_WAVE: usize = 298;
-pub const ICON_SHIELD_PEIRCER: usize = 301;
+pub const ICON_SHIELD_PIERCER: usize = 301;
 pub const ICON_SOULSTRIKE: usize = 305;
 pub const ICON_MINI_SURGE: usize = 315;
 pub const ICON_CONJURE: usize = 322;
@@ -116,3 +117,81 @@ pub const UI_TRAIT_ORDER: &[usize] = &[
     ICON_TRAIT_AKU,
     ICON_TRAIT_TRAITLESS,
 ];
+
+// Alt Text Fallbacks
+pub fn get_alt_text(id: usize) -> &'static str {
+    match id {
+        // Traits
+        ICON_TRAIT_RED => "Red",
+        ICON_TRAIT_FLOATING => "Float",
+        ICON_TRAIT_BLACK => "Black",
+        ICON_TRAIT_METAL => "Metal",
+        ICON_TRAIT_ANGEL => "Angel",
+        ICON_TRAIT_ALIEN => "Alien",
+        ICON_TRAIT_ZOMBIE => "Zomb",
+        ICON_TRAIT_RELIC => "Relic",
+        ICON_TRAIT_AKU => "Aku",
+        ICON_TRAIT_TRAITLESS => "White",
+
+        // Abilities
+        ICON_SINGLE_ATTACK => "Singl",
+        ICON_AREA_ATTACK => "Area",
+        ICON_OMNI_STRIKE => "Omni",
+        ICON_LONG_DISTANCE => "LD",
+        ICON_MULTIHIT => "Multi",
+        ICON_ATTACK_ONLY => "AtkOn",
+        ICON_STRONG_AGAINST => "Strng",
+        ICON_RESIST => "Resist",
+        ICON_INSANELY_TOUGH => "Tough",
+        ICON_MASSIVE_DAMAGE => "Massv",
+        ICON_INSANE_DAMAGE => "Insan",
+        ICON_DODGE => "Dodge",
+        ICON_WARP => "Warp",
+        ICON_CURSE => "Curse",
+        ICON_WEAKEN => "Weak",
+        ICON_FREEZE => "Freez",
+        ICON_SLOW => "Slow",
+        ICON_KNOCKBACK => "KB",
+        ICON_EVA_KILLER => "Eva",
+        ICON_WITCH_KILLER => "Witch",
+        ICON_COLOSSUS_SLAYER => "Colos",
+        ICON_BEHEMOTH_SLAYER => "Behem",
+        ICON_SAGE_SLAYER => "Sage",
+        ICON_STRENGTHEN => "Str+",
+        ICON_SURVIVE => "Surv",
+        ICON_BASE_DESTROYER => "Base",
+        ICON_CRITICAL_HIT => "Crit",
+        ICON_DOUBLE_BOUNTY => "2x$",
+        ICON_WAVE => "Wave",
+        ICON_METAL => "Metal",
+        ICON_SAVAGE_BLOW => "Savge",
+        ICON_SURGE => "Surge",
+        ICON_ZOMBIE_KILLER => "Zkill",
+        ICON_BARRIER_BREAKER => "Brkr",
+        ICON_MINI_WAVE => "MiniW",
+        ICON_SHIELD_PIERCER => "Spierc",
+        ICON_SOULSTRIKE => "Soul",
+        ICON_MINI_SURGE => "MiniS",
+        ICON_CONJURE => "Spirit",
+        ICON_METAL_KILLER => "MetKil",
+        ICON_EXPLOSION => "Expl",
+        
+        // Immunities
+        ICON_IMMUNE_CURSE => "NoCur",
+        ICON_IMMUNE_WAVE => "NoWav",
+        ICON_IMMUNE_WEAKEN => "NoWk",
+        ICON_IMMUNE_FREEZE => "NoFrz",
+        ICON_IMMUNE_SLOW => "NoSlw",
+        ICON_IMMUNE_KNOCKBACK => "NoKB",
+        ICON_IMMUNE_TOXIC => "NoTox",
+        ICON_IMMUNE_SURGE => "NoSrg",
+        ICON_IMMUNE_WARP => "NoWrp",
+        ICON_IMMUNE_EXPLOSION => "NoExp",
+        
+        // Block/Counter
+        ICON_WAVE_BLOCK => "W-Blk",
+        ICON_COUNTER_SURGE => "C-Srg",
+
+        _ => "???",
+    }
+}

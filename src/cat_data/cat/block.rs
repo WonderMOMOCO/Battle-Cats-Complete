@@ -3,7 +3,7 @@ use crate::definitions;
 use crate::cat_data::stats::{self, CatRaw};
 use crate::cat_data::abilities::{self, AbilityItem};
 use crate::cat_data::sprites::SpriteSheet;
-use super::utils::text_with_superscript;
+use super::utils::{self, text_with_superscript};
 use crate::settings::Settings; 
 
 pub fn render_abilities(
@@ -17,21 +17,19 @@ pub fn render_abilities(
     settings: &Settings, 
 ) {
     ui.spacing_mut().item_spacing.y = 0.0;
-
     let (grp_hl1, grp_hl2, grp_b1, grp_b2, grp_footer) = abilities::collect_ability_data(s, level, curve, multihit_tex, false);
     
-
-    
     let mut previous_content = false;
+    let main_border = egui::Color32::BLACK; // Standard Border Color
 
     if !grp_hl1.is_empty() { 
-        render_icon_row(ui, &grp_hl1, sheet, settings); 
+        render_icon_row(ui, &grp_hl1, sheet, settings, main_border); 
         previous_content = true;
     }
     
     if !grp_hl2.is_empty() { 
         if previous_content { ui.add_space(settings.ability_padding_y); }
-        render_icon_row(ui, &grp_hl2, sheet, settings); 
+        render_icon_row(ui, &grp_hl2, sheet, settings, main_border); 
         previous_content = true;
     }
 
@@ -39,8 +37,8 @@ pub fn render_abilities(
     if has_body {
        if previous_content { ui.add_space(settings.ability_padding_y); }
        
-       render_list_view(ui, &grp_b1, sheet, multihit_tex, cat_id, level, curve, s, settings);
-       render_list_view(ui, &grp_b2, sheet, multihit_tex, cat_id, level, curve, s, settings);
+       render_list_view(ui, &grp_b1, sheet, multihit_tex, cat_id, level, curve, s, settings, main_border);
+       render_list_view(ui, &grp_b2, sheet, multihit_tex, cat_id, level, curve, s, settings, main_border);
        previous_content = true;
     }
 
@@ -50,11 +48,11 @@ pub fn render_abilities(
         if padding_needed { 
             ui.add_space(settings.ability_padding_y);
         }
-        render_icon_row(ui, &grp_footer, sheet, settings); 
+        render_icon_row(ui, &grp_footer, sheet, settings, main_border); 
     }
 }
 
-pub fn render_icon_row(ui: &mut egui::Ui, items: &Vec<AbilityItem>, sheet: &SpriteSheet, settings: &Settings) {
+pub fn render_icon_row(ui: &mut egui::Ui, items: &Vec<AbilityItem>, sheet: &SpriteSheet, settings: &Settings, border_color: egui::Color32) {
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing = egui::vec2(settings.ability_padding_x, settings.ability_padding_y);
         
@@ -63,7 +61,10 @@ pub fn render_icon_row(ui: &mut egui::Ui, items: &Vec<AbilityItem>, sheet: &Spri
                 ui.add(egui::Image::new((tex_id, egui::vec2(stats::ICON_SIZE, stats::ICON_SIZE))))
             } else if let Some(sprite) = sheet.get_sprite_by_line(item.icon_id) {
                 ui.add(sprite.fit_to_exact_size(egui::vec2(stats::ICON_SIZE, stats::ICON_SIZE)))
-            } else { continue; };
+            } else { 
+                let alt_text = definitions::get_alt_text(item.icon_id);
+                utils::render_fallback_icon(ui, alt_text, border_color) // Use shared helper
+            };
             
             r.on_hover_ui(|ui| { 
                 text_with_superscript(ui, &item.text); 
@@ -82,6 +83,7 @@ pub fn render_list_view(
     curve: Option<&stats::CatLevelCurve>,
     s: &CatRaw,
     settings: &Settings, 
+    border_color: egui::Color32,
 ) {
     for item in items {
         let is_conjure_item = item.icon_id == definitions::ICON_CONJURE;
@@ -98,6 +100,9 @@ pub fn render_list_view(
                 egui::Image::new((tex_id, icon_size)).paint_at(ui, rect);
             } else if let Some(sprite) = sheet.get_sprite_by_line(item.icon_id) {
                 sprite.paint_at(ui, rect);
+            } else {
+                let alt_text = definitions::get_alt_text(item.icon_id);
+                utils::paint_fallback_at(ui, rect, alt_text, border_color);
             }
 
             if is_conjure_item {
@@ -134,6 +139,8 @@ pub fn render_list_view(
                 .inner_margin(8.0)
                 .show(ui, |ui| {
                     
+                    let spirit_border = egui::Color32::WHITE;
+
                     if let Some(conjure_stats) = stats::load_from_id(s.conjure_unit_id) {
                         let dmg = curve.as_ref().map_or(
                             conjure_stats.attack_1, 
@@ -145,6 +152,9 @@ pub fn render_list_view(
                             ui.spacing_mut().item_spacing.x = 8.0;
                             if let Some(sprite) = sheet.get_sprite_by_line(definitions::ICON_AREA_ATTACK) {
                                 ui.add(sprite.fit_to_exact_size(egui::vec2(stats::ICON_SIZE, stats::ICON_SIZE)));
+                            } else {
+                                let alt_text = definitions::get_alt_text(definitions::ICON_AREA_ATTACK);
+                                utils::render_fallback_icon(ui, alt_text, spirit_border);
                             }
                             ui.label(range_txt);
                         });
@@ -153,14 +163,14 @@ pub fn render_list_view(
 
                         let (c_hl1, c_hl2, c_b1, c_b2, c_ft) = abilities::collect_ability_data(&conjure_stats, current_level, curve, multihit_tex, true);
                         
-                        if !c_hl1.is_empty() { render_icon_row(ui, &c_hl1, sheet, settings); }
-                        if !c_hl2.is_empty() { render_icon_row(ui, &c_hl2, sheet, settings); }
+                        if !c_hl1.is_empty() { render_icon_row(ui, &c_hl1, sheet, settings, spirit_border); }
+                        if !c_hl2.is_empty() { render_icon_row(ui, &c_hl2, sheet, settings, spirit_border); }
                         
-                        render_list_view(ui, &c_b1, sheet, multihit_tex, 0, current_level, curve, &conjure_stats, settings);
-                        render_list_view(ui, &c_b2, sheet, multihit_tex, 0, current_level, curve, &conjure_stats, settings);
+                        render_list_view(ui, &c_b1, sheet, multihit_tex, 0, current_level, curve, &conjure_stats, settings, spirit_border);
+                        render_list_view(ui, &c_b2, sheet, multihit_tex, 0, current_level, curve, &conjure_stats, settings, spirit_border);
                         
                         if !c_ft.is_empty() {
-                            render_icon_row(ui, &c_ft, sheet, settings);
+                            render_icon_row(ui, &c_ft, sheet, settings, spirit_border);
                         }
                     } else {
                         ui.label(egui::RichText::new("Spirit data not found").weak());

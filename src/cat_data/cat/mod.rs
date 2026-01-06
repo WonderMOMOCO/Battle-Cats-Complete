@@ -93,7 +93,6 @@ pub fn show(
 
                 if *current_key != expected {
                     *current_key = expected.clone(); 
-                    *texture_cache = None; 
                     
                     let p = std::path::Path::new(&expected);
                     let f = std::path::Path::new("game/cats/uni.png");
@@ -107,7 +106,11 @@ pub fn show(
                             let size = [rgba.width() as usize, rgba.height() as usize];
                             let pixels = rgba.as_flat_samples();
                             *texture_cache = Some(ctx.load_texture("detail_icon", egui::ColorImage::from_rgba_unmultiplied(size, pixels.as_slice()), egui::TextureOptions::LINEAR));
+                        } else {
+                            *texture_cache = None;
                         }
+                    } else {
+                         *texture_cache = None;
                     }
                 }
 
@@ -236,23 +239,28 @@ pub fn show(
                                 _ => false,
                             };
                             if has_trait {
-                                if let Some(sprite) = sprite_sheet.get_sprite_by_line(line_num) {
-                                    let r = ui.add(sprite.fit_to_exact_size(egui::vec2(stats::ICON_SIZE, stats::ICON_SIZE)));
-                                    let tooltip_text = match line_num {
-                                        definitions::ICON_TRAIT_RED => "Targets Red Enemies",
-                                        definitions::ICON_TRAIT_FLOATING => "Targets Floating Enemies",
-                                        definitions::ICON_TRAIT_BLACK => "Targets Black Enemies",
-                                        definitions::ICON_TRAIT_METAL => "Targets Metal Enemies",
-                                        definitions::ICON_TRAIT_ANGEL => "Targets Angel Enemies",
-                                        definitions::ICON_TRAIT_ALIEN => "Targets Alien Enemies",
-                                        definitions::ICON_TRAIT_ZOMBIE => "Targets Zombie Enemies",
-                                        definitions::ICON_TRAIT_RELIC => "Targets Relic Enemies",
-                                        definitions::ICON_TRAIT_AKU => "Targets Aku Enemies",
-                                        definitions::ICON_TRAIT_TRAITLESS => "Targets Traitless Enemies",
-                                        _ => "",
-                                    };
-                                    if !tooltip_text.is_empty() { r.on_hover_text(tooltip_text); }
-                                }
+                                let tooltip_text = match line_num {
+                                    definitions::ICON_TRAIT_RED => "Targets Red Enemies",
+                                    definitions::ICON_TRAIT_FLOATING => "Targets Floating Enemies",
+                                    definitions::ICON_TRAIT_BLACK => "Targets Black Enemies",
+                                    definitions::ICON_TRAIT_METAL => "Targets Metal Enemies",
+                                    definitions::ICON_TRAIT_ANGEL => "Targets Angel Enemies",
+                                    definitions::ICON_TRAIT_ALIEN => "Targets Alien Enemies",
+                                    definitions::ICON_TRAIT_ZOMBIE => "Targets Zombie Enemies",
+                                    definitions::ICON_TRAIT_RELIC => "Targets Relic Enemies",
+                                    definitions::ICON_TRAIT_AKU => "Targets Aku Enemies",
+                                    definitions::ICON_TRAIT_TRAITLESS => "Targets Traitless Enemies",
+                                    _ => "",
+                                };
+                                
+                                let r = if let Some(sprite) = sprite_sheet.get_sprite_by_line(line_num) {
+                                    ui.add(sprite.fit_to_exact_size(egui::vec2(stats::ICON_SIZE, stats::ICON_SIZE)))
+                                } else {
+                                    let alt_text = definitions::get_alt_text(line_num);
+                                    utils::render_fallback_icon(ui, alt_text, egui::Color32::BLACK)
+                                };
+
+                                if !tooltip_text.is_empty() { r.on_hover_text(tooltip_text); }
                             }
                         }
                     });
