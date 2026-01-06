@@ -1,0 +1,76 @@
+name: Auto Build & Draft
+
+on:
+  push:
+    branches: [ "main", "master" ]
+    paths:
+      - 'Cargo.toml' # Runs if version changed
+  workflow_dispatch: # Enables button
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check-version:
+    name: Check Version
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.check.outputs.should_release }}
+      app_version: ${{ steps.get_version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version from Cargo.toml
+        id: get_version
+        run: |
+          VERSION=$(grep "^version" Cargo.toml | head -1 | awk -F '"' '{print $2}')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Found version: $VERSION"
+
+      - name: Check if tag exists
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=${{ steps.get_version.outputs.version }}
+          TAG="v$VERSION"
+          
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "Version $TAG already exists on GitHub."
+            echo "should_release=false" >> $GITHUB_OUTPUT
+          else
+            echo "Version $TAG is new! Proceeding to build."
+            echo "should_release=true" >> $GITHUB_OUTPUT
+          fi
+
+  build-and-release:
+      name: Build Windows Binary
+      needs: check-version
+      if: needs.check-version.outputs.should_release == 'true' || github.event_name == 'workflow_dispatch'
+      runs-on: windows-latest
+      permissions:
+        contents: write
+      steps:
+        - uses: actions/checkout@v4
+
+        - name: Cache Cargo registry
+          uses: actions/cache@v3
+          with:
+            path: |
+              ~/.cargo/registry
+              ~/.cargo/git
+              target
+            key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+        - name: Build Release
+          run: cargo build --release --verbose
+
+        - name: Create Draft Release
+          uses: softprops/action-gh-release@v1
+          with:
+            tag_name: v${{ needs.check-version.outputs.app_version }}
+            name: Battle Cats Complete v${{ needs.check-version.outputs.app_version }}
+            draft: true
+            prerelease: true
+            files: target/release/Battle_Cats_Complete.exe
+            generate_release_notes: true
