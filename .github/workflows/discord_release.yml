@@ -53,7 +53,7 @@ jobs:
           -d "{
             \"content\": \"**$REL_NAME**\",
             \"embeds\": [{
-              \"title\": \"Changelog\",
+              \"title\": \"Release\",
               \"url\": \"$REL_URL\",
               \"description\": $CLEAN_BODY,
               \"color\": 2058496,
