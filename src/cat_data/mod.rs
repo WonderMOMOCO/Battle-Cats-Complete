@@ -72,7 +72,6 @@ impl SoftReset for CatListState {
 
 impl CatListState {
     pub fn update_data(&mut self) {
-        // Guard: Exit if no active scanner
         let Some(rx) = &self.scan_receiver else { return };
 
         let mut new_data = false;

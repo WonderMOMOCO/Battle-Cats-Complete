@@ -6,7 +6,7 @@ use std::env;
 
 use super::game_data_pub as game_data;
 use super::sort;
-use crate::settings::Settings; // NEW IMPORT
+use crate::settings::Settings;
 
 #[derive(PartialEq, Clone, Copy, Debug)]
 pub enum ImportMode {
@@ -71,7 +71,6 @@ impl ImportState {
             ctx.request_repaint();
         }
 
-        // TRIGGER: Auto-detect language on success
         if finished_just_now && self.status_message.contains("Success") {
             settings.validate_and_update_language();
         }

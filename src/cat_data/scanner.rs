@@ -71,6 +71,10 @@ fn process_cat_entry(path: &Path, level_curves: &Vec<CatLevelCurve>, lang: &str)
         path.join("u").exists(),
     ];
 
+    if !forms[1] && id != 673 {
+        return None;
+    }
+
     let mut atk_anim_frames = [0; 4];
     for i in 0..4 {
         if forms[i] {
@@ -92,26 +96,56 @@ fn process_cat_entry(path: &Path, level_curves: &Vec<CatLevelCurve>, lang: &str)
     let img = image::open(&img_path).ok()?;
     let (w, h) = img.dimensions();
 
-    if w <= 14 || h <= 2 { return None; }
-    if !img.pixels().any(|(_, _, pixel)| pixel[3] > 0) { return None; }
+    if (w <= 14 || h <= 2) && id != 673 { 
+        return None; 
+    }
+    if (w > 14 && h > 2) && !img.pixels().any(|(_, _, pixel)| pixel[3] > 0) { 
+        return None; 
+    }
 
     let mut names = vec![String::new(); 4];
     let target_file_id = id + 1;
     let lang_dir = path.join("lang");
-    
-    if let Some(name_file_path) = find_name_file(&lang_dir, target_file_id, lang) {
-        if let Ok(bytes) = fs::read(&name_file_path) {
-            let content = String::from_utf8_lossy(&bytes);
-            let separator = if lang == "ja" { ',' } else { '|' };
 
-            for (i, line) in content.lines().enumerate().take(4) {
-                if let Some(name_part) = line.split(separator).next() {
-                    names[i] = name_part.trim().to_string();
+    let codes_to_try: Vec<&str> = if lang == "au" || lang.is_empty() {
+        SCAN_PRIORITY.iter().filter(|&&c| c != "au").cloned().collect() 
+    } else {
+        vec![lang]
+    };
+
+    for code in codes_to_try {
+        if let Some(name_file_path) = find_name_file_for_code(&lang_dir, target_file_id, code) {
+            if let Ok(bytes) = fs::read(&name_file_path) {
+                let content = String::from_utf8_lossy(&bytes);
+                let separator = if code == "ja" { ',' } else { '|' };
+
+                let mut temp_names = vec![String::new(); 4];
+                let mut found_valid_name = false;
+
+                for (i, line) in content.lines().enumerate().take(4) {
+                    if let Some(name_part) = line.split(separator).next() {
+                        let trimmed = name_part.trim();
+                        
+                        if !trimmed.is_empty() && !looks_like_garbage_id(trimmed) {
+                            found_valid_name = true;
+                            temp_names[i] = trimmed.to_string();
+                        } else {
+                        }
+                    }
+                }
+
+                if found_valid_name {
+                    names = temp_names;
+                    break;
                 }
             }
         }
     }
-
+    
+    if id == 673 && names[0].is_empty() {
+        names[0] = "Cheetah Cat".to_string();
+    }
+    
     let mut stats = vec![None; 4];
     let stats_path = path.join(format!("unit{:03}.csv", target_file_id));
     if let Ok(content) = fs::read_to_string(&stats_path) {
@@ -131,45 +165,28 @@ fn process_cat_entry(path: &Path, level_curves: &Vec<CatLevelCurve>, lang: &str)
     })
 }
 
-fn find_name_file(lang_dir: &Path, target_id: u32, lang: &str) -> Option<PathBuf> {
-    if !lang_dir.exists() || lang.is_empty() { return None; }
+fn looks_like_garbage_id(s: &str) -> bool {
+    s.chars().all(|c| c.is_ascii_digit() || c == '-')
+}
+
+fn find_name_file_for_code(lang_dir: &Path, target_id: u32, code: &str) -> Option<PathBuf> {
+    if !lang_dir.exists() { return None; }
     
-    let codes_to_try: Vec<&str> = if lang == "au" {
-        SCAN_PRIORITY.to_vec()
-    } else {
-        vec![lang]
-    };
+    let suffix = format!("_{}.csv", code);
 
-    for code in codes_to_try {
-        let suffix = format!("_{}.csv", code);
-
-        let found = fs::read_dir(lang_dir).ok()?
-            .flatten()
-            .find_map(|entry| {
-                let name = entry.file_name().to_string_lossy().to_string();
-                
-                if !name.starts_with("Unit_Explanation") || !name.ends_with(&suffix) {
-                    return None;
-                }
-
-                let num_part = name
-                    .trim_start_matches("Unit_Explanation")
-                    .trim_end_matches(&suffix);
-                
-                if let Ok(num) = num_part.parse::<u32>() {
-                    if num == target_id {
-                        return Some(entry.path());
-                    }
-                }
-                None
-            });
-
-        if found.is_some() {
-            return found;
-        }
-    }
-    
-    None
+    fs::read_dir(lang_dir).ok()?
+        .flatten()
+        .find_map(|entry| {
+            let name = entry.file_name().to_string_lossy().to_string();
+            if !name.starts_with("Unit_Explanation") || !name.ends_with(&suffix) {
+                return None;
+            }
+            let num_part = name.trim_start_matches("Unit_Explanation").trim_end_matches(&suffix);
+            if let Ok(num) = num_part.parse::<u32>() {
+                if num == target_id { return Some(entry.path()); }
+            }
+            None
+        })
 }
 
 fn parse_max_frame(content: &str) -> i32 {
