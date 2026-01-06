@@ -1,5 +1,34 @@
 use eframe::egui;
-use image::imageops; 
+use image::imageops;
+
+pub fn paint_fallback_at(ui: &mut egui::Ui, rect: egui::Rect, text: &str, border_color: egui::Color32) {
+    let rounding = 5.5;
+    
+    if ui.is_rect_visible(rect) {
+        ui.painter().rect_stroke(
+            rect,
+            rounding,
+            egui::Stroke::new(1.5, border_color),
+        );
+
+        // Standardizes font size
+        let font_id = egui::FontId::proportional(10.0); 
+        ui.painter().text(
+            rect.center(),
+            egui::Align2::CENTER_CENTER,
+            text,
+            font_id,
+            ui.visuals().text_color(),
+        );
+    }
+}
+
+pub fn render_fallback_icon(ui: &mut egui::Ui, text: &str, border_color: egui::Color32) -> egui::Response {
+    let size = egui::vec2(40.0, 40.0);
+    let (rect, response) = ui.allocate_exact_size(size, egui::Sense::hover());
+    paint_fallback_at(ui, rect, text, border_color);
+    response
+}
 
 pub fn text_with_superscript(ui: &mut egui::Ui, text: &str) {
     if text.contains('^') {

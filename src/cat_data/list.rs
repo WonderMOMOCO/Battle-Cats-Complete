@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::Arc;
 use std::thread;
+use std::time::Instant; 
 use super::scanner::CatEntry;
 use image::imageops;
 
@@ -20,6 +21,7 @@ struct LoadRequest {
 
 pub struct CatList {
     texture_cache: HashMap<u32, egui::TextureHandle>,
+    placeholder_texture: Option<egui::TextureHandle>, 
     tx_request: Sender<LoadRequest>,
     rx_result: Receiver<LoadedImage>,
     pending_requests: HashSet<u32>,
@@ -59,6 +61,7 @@ impl Default for CatList {
 
         Self {
             texture_cache: HashMap::new(),
+            placeholder_texture: None,
             tx_request,
             rx_result,
             pending_requests: HashSet::new(),
@@ -82,12 +85,30 @@ impl CatList {
         self.last_unit_count = 0; 
     }
 
-    #[allow(dead_code)] // Might use this function at some point
+    #[allow(dead_code)] 
     pub fn reset_scroll(&mut self) {
         self.scroll_to_top_needed = true;
     }
 
     pub fn show(&mut self, ctx: &egui::Context, ui: &mut egui::Ui, units: &[CatEntry], selected_id: &mut Option<u32>, search_query: &str, high_banner_quality: bool) {
+        
+        if self.placeholder_texture.is_none() {
+            const BG_BYTES: &[u8] = include_bytes!("../../assets/udi_bg.png");
+            if let Ok(img) = image::load_from_memory(BG_BYTES) {
+                let rgba = img.to_rgba8();
+                let size = [rgba.width() as usize, rgba.height() as usize];
+                let pixels = rgba.as_flat_samples();
+                self.placeholder_texture = Some(ctx.load_texture(
+                    "list_placeholder", 
+                    egui::ColorImage::from_rgba_unmultiplied(size, pixels.as_slice()), 
+                    egui::TextureOptions::LINEAR
+                ));
+            }
+        }
+
+        let start_time = Instant::now();
+        let time_budget_secs = 0.0025; 
+
         while let Ok(loaded) = self.rx_result.try_recv() {
             let texture = ctx.load_texture(
                 format!("unit_{}", loaded.id),
@@ -96,6 +117,11 @@ impl CatList {
             );
             self.texture_cache.insert(loaded.id, texture);
             self.pending_requests.remove(&loaded.id);
+
+            if start_time.elapsed().as_secs_f32() > time_budget_secs {
+                ctx.request_repaint();
+                break;
+            }
         }
 
         if search_query != self.last_search_query || units.len() != self.last_unit_count {
@@ -149,6 +175,7 @@ impl CatList {
         }
 
         let texture = self.texture_cache.get(&unit.id);
+        
         let response = self.render_unit_button(ui, unit, texture, selected_id, 50.0);
         let response_id = response.id; 
 
@@ -217,7 +244,9 @@ impl CatList {
         
         let is_selected = Some(unit.id) == *selected_id;
 
-        if let Some(tex) = texture {
+        let tex_to_draw = texture.or(self.placeholder_texture.as_ref());
+
+        if let Some(tex) = tex_to_draw {
             let size = tex.size_vec2();
             let scale = target_height / size.y;
             let btn_size = size * scale;

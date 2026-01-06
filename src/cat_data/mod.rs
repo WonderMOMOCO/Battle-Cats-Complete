@@ -1,6 +1,7 @@
 use eframe::egui;
-use std::sync::mpsc::Receiver;
+use std::sync::mpsc::{Receiver, TryRecvError};
 use crate::functions::SoftReset;
+use serde::{Deserialize, Serialize};
 
 pub mod scanner;
 pub mod list;
@@ -13,22 +14,38 @@ use scanner::CatEntry;
 use list::CatList;
 use sprites::SpriteSheet;
 
+#[derive(Deserialize, Serialize)]
+#[serde(default)] 
 pub struct CatListState {
+    #[serde(skip)] 
     pub cats: Vec<CatEntry>,
+    
+    #[serde(alias = "persistent_id")] 
     pub selected_cat: Option<u32>,
+    
+    pub search_query: String, 
+    pub selected_form: usize, 
+    pub level_input: String, 
+    pub current_level: i32, 
+
+    #[serde(skip)] 
     pub cat_list: CatList,
+    
+    #[serde(skip)]
     pub scan_receiver: Option<Receiver<CatEntry>>,
-    pub search_query: String,
-    pub selected_form: usize,
     
-    pub level_input: String,
-    pub current_level: i32,
-    
+    #[serde(skip)]
     pub detail_texture: Option<egui::TextureHandle>,
+    #[serde(skip)]
     pub detail_key: String, 
     
+    #[serde(skip)]
     pub sprite_sheet: SpriteSheet, 
+    #[serde(skip)]
     pub multihit_texture: Option<egui::TextureHandle>,
+
+    #[serde(skip)]
+    pub initialized: bool,
 }
 
 impl Default for CatListState {
@@ -49,6 +66,8 @@ impl Default for CatListState {
             
             sprite_sheet: SpriteSheet::default(), 
             multihit_texture: None,
+            
+            initialized: false, 
         }
     }
 }
@@ -75,40 +94,57 @@ impl CatListState {
         let Some(rx) = &self.scan_receiver else { return };
 
         let mut new_data = false;
-        while let Ok(entry) = rx.try_recv() {
-            self.cats.push(entry);
-            new_data = true;
+        let mut scan_complete = false;
+
+        loop {
+            match rx.try_recv() {
+                Ok(entry) => {
+                    self.cats.push(entry);
+                    new_data = true;
+                },
+                Err(TryRecvError::Empty) => break,
+                Err(TryRecvError::Disconnected) => {
+                    scan_complete = true;
+                    break;
+                }
+            }
         }
 
-        if !new_data { return; }
-
-        self.cats.sort_by_key(|c| c.id);
+        if new_data { 
+            self.cats.sort_by_key(|c| c.id);
+        }
 
         if self.selected_cat.is_none() {
             self.selected_cat = Some(0);
         }
-
-        let target_id = self.selected_cat.unwrap();
-        let exists = self.cats.iter().any(|c| c.id == target_id);
-
-        if !exists {
-            return;
-        }
         
+        if scan_complete {
+            if let Some(target) = self.selected_cat {
+                if !self.cats.iter().any(|c| c.id == target) && !self.cats.is_empty() {
+                    self.selected_cat = Some(0);
+                }
+            }
+            self.scan_receiver = None;
+        }
     }
 
     pub fn restart_scan(&mut self, language: &str) {
-        let current_selection = self.selected_cat.or(Some(0));
-        
+        let current_selection = self.selected_cat;
         self.reset();
-        
         self.selected_cat = current_selection;
-        
         self.scan_receiver = Some(scanner::start_scan(language.to_string()));
     }
 }
 
 pub fn show(ctx: &egui::Context, state: &mut CatListState, settings: &crate::settings::Settings) {
+    if !state.initialized {
+        state.initialized = true;
+        if !settings.unit_persistence {
+            state.selected_cat = Some(0);
+            state.cat_list.reset_scroll();
+        }
+    }
+
     egui::SidePanel::left("cat_list_panel")
         .resizable(false)
         .default_width(160.0)
@@ -135,7 +171,7 @@ pub fn show(ctx: &egui::Context, state: &mut CatListState, settings: &crate::set
 
     egui::CentralPanel::default().show(ctx, |ui| {
         let Some(selected_id) = state.selected_cat else {
-            ui.centered_and_justified(|ui| { ui.label("No Data Found"); });
+            ui.centered_and_justified(|ui| { ui.spinner(); });
             return;
         };
 

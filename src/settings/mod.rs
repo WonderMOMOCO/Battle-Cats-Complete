@@ -1,18 +1,22 @@
 use eframe::egui;
 use serde::{Deserialize, Serialize};
 use std::sync::mpsc::Receiver;
+
 pub mod lang;
+pub mod categories; 
 
 #[derive(Serialize, Deserialize)]
 #[serde(default)] 
 pub struct Settings {
     pub high_banner_quality: bool,
+    pub unit_persistence: bool,
     pub expand_spirit_details: bool,
     pub ability_padding_x: f32,
     pub ability_padding_y: f32,
     pub trait_padding_y: f32,
     pub game_language: String, 
     
+    #[serde(skip)] 
     pub active_tab: String,
 
     #[serde(skip)]
@@ -25,12 +29,15 @@ impl Default for Settings {
     fn default() -> Self {
         let mut s = Self {
             high_banner_quality: false,
+            unit_persistence: true,
             expand_spirit_details: false,
             ability_padding_x: 3.0,
             ability_padding_y: 5.0,
             trait_padding_y: 5.0,
             game_language: "".to_string(), 
+            
             active_tab: "General".to_string(),
+            
             available_languages: Vec::new(),
             rx_lang: None,
         };
@@ -58,7 +65,6 @@ pub fn show(ctx: &egui::Context, settings: &mut Settings, tabs: &[&str]) -> bool
         ui.heading("Settings");
         ui.add_space(10.0);
 
-        // --- Tabs ---
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 5.0; 
 
@@ -89,89 +95,26 @@ pub fn show(ctx: &egui::Context, settings: &mut Settings, tabs: &[&str]) -> bool
         ui.add_space(10.0);
 
         egui::ScrollArea::vertical().show(ui, |ui| {
-            match settings.active_tab.as_str() {
-                "General" => {
-                    ui.add_space(5.0);
-                    ui.heading("Visual");
-                    ui.add_space(10.0);
-                    
-                    ui.horizontal(|ui| {
-                        ui.label("Game Language:");
-                        if settings.rx_lang.is_some() { ui.spinner(); }
-
-                        egui::ComboBox::from_id_salt("lang_selector")
-                            .selected_text(lang::get_label_for_code(&settings.game_language))
-                            .show_ui(ui, |ui| {
-                                for (code, label) in lang::LANGUAGE_PRIORITY {
-                                    // Early return pattern in loop (continue)
-                                    if !settings.available_languages.contains(&code.to_string()) { 
-                                        continue; 
-                                    }
-                                    
-                                    if ui.selectable_value(&mut settings.game_language, code.to_string(), *label).clicked() {
-                                        refresh_needed = true;
-                                    }
-                                }
-                                
-                                if ui.selectable_value(&mut settings.game_language, "".to_string(), "None").clicked() {
-                                    refresh_needed = true;
-                                }
-                            });
-                    });
-                },
-
-                "Cat Data" => {
-                    ui.add_space(5.0);
-                    ui.heading("Cat List");
-                    ui.add_space(10.0);
-
-                    ui.horizontal(|ui| {
-                        if toggle_ui(ui, &mut settings.high_banner_quality).changed() {
-                            refresh_needed = true;
-                        }
-                        ui.label("Smooth Banner Scaling");
-                    });
-
-                    ui.add_space(20.0);
-                    ui.heading("Ability Display");
-                    ui.add_space(10.0);
-
-                    ui.horizontal(|ui| {
-                        toggle_ui(ui, &mut settings.expand_spirit_details);
-                        ui.label("Expand Spirit Details by Default");
-                    });
-                    
-                    ui.add_space(10.0);
-
-                    egui::Grid::new("ability_grid").num_columns(2).spacing([10.0, 10.0]).show(ui, |ui| {
-                        ui.label("Ability Padding X");
-                        ui.add(egui::DragValue::new(&mut settings.ability_padding_x).speed(0.5).range(0.0..=50.0));
-                        ui.end_row();
-
-                        ui.label("Ability Padding Y");
-                        ui.add(egui::DragValue::new(&mut settings.ability_padding_y).speed(0.5).range(0.0..=50.0));
-                        ui.end_row();
-
-                        ui.label("Trait Padding Y");
-                        ui.add(egui::DragValue::new(&mut settings.trait_padding_y).speed(0.5).range(0.0..=50.0));
-                        ui.end_row();
-                    });
-                },
-                
+            let result = match settings.active_tab.as_str() {
+                "General" => categories::general::show(ui, settings),
+                "Cat Data" => categories::cat_data::show(ui, settings),
                 _ => {
                     ui.vertical_centered(|ui| {
                         ui.add_space(50.0);
                         ui.label(egui::RichText::new("No settings available for this category.").weak().size(16.0));
                     });
+                    false
                 }
-            }
+            };
+            
+            if result { refresh_needed = true; }
         });
     });
 
     refresh_needed
 }
 
-fn toggle_ui(ui: &mut egui::Ui, on: &mut bool) -> egui::Response {
+pub fn toggle_ui(ui: &mut egui::Ui, on: &mut bool) -> egui::Response {
     let desired_size = ui.spacing().interact_size.y * egui::vec2(2.0, 1.0);
     let (rect, mut response) = ui.allocate_exact_size(desired_size, egui::Sense::click());
     

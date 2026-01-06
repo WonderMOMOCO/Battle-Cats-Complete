@@ -25,7 +25,7 @@ pub struct BattleCatsApp {
     sidebar_open: bool,
     #[serde(skip)]
     import_state: import_data::ImportState,
-    #[serde(skip)]
+    
     cat_list_state: cat_data::CatListState,
     
     pub settings: settings::Settings,
@@ -79,7 +79,6 @@ fn setup_custom_fonts(ctx: &egui::Context) {
         egui::FontData::from_static(include_bytes!("../assets/NotoSansThai-Regular.ttf")),
     );
 
-    // Set fallback priority for both Proportional (UI) and Monospace (Logs)
     let families = [egui::FontFamily::Proportional, egui::FontFamily::Monospace];
     for family in families {
         if let Some(list) = fonts.families.get_mut(&family) {
@@ -109,7 +108,6 @@ impl eframe::App for BattleCatsApp {
             self.cat_list_state.restart_scan(&self.settings.game_language);
         }
 
-        // Apply Global UI Styling
         let mut style = (*ctx.style()).clone();
         style.visuals.window_rounding = egui::Rounding::same(10.0);
         style.visuals.widgets.noninteractive.rounding = egui::Rounding::same(10.0);
@@ -133,7 +131,7 @@ impl eframe::App for BattleCatsApp {
             Page::Settings => {
                 let mut tabs = vec!["General"];
                 for (page_enum, label) in PAGES {
-                    if *page_enum != Page::MainMenu {
+                    if *page_enum != Page::MainMenu && *page_enum != Page::Settings {
                         tabs.push(label);
                     }
                 }
