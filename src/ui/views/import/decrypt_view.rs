@@ -1,13 +1,13 @@
 #[cfg(feature = "dev")]
 use eframe::egui;
 #[cfg(feature = "dev")]
-use crate::core::import::{ImportState, GameRegion};
+use crate::core::import::{ImportState, GameRegion, game_data, sort};
 #[cfg(feature = "dev")]
 use std::sync::mpsc;
 
 #[cfg(feature = "dev")]
 pub fn show(ui: &mut egui::Ui, state: &mut ImportState) {
-    ui.label(egui::RichText::new("Extract and decrypt game files.").strong());
+    ui.label(egui::RichText::new("Decrypt and extract game files.").strong());
     ui.add_space(10.0);
 
     ui.horizontal(|ui| {
@@ -27,31 +27,38 @@ pub fn show(ui: &mut egui::Ui, state: &mut ImportState) {
         let btn_enabled = state.rx.is_none();
         if ui.add_enabled(btn_enabled, egui::Button::new("Select Game Folder")).clicked() {
             if let Some(path) = rfd::FileDialog::new().pick_folder() {
-                // Use new setter
-                state.set_extract_folder(path.display().to_string());
+                state.set_decrypt_path(path.display().to_string());
                 state.status_message = "Folder selected.".to_string();
             }
         }
-        ui.monospace(&state.censored_folder);
+        ui.monospace(&state.decrypt_censored);
     });
 
     ui.add_space(15.0);
 
-    let can_start = state.selected_folder != "No folder selected" && state.rx.is_none();
+    let can_start = !state.decrypt_path.is_empty() && state.rx.is_none();
     
-    if ui.add_enabled(can_start, egui::Button::new("Start Extraction")).clicked() {
+    if ui.add_enabled(can_start, egui::Button::new("Start Decryption")).clicked() {
         state.status_message = "Initializing Decryptor...".to_string();
         state.log_content.clear();
         
         let (tx, rx) = mpsc::channel();
         state.rx = Some(rx);
 
-        let folder = state.selected_folder.clone();
-        let region_code = state.selected_region.code().to_string();
+        let folder = state.decrypt_path.clone();
+        let region = state.selected_region.code().to_string();
 
         std::thread::spawn(move || {
-            if let Err(e) = crate::dev::extract_data::run_extraction(folder, region_code, tx.clone()) {
+            if let Err(e) = game_data::run_dev_decryption(&folder, &region, tx.clone()) {
                 let _ = tx.send(format!("Error: {}", e));
+                return; 
+            }
+            
+            let _ = tx.send("Sorting extracted files...".to_string());
+            if let Err(e) = sort::sort_game_files(tx.clone()) {
+                let _ = tx.send(format!("Error Sorting: {}", e));
+            } else {
+                let _ = tx.send("Success! Decryption and sort complete.".to_string());
             }
         });
     }

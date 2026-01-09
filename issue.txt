@@ -1,0 +1,15 @@
+[ SORTING ISSUE ]
+When sorting tons of files, our sorter seems to disconnect with the UI and other elements, as it continues to sort in the background, but doesn't trigger a re-scan of the cats or languages when it finishes
+
+We extract 70,000 files from zip archives perfectly fine, and yet when sorting (simply moving) those files the UI chokes up (or disconnects), it still finishes sorting in the background, but doesn't seem to send any signals despite a sort finishing
+
+"error: process didn't exit successfully: `target\release\Battle_Cats_Complete.exe` (exit code: 0xc0000409, STATUS_STACK_BUFFER_OVERRUN)" seems to be related to the same issue, we encounter it when we click om Cat Data sometimes after a glitchy sort
+
+search for the string: "one last bug! when an import finishes, our settings should do a re-scan" using crtl+f to find where our import/extraction/export/sorting logic gets split between UI and core, maybe this is what is causing the issue?
+Actually, maybe not, maybe "yes, app.rs is yelling at me"? i cant seem to find it! we will have to use our pre-refactor logic
+
+The logging UI worked flawlessly in the past with a previous version of the sort logic I had before the refactor, we tried reversion once but failed. Maybe i can send some of those files over?
+
+the sorter getting choked on trying to applying REGEX to 70,000 files and reading said files line counts aren't the issue, as the app did these things flawlessly before the refactor, we should definitely try to revert our logic, we can even abandon the "split functions and UI" principle for the time being if it means we find a working version!
+
+I have reverted all my files to when we first encountered this issue, so we can have a clean slate to work from

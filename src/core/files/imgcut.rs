@@ -118,8 +118,6 @@ fn parse_imgcut_data(image_file_path: &Path, cut_file_path: &Path) -> Option<(eg
         ) {
             let uv_min = egui::pos2(sprite_x / atlas_width, sprite_y / atlas_height);
             let uv_max = egui::pos2((sprite_x + sprite_width) / atlas_width, (sprite_y + sprite_height) / atlas_height);
-            
-            // Line Index + 1 (1-based ID)
 
             parsed_cuts.insert(line_index + 1, SpriteCut {
                 uv_coordinates: egui::Rect::from_min_max(uv_min, uv_max),

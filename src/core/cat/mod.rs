@@ -109,9 +109,6 @@ impl CatListState {
             self.cats.sort_by_key(|cat| cat.id);
         }
 
-        if self.selected_cat.is_none() && !self.cats.is_empty() {
-            self.selected_cat = Some(self.cats[0].id);
-        }
         
         if is_scan_complete {
             if let Some(target_id) = self.selected_cat {
@@ -121,6 +118,10 @@ impl CatListState {
                     } else {
                         self.selected_cat = None;
                     }
+                }
+            } else {
+                if let Some(first_cat) = self.cats.first() {
+                    self.selected_cat = Some(first_cat.id);
                 }
             }
             self.scan_receiver = None;
@@ -171,31 +172,43 @@ pub fn show(ctx: &egui::Context, state: &mut CatListState, settings: &crate::cor
     egui::CentralPanel::default().show(ctx, |ui| {
         if state.cats.is_empty() {
             ui.centered_and_justified(|ui| {
-                if state.scan_receiver.is_some() {
-                    ui.vertical(|ui| {
+                ui.vertical_centered(|ui| {
+                    ui.add_space(ui.available_height() * 0.4);
+                    ui.set_max_width(400.0);
+
+                    if state.scan_receiver.is_some() {
                         ui.spinner();
                         ui.add_space(10.0);
                         ui.label("Loading Unit Data...");
-                    });
-                } else {
-                    ui.vertical_centered(|ui| {
+                    } else {
                         ui.heading("No Data Found");
-                        ui.label("Could not find any units in game/cats.");
+                        
+                        ui.label(egui::RichText::new("Could not find any units in game/cats.")
+                            .color(ui.visuals().weak_text_color()));
+                        
                         ui.add_space(5.0);
+                        
                         ui.label("Check that 'unitbuy.csv' exists and");
                         ui.label("unit folders (000, 001...) are present.");
+                        
                         ui.add_space(15.0);
+                        
                         if ui.button("Retry Scan").clicked() {
                             state.restart_scan(&settings.game_language);
+                            ui.ctx().request_repaint();
                         }
-                    });
-                }
+                    }
+                });
             });
             return;
         }
 
         let Some(selected_id) = state.selected_cat else {
-            ui.centered_and_justified(|ui| { ui.label("Select a Unit"); });
+            if state.scan_receiver.is_some() {
+                 ui.centered_and_justified(|ui| { ui.spinner(); });
+            } else {
+                 ui.centered_and_justified(|ui| { ui.label("Select a Unit"); });
+            }
             return;
         };
 

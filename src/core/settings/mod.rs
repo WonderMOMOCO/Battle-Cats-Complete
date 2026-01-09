@@ -53,7 +53,4 @@ impl Settings {
         );
     }
 
-    pub fn trigger_language_scan(&mut self) {
-        self.rx_lang = Some(lang::start_scan());
-    }
 }

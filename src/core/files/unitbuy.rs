@@ -13,7 +13,6 @@ impl UnitBuyRow {
     pub fn from_csv_line(csv_line: &str) -> Option<Self> {
         let line_parts: Vec<&str> = csv_line.split(',').map(|part| part.trim()).collect();
         
-        // Filter out empty trailing parts often found in these CSVs
         let clean_parts: Vec<&str> = line_parts.iter()
             .rev()
             .skip_while(|part| part.is_empty())

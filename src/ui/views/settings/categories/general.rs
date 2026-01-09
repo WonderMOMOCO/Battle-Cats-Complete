@@ -18,7 +18,6 @@ pub fn show(ui: &mut egui::Ui, settings: &mut Settings) -> bool {
                 for (code, label) in lang::LANGUAGE_LIST {
                     let code_str = code.to_string();
 
-                    // Only show languages found in assets
                     if settings.available_languages.contains(&code_str) {
                         if ui.selectable_value(&mut settings.game_language, code_str, *label).clicked() {
                             refresh_needed = true;

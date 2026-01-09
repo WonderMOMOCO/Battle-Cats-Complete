@@ -1,18 +1,19 @@
 use eframe::egui;
-use crate::core::import::ImportState;
 use std::sync::mpsc;
+use std::thread;
+use crate::core::import::{ImportState, game_data};
 
 pub fn show(ui: &mut egui::Ui, state: &mut ImportState) {
-    ui.label(egui::RichText::new("Package sorted files into a ZIP archive.").strong());
+    ui.label("Package sorted files into a ZIP archive.");
     ui.add_space(10.0);
-
-    // File Name Input
+    
     ui.horizontal(|ui| {
-        ui.label("Export Name:");
+        ui.label("Filename:");
         
-        ui.add(egui::TextEdit::singleline(&mut state.export_name)
-            .hint_text(egui::RichText::new("battlecats").color(egui::Color32::from_gray(100)))
-            .desired_width(120.0)
+        ui.spacing_mut().item_spacing.x = 3.0;
+        ui.add(egui::TextEdit::singleline(&mut state.export_filename)
+            .hint_text(egui::RichText::new("battlecats").color(egui::Color32::DARK_GRAY))
+            .desired_width(100.0)
         );
         
         ui.label(".game.zip");
@@ -26,35 +27,26 @@ pub fn show(ui: &mut egui::Ui, state: &mut ImportState) {
     });
     
     ui.add_space(15.0);
-
+    
     let can_zip = state.rx.is_none(); 
     
-    // Determine the effective button text
-    let display_name = if state.export_name.trim().is_empty() {
-        "battlecats"
-    } else {
-        &state.export_name
-    };
-    let button_text = format!("Create {}.game.zip", display_name);
+    let base_name = if state.export_filename.trim().is_empty() { "battlecats" } else { &state.export_filename };
+    let full_name = format!("{}.game.zip", base_name);
+    let btn_text = format!("Create {}", full_name);
 
-    if ui.add_enabled(can_zip, egui::Button::new(button_text)).clicked() {
+    if ui.add_enabled(can_zip, egui::Button::new(btn_text)).clicked() {
         state.status_message = "Preparing to zip...".to_string();
         state.log_content.clear();
         
         let (tx, rx) = mpsc::channel();
         state.rx = Some(rx);
-        let level = state.compression_level;
         
-        // Fallback to "battlecats" if empty
-        let final_name = if state.export_name.trim().is_empty() {
-            "battlecats".to_string()
-        } else {
-            state.export_name.clone()
-        };
+        let level = state.compression_level;
+        let filename_arg = full_name.clone(); 
 
-        std::thread::spawn(move || {
-            if let Err(e) = crate::core::import::export_data::to_zip(level, final_name, tx.clone()) {
-                let _ = tx.send(format!("Error: {}", e));
+        thread::spawn(move || {
+            if let Err(e) = game_data::create_game_zip(tx.clone(), level, filename_arg) {
+                 let _ = tx.send(format!("Error Zipping: {}", e));
             }
         });
     }

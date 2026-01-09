@@ -96,19 +96,18 @@ impl eframe::App for BattleCatsApp {
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // Data Updates
         self.cat_list_state.update_data();
         if self.cat_list_state.scan_receiver.is_some() {
             ctx.request_repaint();
         }
 
         let import_finished = self.import_state.update(ctx, &mut self.settings);
+        
         if import_finished {
-            // Refresh if new data was imported/sorted
             self.cat_list_state.restart_scan(&self.settings.game_language);
+            ctx.request_repaint();
         }
 
-        // Global Style Overrides
         let mut style = (*ctx.style()).clone();
         style.visuals.window_rounding = egui::Rounding::same(10.0);
         style.visuals.widgets.noninteractive.rounding = egui::Rounding::same(10.0);
@@ -121,7 +120,6 @@ impl eframe::App for BattleCatsApp {
         style.visuals.override_text_color = Some(egui::Color32::WHITE);
         ctx.set_style(style);
 
-        // Page Routing
         match self.current_page {
             Page::MainMenu => main_menu::show(ctx),
             Page::ImportData => {
@@ -146,8 +144,7 @@ impl eframe::App for BattleCatsApp {
                 }
             }
         }
-
-        // Sidebar & Navigation Logic
+        
         let sidebar_inner_width = 150.0; 
         let sidebar_margin = 15.0;       
         let total_sidebar_width = sidebar_inner_width + (sidebar_margin * 2.0);
@@ -198,7 +195,6 @@ impl eframe::App for BattleCatsApp {
                 });
         }
 
-        // Sidebar Toggle Button
         egui::Area::new("toggle_btn".into())
             .fixed_pos(egui::pos2(button_x, 2.5))
             .order(egui::Order::Tooltip)

@@ -4,8 +4,9 @@ use std::thread;
 use std::sync::{Arc, mpsc::{self, Receiver}};
 use rayon::prelude::*;
 use regex::Regex; 
-use crate::core::patterns; 
+use image::GenericImageView; 
 
+use crate::core::patterns; 
 use crate::core::files::unitid::CatRaw;
 use crate::core::files::unitbuy::{self, UnitBuyRow};
 use crate::core::files::unitlevel::{self, CatLevelCurve};
@@ -30,7 +31,6 @@ pub fn start_scan(language_code: String) -> Receiver<CatEntry> {
     thread::spawn(move || {
         let cats_directory = Path::new("game/cats");
         
-        // Load global data using specific file loaders
         let level_curves_arc = Arc::new(unitlevel::load_level_curves(cats_directory));
         let unit_buy_map_arc = Arc::new(unitbuy::load_unitbuy(cats_directory));
         
@@ -43,7 +43,6 @@ pub fn start_scan(language_code: String) -> Receiver<CatEntry> {
             Err(_) => Vec::new(),
         };
 
-        // Parallel processing of each cat ID folder
         folder_entries.par_iter().for_each(|folder_path| {
             let sender_clone = cat_sender.clone();
             let curves_clone = Arc::clone(&level_curves_arc);
@@ -70,8 +69,6 @@ fn process_cat_entry(
     let unit_buy_data = unit_buys.get(&cat_id);
     if let Some(row_data) = unit_buy_data {
         let is_egg_unit = row_data.egg_id_normal != -1;
-        // Filter out non-primary units
-        // Cat 673 is Cheetah Cat
         if !is_egg_unit && row_data.guide_order == -1 && cat_id != 673 {
             return None; 
         }
@@ -82,7 +79,6 @@ fn process_cat_entry(
 
     let cats_root_dir = Path::new("game/cats");
     
-    // Resolve Paths for Eggs vs Normal Units
     let get_form_path = |form_index: usize, form_char: char| -> PathBuf {
         let is_egg_normal_form = form_index == 0 && ub_row.egg_id_normal != -1;
         let is_egg_evolved_form = form_index == 1 && ub_row.egg_id_evolved != -1;
@@ -130,13 +126,6 @@ fn process_cat_entry(
         form_folder_paths[3].exists(),
     ];
 
-    // Must have at least 2nd form (evolved) to be valid
-    // Cat 673 is Cheetah Cat
-    if !forms_existence[1] && cat_id != 673 {
-        return None;
-    }
-
-    // Load Animation Lengths
     let mut attack_anim_frames = [0; 4];
     for i in 0..4 {
         if forms_existence[i] {
@@ -147,7 +136,6 @@ fn process_cat_entry(
         }
     }
 
-    // Icon Finder
     let find_image_path = |search_dir: &Path, file_stem: &str| -> Option<PathBuf> {
         let png_path = search_dir.join(format!("{}.png", file_stem));
         if png_path.exists() { return Some(png_path); }
@@ -168,8 +156,20 @@ fn process_cat_entry(
         Some(p) => p,
         None => return None, 
     };
+
+    match image::open(&valid_image_path) {
+        Ok(img) => {
+            let (w, h) = img.dimensions();
+            
+            if w < 50 || h < 30 {
+                return None;
+            }
+        },
+        Err(_) => {
+            return None;
+        }
+    }
     
-    // Name Loader
     let mut cat_names = vec![String::new(); 4];
     let target_file_id = cat_id + 1;
     let lang_directory = original_folder_path.join("lang"); 
@@ -211,7 +211,6 @@ fn process_cat_entry(
         cat_names[0] = "Cheetah Cat".to_string();
     }
     
-    // Stats Loader
     let mut cat_stats = vec![None; 4];
     let stats_file_path = original_folder_path.join(format!("unit{:03}.csv", target_file_id));
     if let Ok(file_content) = fs::read_to_string(&stats_file_path) {
