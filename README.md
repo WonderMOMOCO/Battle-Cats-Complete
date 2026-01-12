@@ -12,5 +12,11 @@ To use this app, you must provide game files for it to read. These files are not
 
 *This app will trigger Windows Defender Firewall: "Windows protected your PC" as I am not a registered publisher. You must click "More Info" and "Run Anyways" to use the app.*
 
+## Credit
+Various people have motivated and helped me create this project:
+- Timtams: Did field research to confirm certain game data quirks, also supplied some custom assets.
+- TheWWRNerdGuy: Provided a repo which holds Rust code for reading raw game data, also gave coding tips.
+- SweetDonut0: Used their Cat Stats Tool web-app hosted on the Wiki as a reference for level scaling code.
+
 ## Legal
 This project is for educational purposes only. Assets are copyright PONOS Corp. Please support the official release.

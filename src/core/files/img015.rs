@@ -23,8 +23,7 @@ pub const ICON_SINGLE_ATTACK: usize = 222;
 pub const ICON_AREA_ATTACK: usize = 216;
 pub const ICON_OMNI_STRIKE: usize = 117;
 pub const ICON_LONG_DISTANCE: usize = 217;
-pub const ICON_MULTIHIT: usize = 9999; // Mimicing a real icon
-
+pub const ICON_MULTIHIT: usize = 9999; // Mock ID
 
 // Target Abiltiies
 pub const ICON_ATTACK_ONLY: usize = 207;
@@ -69,6 +68,7 @@ pub const ICON_MINI_SURGE: usize = 315;
 pub const ICON_CONJURE: usize = 322;
 pub const ICON_METAL_KILLER: usize = 326;
 pub const ICON_EXPLOSION: usize = 340;
+pub const ICON_KAMIKAZE: usize = 9998; // Mock ID
 
 // Immunities
 pub const ICON_IMMUNE_CURSE: usize = 121;
@@ -81,6 +81,7 @@ pub const ICON_IMMUNE_TOXIC: usize = 242;
 pub const ICON_IMMUNE_SURGE: usize = 248;
 pub const ICON_IMMUNE_WARP: usize = 267;
 pub const ICON_IMMUNE_EXPLOSION: usize = 342;
+pub const ICON_IMMUNE_BOSS_WAVE: usize = 9997; // Mock ID
 
 // Counters
 pub const ICON_WAVE_BLOCK: usize = 223;
@@ -88,10 +89,12 @@ pub const ICON_COUNTER_SURGE: usize = 320;
 
 // Talent Only
 pub const ICON_MOVE_SPEED: usize = 101;
-pub const ICON_IMPROVE_KNOCKBACKS: usize = 103;
+pub const ICON_IMPROVE_KNOCKBACK_COUNT: usize = 103;
 pub const ICON_ATTACK_BUFF: usize = 123;
 pub const ICON_HEALTH_BUFF: usize = 125;
 pub const ICON_TBA_DOWN: usize = 310;
+pub const ICON_COST_DOWN: usize = 97;
+pub const ICON_RECOVER_SPEED_UP: usize = 99;
 
 // Resist
 pub const ICON_RESIST_WEAKEN: usize = 48;
@@ -175,6 +178,7 @@ pub fn img015_alt(id: usize) -> &'static str {
         ICON_CONJURE => "Spirit",
         ICON_METAL_KILLER => "MetKil",
         ICON_EXPLOSION => "Expl",
+        ICON_KAMIKAZE => "Kami",
         
         // Immunities
         ICON_IMMUNE_CURSE => "NoCur",
@@ -187,10 +191,31 @@ pub fn img015_alt(id: usize) -> &'static str {
         ICON_IMMUNE_SURGE => "NoSrg",
         ICON_IMMUNE_WARP => "NoWrp",
         ICON_IMMUNE_EXPLOSION => "NoExp",
+        ICON_IMMUNE_BOSS_WAVE => "NoBos",
         
         // Counters
         ICON_WAVE_BLOCK => "W-Blk",
         ICON_COUNTER_SURGE => "C-Srg",
+
+        // Talent Only
+        ICON_MOVE_SPEED => "Spd",
+        ICON_IMPROVE_KNOCKBACK_COUNT => "KB+",
+        ICON_ATTACK_BUFF => "Atk+",
+        ICON_HEALTH_BUFF => "HP+",
+        ICON_TBA_DOWN => "TBA-",
+        ICON_COST_DOWN => "Cost-",
+        ICON_RECOVER_SPEED_UP => "Rec+",
+
+        // Resist
+        ICON_RESIST_WEAKEN => "ReWkn",
+        ICON_RESIST_FREEZE => "ReFrz",
+        ICON_RESIST_SLOW => "ReSlw",
+        ICON_RESIST_KNOCKBACK => "ReKB",
+        ICON_RESIST_WAVE => "ReWav",
+        ICON_RESIST_WARP => "ReWrp",
+        ICON_RESIST_CURSE => "ReCur",
+        ICON_RESIST_TOXIC => "ReTox",
+        ICON_SURGE_RESIST => "ReSrg",
 
         _ => "???",
     }
@@ -208,26 +233,28 @@ pub fn ensure_loaded(ctx: &egui::Context, sheet: &mut SpriteSheet, settings: &Se
     }
 
     let base_dir = std::path::Path::new("game/assets/img015");
-    let lang = &settings.game_language;
+    let current_language = &settings.game_language;
     
-    let codes_to_try: Vec<String> = if lang.is_empty() {
-        let mut p: Vec<String> = crate::core::cat::scanner::SCAN_PRIORITY.iter().map(|s| s.to_string()).collect();
-        p.push("".to_string());
-        p
+    // Updated to use shared config from utils
+    let codes_to_try: Vec<String> = if current_language.is_empty() {
+        crate::core::utils::LANGUAGE_PRIORITY
+            .iter()
+            .map(|language_code| language_code.to_string()) // RENAMED s -> language_code
+            .collect()
     } else {
-        vec![lang.clone()]
+        vec![current_language.clone()]
     };
 
     for code in codes_to_try {
-        let (png, cut) = if code.is_empty() {
-            ("img015.png".into(), "img015.imgcut".into())
+        let (png_filename, imgcut_filename) = if code.is_empty() {
+            ("img015.png".to_string(), "img015.imgcut".to_string())
         } else {
             (format!("img015_{}.png", code), format!("img015_{}.imgcut", code))
         };
 
-        let (p, c) = (base_dir.join(png), base_dir.join(cut));
-        if p.exists() && c.exists() {
-            sheet.load(ctx, &p, &c);
+        let (full_png_path, full_imgcut_path) = (base_dir.join(png_filename), base_dir.join(imgcut_filename));
+        if full_png_path.exists() && full_imgcut_path.exists() {
+            sheet.load(ctx, &full_png_path, &full_imgcut_path);
             break;
         }
     }

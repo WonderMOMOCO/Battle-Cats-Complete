@@ -15,7 +15,7 @@ pub fn import_standard_zip(path: &str, tx: Sender<String>) -> Result<bool, Strin
 // Dev
 #[cfg(feature = "dev")]
 pub fn run_dev_decryption(path: &str, region: &str, tx: Sender<String>) -> Result<String, String> {
-    crate::dev::decrypt::run_decryption(path, region, tx)
+    crate::dev::run_decryption(path, region, tx)
         .map(|_| "Success! Decryption complete.".to_string())
 }
 

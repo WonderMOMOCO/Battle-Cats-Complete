@@ -76,6 +76,7 @@ pub fn sort_game_files(tx: Sender<String>) -> Result<(), String> {
     let anim = Regex::new(patterns::CAT_ANIM_PATTERN).unwrap();
     let maanim = Regex::new(patterns::CAT_MAANIM_PATTERN).unwrap();
     let explain = Regex::new(patterns::CAT_EXPLAIN_PATTERN).unwrap();
+    let skill_name = Regex::new(patterns::SKILL_NAME_PATTERN).unwrap();
     
     let egg_icon = Regex::new(patterns::EGG_ICON_PATTERN).unwrap();
     let egg_upgrade = Regex::new(patterns::EGG_UPGRADE_PATTERN).unwrap();
@@ -129,6 +130,9 @@ pub fn sort_game_files(tx: Sender<String>) -> Result<(), String> {
             if let Ok(id) = caps[1].parse::<u32>() {
                 if id > 0 { dest_folder = Some(cats_dir.join(format!("{:03}", id - 1)).join("lang")); }
             }
+        }
+        else if let Some(_caps) = skill_name.captures(name) {
+            dest_folder = Some(assets_dir.join("Skill_name"));
         }
         else if let Some(caps) = egg_icon.captures(name) {
             dest_folder = Some(cats_dir.join(format!("egg_{}", &caps[1])).join(map_egg(&caps[2])));

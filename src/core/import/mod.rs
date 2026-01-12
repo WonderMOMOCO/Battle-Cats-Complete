@@ -12,7 +12,7 @@ use crate::core::settings::Settings;
 #[cfg(feature = "dev")]
 #[derive(PartialEq, Clone, Copy, Debug, Deserialize, Serialize)]
 pub enum GameRegion {
-    Japan, Taiwan, Korean, Global,
+    Japan, Taiwan, Korean, Global, Mod,
 }
 
 #[cfg(feature = "dev")]
@@ -23,6 +23,7 @@ impl GameRegion {
             GameRegion::Taiwan => "tw",
             GameRegion::Korean => "ko",
             GameRegion::Global => "en",
+            GameRegion::Mod => "mod",
         }
     }
 }
@@ -52,6 +53,7 @@ pub struct ImportState {
     pub export_filename: String,
     
     #[cfg(feature = "dev")] pub selected_region: GameRegion,
+    
     pub compression_level: i32,
 
     #[serde(skip)] pub status_message: String,
@@ -69,7 +71,7 @@ impl Default for ImportState {
             decrypt_censored: String::new(),
             
             #[cfg(feature = "dev")]
-            active_tab: DataTab::Export,
+            active_tab: DataTab::Decrypt,
             #[cfg(not(feature = "dev"))]
             active_tab: DataTab::Import,
 
@@ -78,6 +80,7 @@ impl Default for ImportState {
             export_filename: String::new(),
             
             #[cfg(feature = "dev")] selected_region: GameRegion::Global,
+            
             compression_level: 6,
             status_message: "Ready".to_owned(),
             log_content: String::new(),
@@ -91,7 +94,7 @@ impl ImportState {
         self.import_path = path;
         self.import_censored = censor_path(&self.import_path);
     }
-
+    
     #[cfg(feature = "dev")]
     pub fn set_decrypt_path(&mut self, path: String) {
         self.decrypt_path = path;

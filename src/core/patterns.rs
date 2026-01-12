@@ -32,6 +32,7 @@ pub const SKILL_DESC_PATTERN: &str = concat!(r"^SkillDescriptions_", r"([a-z]{2}
 // Assets
 pub const ASSET_IMG015_PATTERN: &str = r"^img015_([a-z]{2})\.png$";
 pub const ASSET_015CUT_PATTERN: &str = r"^img015\.imgcut$";
+pub const SKILL_NAME_PATTERN: &str = r"^Skill_name_(\d+)_([a-z]{2})\.png$";
 
 // Master files for Cat Data
 pub const CAT_UNIVERSAL_FILES: &[&str] = &[
@@ -85,5 +86,6 @@ pub const ESSENTIAL_FILES: &[(&str, &str, &[&str])] = &[
 pub const REGION_SENSITIVE_FILES: &[&str] = &[
     "img015.imgcut", 
     "img015.png", 
-    "SkillDescriptions.csv"
+    "SkillDescriptions.csv",
+    "Skill_name_"
 ];

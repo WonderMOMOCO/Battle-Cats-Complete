@@ -1,6 +1,5 @@
 use eframe::egui;
 use crate::core::import::{ImportState, DataTab};
-
 pub mod import_view;
 pub mod export_view;
 
@@ -62,11 +61,11 @@ pub fn show(ctx: &egui::Context, state: &mut ImportState) {
             .auto_shrink([false, false]) 
             .show(ui, |ui| {
                 ui.set_min_width(ui.available_width());
-                ui.add_sized(
-                    ui.available_size(),
-                    egui::TextEdit::multiline(&mut state.log_content.as_str())
-                        .font(egui::TextStyle::Monospace)
-                        .desired_width(f32::INFINITY)
+                
+                ui.label(
+                    egui::RichText::new(&state.log_content)
+                    .monospace()
+                    .size(12.0)
                 );
             });
     });

@@ -10,8 +10,8 @@ use crate::core::patterns;
 use crate::core::files::unitid::CatRaw;
 use crate::core::files::unitbuy::{self, UnitBuyRow};
 use crate::core::files::unitlevel::{self, CatLevelCurve};
-
-pub const SCAN_PRIORITY: &[&str] = &["en", "ja", "tw", "ko", "es", "de", "fr", "it", "th", ""];
+use crate::core::files::skillacquisition::{self, TalentRaw}; 
+use crate::core::utils; 
 
 #[derive(Clone, Debug)]
 pub struct CatEntry {
@@ -23,6 +23,7 @@ pub struct CatEntry {
     pub curve: Option<CatLevelCurve>,
     pub atk_anim_frames: [i32; 4], 
     pub egg_ids: (i32, i32),
+    pub talent_data: Option<TalentRaw>, 
 }
 
 pub fn start_scan(language_code: String) -> Receiver<CatEntry> {
@@ -33,6 +34,7 @@ pub fn start_scan(language_code: String) -> Receiver<CatEntry> {
         
         let level_curves_arc = Arc::new(unitlevel::load_level_curves(cats_directory));
         let unit_buy_map_arc = Arc::new(unitbuy::load_unitbuy(cats_directory));
+        let talent_map_arc = Arc::new(skillacquisition::load(cats_directory));
         
         let folder_entries: Vec<PathBuf> = match fs::read_dir(cats_directory) {
             Ok(read_dir_iter) => read_dir_iter
@@ -47,8 +49,9 @@ pub fn start_scan(language_code: String) -> Receiver<CatEntry> {
             let sender_clone = cat_sender.clone();
             let curves_clone = Arc::clone(&level_curves_arc);
             let unit_buys_clone = Arc::clone(&unit_buy_map_arc);
+            let talents_clone = Arc::clone(&talent_map_arc);
             
-            if let Some(cat_entry) = process_cat_entry(folder_path, &curves_clone, &unit_buys_clone, &language_code) {
+            if let Some(cat_entry) = process_cat_entry(folder_path, &curves_clone, &unit_buys_clone, &talents_clone, &language_code) {
                 let _ = sender_clone.send(cat_entry);
             }
         });
@@ -60,6 +63,7 @@ fn process_cat_entry(
     original_folder_path: &Path, 
     level_curves: &Vec<CatLevelCurve>, 
     unit_buys: &std::collections::HashMap<u32, UnitBuyRow>,
+    talents_map: &std::collections::HashMap<u16, TalentRaw>, 
     language_code: &str
 ) -> Option<CatEntry> {
     
@@ -160,48 +164,58 @@ fn process_cat_entry(
     match image::open(&valid_image_path) {
         Ok(img) => {
             let (w, h) = img.dimensions();
-            
-            if w < 50 || h < 30 {
-                return None;
-            }
+            if w < 50 || h < 30 { return None; }
         },
-        Err(_) => {
-            return None;
-        }
+        Err(_) => { return None; }
     }
     
     let mut cat_names = vec![String::new(); 4];
+    
     let target_file_id = cat_id + 1;
     let lang_directory = original_folder_path.join("lang"); 
 
     let language_codes_to_check: Vec<&str> = if language_code.is_empty() {
-        SCAN_PRIORITY.to_vec()
+        utils::LANGUAGE_PRIORITY.to_vec()
     } else {
         vec![language_code]
     };
 
     for code in language_codes_to_check {
+        let all_found = (0..4).all(|i| !forms_existence[i] || !cat_names[i].is_empty());
+        if all_found { break; }
+
         if let Some(name_file_path) = find_name_file_for_code(&lang_directory, target_file_id, code) {
             if let Ok(file_bytes) = fs::read(&name_file_path) {
                 let file_content = String::from_utf8_lossy(&file_bytes);
                 let separator_char = if code == "ja" { ',' } else { '|' };
 
-                let mut temp_name_list = vec![String::new(); 4];
-                let mut found_valid_name = false;
-
+                let mut current_lang_names = vec![String::new(); 4];
                 for (line_index, file_line) in file_content.lines().enumerate().take(4) {
                     if let Some(name_part) = file_line.split(separator_char).next() {
                         let trimmed_name = name_part.trim();
                         if !trimmed_name.is_empty() && !looks_like_garbage_id(trimmed_name) {
-                            found_valid_name = true;
-                            temp_name_list[line_index] = trimmed_name.to_string();
+                            current_lang_names[line_index] = trimmed_name.to_string();
                         }
                     }
                 }
 
-                if found_valid_name {
-                    cat_names = temp_name_list;
-                    break;
+                for i in 0..4 {
+                    if !cat_names[i].is_empty() { continue; }
+                    
+                    if !forms_existence[i] { continue; }
+
+                    let candidate = &current_lang_names[i];
+                    
+                    if candidate.is_empty() { continue; }
+
+                    if i > 0 {
+                        let prev_name_source = &current_lang_names[i-1];
+                        if candidate == prev_name_source {
+                             continue;
+                        }
+                    }
+
+                    cat_names[i] = candidate.clone();
                 }
             }
         }
@@ -219,6 +233,8 @@ fn process_cat_entry(
         }
     }
 
+    let talent_data = talents_map.get(&(cat_id as u16)).cloned();
+
     Some(CatEntry { 
         id: cat_id, 
         image_path: valid_image_path,
@@ -228,6 +244,7 @@ fn process_cat_entry(
         curve: level_curves.get(cat_id as usize).cloned(),
         atk_anim_frames: attack_anim_frames,
         egg_ids: (ub_row.egg_id_normal, ub_row.egg_id_evolved),
+        talent_data, 
     })
 }
 

@@ -199,7 +199,7 @@ impl eframe::App for BattleCatsApp {
             .fixed_pos(egui::pos2(button_x, 2.5))
             .order(egui::Order::Tooltip)
             .show(ctx, |ui| {
-                let arrow = if self.sidebar_open { ">" } else { "<" };
+                let arrow = if self.sidebar_open { "▶" } else { "◀" };
                 let btn = egui::Button::new(egui::RichText::new(arrow).size(20.0).strong())
                     .fill(egui::Color32::from_rgb(31, 106, 165));
 

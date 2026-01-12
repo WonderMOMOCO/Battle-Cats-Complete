@@ -1,6 +1,7 @@
 use eframe::egui;
 use std::path::Path;
 use crate::core::cat::scanner::CatEntry;
+use crate::core::cat::DetailTab;
 use crate::core::settings::Settings;
 use crate::core::utils::autocrop; 
 use crate::ui::components::name_box;
@@ -10,6 +11,7 @@ pub fn render(
     ui: &mut egui::Ui,
     cat: &CatEntry,
     current_form: &mut usize,
+    current_tab: &mut DetailTab,
     current_level: &mut i32,
     level_input: &mut String,
     texture_cache: &mut Option<egui::TextureHandle>,
@@ -17,7 +19,7 @@ pub fn render(
     _settings: &Settings,
 ) {
     ui.vertical(|ui| {
-        render_form_buttons(ui, cat, current_form);
+        render_form_buttons(ui, cat, current_form, current_tab);
         ui.separator();
         ui.add_space(5.0);
 
@@ -29,25 +31,68 @@ pub fn render(
     });
 }
 
-fn render_form_buttons(ui: &mut egui::Ui, cat: &CatEntry, current_form: &mut usize) {
+fn render_form_buttons(ui: &mut egui::Ui, cat: &CatEntry, current_form: &mut usize, current_tab: &mut DetailTab) {
     ui.scope(|ui| {
         ui.spacing_mut().item_spacing.x = 5.0; 
         ui.horizontal(|ui| {
             let form_labels = ["Normal", "Evolved", "True", "Ultra"];
-            for (index, &exists) in cat.forms.iter().enumerate() {
-                if !exists { continue; } 
-                
-                let is_selected = *current_form == index;
+            
+            for index in 0..4 {
+                let exists = cat.forms.get(index).copied().unwrap_or(false);
+
+                if exists { 
+                    let is_selected = *current_form == index;
+                    let (fill, stroke, text) = if is_selected {
+                        (egui::Color32::from_rgb(0, 100, 200), egui::Stroke::new(2.0, egui::Color32::WHITE), egui::Color32::WHITE)
+                    } else {
+                        (egui::Color32::from_gray(40), egui::Stroke::new(1.0, egui::Color32::from_gray(100)), egui::Color32::from_gray(200))
+                    };
+                    
+                    let btn = egui::Button::new(egui::RichText::new(form_labels[index]).color(text))
+                        .fill(fill)
+                        .stroke(stroke)
+                        .rounding(egui::Rounding::ZERO)
+                        .min_size(egui::vec2(60.0, 30.0));
+                    
+                    if ui.add(btn).clicked() { 
+                        *current_form = index; 
+                        
+                        if index < 2 && *current_tab == DetailTab::Talents {
+                            *current_tab = DetailTab::Abilities;
+                        }
+                    }
+                } else {
+                    ui.allocate_space(egui::vec2(60.0, 30.0)); 
+                } 
+            }
+
+            ui.add(egui::Separator::default().vertical().spacing(20.0));
+
+            let tabs = [
+                (DetailTab::Abilities, "Abilities"),
+                (DetailTab::Talents, "Talents"),
+                (DetailTab::Details, "Details"),
+            ];
+
+            for (tab_enum, label) in tabs {
+                if tab_enum == DetailTab::Talents && (*current_form < 2 || cat.talent_data.is_none()) {
+                    continue;
+                }
+
+                let is_selected = *current_tab == tab_enum;
                 let (fill, stroke, text) = if is_selected {
                     (egui::Color32::from_rgb(0, 100, 200), egui::Stroke::new(2.0, egui::Color32::WHITE), egui::Color32::WHITE)
                 } else {
                     (egui::Color32::from_gray(40), egui::Stroke::new(1.0, egui::Color32::from_gray(100)), egui::Color32::from_gray(200))
                 };
-                
-                let btn = egui::Button::new(egui::RichText::new(form_labels[index]).color(text))
-                    .fill(fill).stroke(stroke).rounding(egui::Rounding::ZERO).min_size(egui::vec2(60.0, 30.0));
-                
-                if ui.add(btn).clicked() { *current_form = index; }
+
+                let btn = egui::Button::new(egui::RichText::new(label).color(text))
+                    .fill(fill)
+                    .stroke(stroke)
+                    .rounding(egui::Rounding::from(5.0)) 
+                    .min_size(egui::vec2(60.0, 30.0));
+
+                if ui.add(btn).clicked() { *current_tab = tab_enum; }
             }
         });
     });
@@ -110,10 +155,7 @@ fn render_info_box(ui: &mut egui::Ui, cat: &CatEntry, form: usize, level_input: 
         let form_num = form + 1;
         let raw_name = cat.names.get(form).cloned().unwrap_or_default();
         
-        let prev_name = if form > 0 { cat.names.get(form - 1).map(|s| s.as_str()).unwrap_or("") } else { "" };
-        let is_placeholder = !raw_name.is_empty() && raw_name == prev_name;
-
-        let disp_name = if raw_name.is_empty() || is_placeholder { 
+        let disp_name = if raw_name.is_empty() { 
             format!("{:03}-{}", cat.id, form_num) 
         } else { 
             raw_name 

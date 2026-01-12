@@ -11,13 +11,14 @@ pub fn show(ui: &mut egui::Ui, state: &mut ImportState) {
     ui.add_space(10.0);
 
     ui.horizontal(|ui| {
-        ui.label("Select Game Region:");
+        ui.label("Select Game Type:");
         let enabled = state.rx.is_none();
         ui.add_enabled_ui(enabled, |ui| {
             ui.radio_value(&mut state.selected_region, GameRegion::Global, "Global");
             ui.radio_value(&mut state.selected_region, GameRegion::Japan, "Japan");
             ui.radio_value(&mut state.selected_region, GameRegion::Taiwan, "Taiwan");
             ui.radio_value(&mut state.selected_region, GameRegion::Korean, "Korea");
+            ui.radio_value(&mut state.selected_region, GameRegion::Mod, "Mod");
         });
     });
 
@@ -46,10 +47,10 @@ pub fn show(ui: &mut egui::Ui, state: &mut ImportState) {
         state.rx = Some(rx);
 
         let folder = state.decrypt_path.clone();
-        let region = state.selected_region.code().to_string();
+        let region_code = state.selected_region.code().to_string();
 
         std::thread::spawn(move || {
-            if let Err(e) = game_data::run_dev_decryption(&folder, &region, tx.clone()) {
+            if let Err(e) = game_data::run_dev_decryption(&folder, &region_code, tx.clone()) {
                 let _ = tx.send(format!("Error: {}", e));
                 return; 
             }

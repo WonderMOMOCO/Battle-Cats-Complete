@@ -13,8 +13,8 @@ fn main() -> eframe::Result<()> {
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([1000.0, 1000.0])
-            .with_min_inner_size([600.0, 600.0])
+            .with_inner_size([1200.0, 1000.0])
+            .with_min_inner_size([800.0, 600.0])
             .with_title("Battle Cats Complete")
             .with_drag_and_drop(true)
             .with_icon(icon)

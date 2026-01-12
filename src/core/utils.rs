@@ -4,6 +4,8 @@ pub trait SoftReset {
     fn reset(&mut self);
 }
 
+pub const LANGUAGE_PRIORITY: &[&str] = &["en", "ja", "tw", "ko", "es", "de", "fr", "it", "th", ""];
+
 pub fn autocrop(img: image::RgbaImage) -> image::RgbaImage {
     let (width, height) = img.dimensions();
     let (mut min_x, mut min_y, mut max_x, mut max_y) = (width, height, 0, 0);
