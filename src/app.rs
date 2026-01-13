@@ -96,13 +96,27 @@ impl eframe::App for BattleCatsApp {
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Sidebar Logic
+        let sidebar_inner_width = 150.0; 
+        let sidebar_margin = 15.0;       
+        let total_sidebar_width = sidebar_inner_width + (sidebar_margin * 2.0);
+        
+        let target_open = if self.sidebar_open { 1.0 } else { 0.0 };
+        let open_factor = ctx.animate_value_with_time(egui::Id::new("sb_anim"), target_open, 0.35);
+        
+        let visible_sidebar_width = total_sidebar_width * open_factor;
+        ctx.data_mut(|d| d.insert_temp(egui::Id::new("sidebar_visible_width"), visible_sidebar_width));
+
+        if open_factor > 0.0 && open_factor < 1.0 {
+            ctx.request_repaint();
+        }
+
         self.cat_list_state.update_data();
         if self.cat_list_state.scan_receiver.is_some() {
             ctx.request_repaint();
         }
 
         let import_finished = self.import_state.update(ctx, &mut self.settings);
-        
         if import_finished {
             self.cat_list_state.restart_scan(&self.settings.game_language);
             ctx.request_repaint();
@@ -145,19 +159,9 @@ impl eframe::App for BattleCatsApp {
             }
         }
         
-        let sidebar_inner_width = 150.0; 
-        let sidebar_margin = 15.0;       
-        let total_sidebar_width = sidebar_inner_width + (sidebar_margin * 2.0);
+        // Sidebar Rendering
         let screen_rect = ctx.screen_rect();
-        
-        let target_open = if self.sidebar_open { 1.0 } else { 0.0 };
-        let open_factor = ctx.animate_value_with_time(egui::Id::new("sb_anim"), target_open, 0.35);
-
-        if open_factor > 0.0 && open_factor < 1.0 {
-            ctx.request_repaint();
-        }
-
-        let sidebar_x = screen_rect.width() - (total_sidebar_width * open_factor);
+        let sidebar_x = screen_rect.width() - visible_sidebar_width;
         let button_gap = 10.0;
         let button_size = 40.0;
         let button_x = sidebar_x - button_gap - button_size;

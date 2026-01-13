@@ -89,7 +89,7 @@ pub fn calculate_talent_display(
             let bonus_duration = get_val(group.min_2, group.max_2);
             let weaken_to = 100 - group.min_3; 
             Some(format!(
-                "Duration: {}\nChance: {}%\nEffect: deals {}% Atk", 
+                "Duration: {}\nChance: {}%\nReduction: To {}% Atk", 
                 fmt_additive(stats.weaken_duration, bonus_duration, "f"), 
                 chance,
                 weaken_to
