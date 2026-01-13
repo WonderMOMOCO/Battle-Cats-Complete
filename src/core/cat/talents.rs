@@ -65,7 +65,7 @@ pub fn calculate_talent_display(
             return Some(fmt_state(talent_level));
         },
 
-        // Behemoth Slayer (Default)
+        // Behemoth Slayer Default
         64 => {
             let chance_val = get_val(group.min_1, group.max_1);
             let duration_val = get_val(group.min_2, group.max_2);
@@ -83,13 +83,13 @@ pub fn calculate_talent_display(
         _ => {} 
     }
 
-    match group.text_id { //Weaken
+    match group.text_id {
         1 | 70 | 71 => { // Gain Weaken
             let chance = group.min_1; 
             let bonus_duration = get_val(group.min_2, group.max_2);
             let weaken_to = 100 - group.min_3; 
             Some(format!(
-                "Duration: {}\nChance: {}%\nReduction: To {}% Atk", 
+                "Duration: {}\nChance: {}%\nEffect: deals {}% Atk", 
                 fmt_additive(stats.weaken_duration, bonus_duration, "f"), 
                 chance,
                 weaken_to
@@ -128,7 +128,6 @@ pub fn calculate_talent_display(
             Some(format!("Chance: {}", fmt_additive(stats.slow_chance, bonus, "%")))
         },
 
-        
         8 | 73 | 75 => { // Knockback
             let mut bonus = get_val(group.min_1, group.max_1);
             if bonus == 0 && group.min_1 == 0 {
@@ -141,13 +140,13 @@ pub fn calculate_talent_display(
             Some(format!("Chance: {}", fmt_additive(stats.knockback_chance, bonus, "%")))
         },
 
-        10 => { // Strengthen
+        10 => { // Gain Strengthen
             let hp_limit = 100 - group.min_1; 
             let bonus = get_val(group.min_2, group.max_2);
             Some(format!("{}\nTrigger at: {}% HP", fmt_additive(stats.strengthen_boost, bonus, "%"), hp_limit))
         },
-        46 => {
-            let bonus = get_val(group.min_1, group.max_1);
+        46 => { // Upgrade Strengthen
+            let bonus = get_val_fallback();
             Some(fmt_additive(stats.strengthen_boost, bonus, "%"))
         },
         11 => { // Survive
@@ -374,15 +373,20 @@ pub fn apply_talent_stats(base: &CatRaw, talent_data: &TalentRaw, levels: &HashM
                 }
             },
             
-            // THE SISTERS
+            // The Sisters
             5 => s.strong_against = 1, 
             6 => s.resist = 1,         
             7 => s.massive_damage = 1, 
             
             8 => s.knockback_chance += val,
             10 => { // Strengthen
-                s.strengthen_threshold = (100 - group.min_1) as i32;
-                s.strengthen_boost += val2;
+                if s.strengthen_boost == 0 {
+                    // Gain Strengthen
+                    s.strengthen_threshold = (100 - group.min_1) as i32;
+                    s.strengthen_boost = val2;
+                } else {
+                    s.strengthen_boost += if val != 0 { val } else { val2 };
+                }
             },
             11 => s.survive += val,
             
@@ -436,10 +440,7 @@ pub fn apply_talent_stats(base: &CatRaw, talent_data: &TalentRaw, levels: &HashM
                     if val2 > 0 { s.curse_duration += val2; }
                 }
             },
-            61 => { // TBA (Standard)
-                s.time_before_attack_1 = s.time_before_attack_1.saturating_sub(val);
-            },
-            82 => { // Attack Freq Up (Percentage)
+            61 | 82 => { // Attack Freq Up
                 let reduction = (s.time_before_attack_1 as f32 * val as f32 / 100.0).round() as i32;
                 s.time_before_attack_1 = s.time_before_attack_1.saturating_sub(reduction);
             },
@@ -449,7 +450,7 @@ pub fn apply_talent_stats(base: &CatRaw, talent_data: &TalentRaw, levels: &HashM
                 s.wave_level = group.min_2 as i32;
             },
             
-            // SLAYERS
+            // Slayers
             63 => s.colossus_slayer = 1,
             64 => { // Behemoth Slayer
                 s.behemoth_slayer = 1;

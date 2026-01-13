@@ -276,8 +276,17 @@ pub fn collect_ability_data(
                 27 => push_ability(&mut talent_headline, true, img015::ICON_MOVE_SPEED, format!("Move Speed Up (+{})", val), aid),
                 31 => push_ability(&mut talent_headline, true, img015::ICON_ATTACK_BUFF, format!("Attack Power Up (+{}%)", val), aid),
                 32 => push_ability(&mut talent_headline, true, img015::ICON_HEALTH_BUFF, format!("Health Up (+{}%)", val), aid),
-                61 => push_ability(&mut talent_headline, true, img015::ICON_TBA_DOWN, format!("TBA Down (-{}%)", val), aid),
-
+                61 | 82 => { // Attack Freq Up
+                    let reduction = (cat_stats.time_before_attack_1 as f32 * val as f32 / 100.0).round() as i32;
+                    push_ability(
+                        &mut talent_headline, 
+                        true, 
+                        img015::ICON_TBA_DOWN, 
+                        format!("TBA Down (-{}% | -{}f)", val, reduction), 
+                        aid
+                    );
+                }
+                
                 // Resistances
                 18 => push_ability(&mut group_footer, true, img015::ICON_RESIST_WEAKEN, format!("Resist Weaken ({}%)", val), aid),
                 19 => push_ability(&mut group_footer, true, img015::ICON_RESIST_FREEZE, format!("Resist Freeze ({}%)", val), aid),
