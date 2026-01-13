@@ -52,15 +52,29 @@ pub fn calculate_talent_display(
 ) -> Option<String> {
     
     let get_val = |min, max| calculate_talent_value(min, max, talent_level, group.max_level);
+    
+    let get_val_fallback = || {
+        let v1 = get_val(group.min_1, group.max_1);
+        if v1 != 0 { v1 } else { get_val(group.min_2, group.max_2) }
+    };
 
     match group.ability_id {
-        // State
+        // State Talents
         5 | 6 | 7 | 12 | 14 | 16 | 23 | 29 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 
-        44 | 45 | 46 | 47 | 48 | 49 | 53 | 55 | 57 | 63 | 64 | 66 | 67 | 92 => {
+        44 | 45 | 46 | 47 | 48 | 49 | 53 | 55 | 57 | 63 | 66 | 67 | 92 => {
             return Some(fmt_state(talent_level));
         },
 
-        // percentage
+        // Behemoth Slayer (Default)
+        64 => {
+            let chance_val = get_val(group.min_1, group.max_1);
+            let duration_val = get_val(group.min_2, group.max_2);
+            let chance = if chance_val > 0 { chance_val } else { 5 };
+            let duration = if duration_val > 0 { duration_val } else { 30 };
+            return Some(format!("Inactive -> Active\nDodge Chance: {}%\nDodge Duration: {}f", chance, duration));
+        },
+
+        // Resistances
         18 | 19 | 20 | 21 | 22 | 24 | 30 | 52 | 54 => {
             let bonus = get_val(group.min_1, group.max_1);
             return Some(fmt_additive(0, bonus, "%"));
@@ -69,42 +83,52 @@ pub fn calculate_talent_display(
         _ => {} 
     }
 
-    match group.text_id {
-        1 | 70 | 71 => { // Weaken
+    match group.text_id { //Weaken
+        1 | 70 | 71 => { // Gain Weaken
             let chance = group.min_1; 
-            let bonus = get_val(group.min_2, group.max_2); 
-            Some(format!("Duration: {}\nChance: {}%", fmt_additive(stats.weaken_duration, bonus, "f"), chance))
+            let bonus_duration = get_val(group.min_2, group.max_2);
+            let weaken_to = 100 - group.min_3; 
+            Some(format!(
+                "Duration: {}\nChance: {}%\nEffect: deals {}% Atk", 
+                fmt_additive(stats.weaken_duration, bonus_duration, "f"), 
+                chance,
+                weaken_to
+            ))
         },
-        42 => { // Upgrade Weaken
-            let bonus = get_val(group.min_1, group.max_1);
+        42 => { // Upgrade Weaken Duration
+            let bonus = get_val_fallback();
             Some(format!("Duration: {}", fmt_additive(stats.weaken_duration, bonus, "f")))
         },
+
         2 | 76 => { // Freeze
             let chance = group.min_1;
             let bonus = get_val(group.min_2, group.max_2);
             Some(format!("Duration: {}\nChance: {}%", fmt_additive(stats.freeze_duration, bonus, "f"), chance))
         },
         43 => { // Upgrade Freeze
-            let bonus = get_val(group.min_1, group.max_1);
+            let bonus = get_val_fallback();
             Some(format!("Duration: {}", fmt_additive(stats.freeze_duration, bonus, "f")))
         },
         74 => { // Upgrade Freeze Chance
             let bonus = get_val(group.min_1, group.max_1);
             Some(format!("Chance: {}", fmt_additive(stats.freeze_chance, bonus, "%")))
         },
+
         3 | 69 | 72 => { // Slow
             let chance = group.min_1;
             let bonus = get_val(group.min_2, group.max_2);
             Some(format!("Duration: {}\nChance: {}%", fmt_additive(stats.slow_duration, bonus, "f"), chance))
         },
         44 => { // Upgrade Slow
-            let bonus = get_val(group.min_1, group.max_1);
+            let bonus = get_val_fallback();
             Some(format!("Duration: {}", fmt_additive(stats.slow_duration, bonus, "f")))
         },
         63 => { // Upgrade Slow Chance
             let bonus = get_val(group.min_1, group.max_1);
             Some(format!("Chance: {}", fmt_additive(stats.slow_chance, bonus, "%")))
         },
+
+        
         8 | 73 | 75 => { // Knockback
             let mut bonus = get_val(group.min_1, group.max_1);
             if bonus == 0 && group.min_1 == 0 {
@@ -116,6 +140,7 @@ pub fn calculate_talent_display(
             let bonus = get_val(group.min_1, group.max_1);
             Some(format!("Chance: {}", fmt_additive(stats.knockback_chance, bonus, "%")))
         },
+
         10 => { // Strengthen
             let hp_limit = 100 - group.min_1; 
             let bonus = get_val(group.min_2, group.max_2);
@@ -210,15 +235,15 @@ pub fn calculate_talent_display(
             Some(format!("Duration: {}\nChance: {}%", fmt_additive(stats.curse_duration, bonus, "f"), chance))
         },
         93 => { // Upgrade Curse
-            let bonus = get_val(group.min_1, group.max_1);
+            let bonus = get_val_fallback();
             Some(format!("Duration: {}", fmt_additive(stats.curse_duration, bonus, "f")))
         },
         82 => { // Attack Freq Up
-        let percent = get_val(group.min_1, group.max_1);
-        let base = stats.time_before_attack_1;
-        let reduction = (base as f32 * percent as f32 / 100.0).round() as i32;
-        Some(format!("{}f (-{}%) -> {}f", base, percent, base.saturating_sub(reduction)))
-    },
+            let percent = get_val(group.min_1, group.max_1);
+            let base = stats.time_before_attack_1;
+            let reduction = (base as f32 * percent as f32 / 100.0).round() as i32;
+            Some(format!("{}f (-{}%) -> {}f", base, percent, base.saturating_sub(reduction)))
+        },
         83 => { // Mini-Wave
             let bonus = get_val(group.min_1, group.max_1);
             let level = group.min_2;
@@ -228,7 +253,7 @@ pub fn calculate_talent_display(
         86 => { // Behemoth Slayer
             let chance = group.min_1;
             let duration = group.min_2;
-            Some(format!("Inactive -> Active\n{}% Chance to Dodge for {}f", chance, duration))
+            Some(format!("Inactive -> Active\nDodge Chance: {}%\nDodge Duration: {}f", chance, duration))
         },
         89 => { // Mini-Surge
             let bonus = get_val(group.min_1, group.max_1);
@@ -316,14 +341,16 @@ pub fn apply_talent_stats(base: &CatRaw, talent_data: &TalentRaw, levels: &HashM
         let val = calculate_talent_value(group.min_1, group.max_1, lv, group.max_level);
         let val2 = calculate_talent_value(group.min_2, group.max_2, lv, group.max_level);
 
+        let val_duration = if val != 0 { val } else { val2 };
+
         match group.ability_id {
             1 => { // Weaken
                 if s.weaken_chance == 0 {
                     s.weaken_chance = group.min_1 as i32; 
                     s.weaken_duration = val2;
-                    s.weaken_to = group.min_3 as i32; 
+                    s.weaken_to = (100 - group.min_3) as i32; 
                 } else {
-                    s.weaken_duration += val; 
+                    s.weaken_duration += val_duration;
                 }
             },
             2 => { // Freeze
@@ -333,7 +360,7 @@ pub fn apply_talent_stats(base: &CatRaw, talent_data: &TalentRaw, levels: &HashM
                 } else if group.text_id == 74 {
                     s.freeze_chance += val;
                 } else {
-                    s.freeze_duration += val;
+                    s.freeze_duration += val_duration;
                 }
             },
             3 => { // Slow
@@ -343,14 +370,14 @@ pub fn apply_talent_stats(base: &CatRaw, talent_data: &TalentRaw, levels: &HashM
                 } else if group.text_id == 63 {
                     s.slow_chance += val;
                 } else {
-                    s.slow_duration += val;
+                    s.slow_duration += val_duration;
                 }
             },
             
-            // The Sisters
-            5 => s.strong_against = 1, // Strong Against
-            6 => s.resist = 1,         // Resistant
-            7 => s.massive_damage = 1, // Massive Damage
+            // THE SISTERS
+            5 => s.strong_against = 1, 
+            6 => s.resist = 1,         
+            7 => s.massive_damage = 1, 
             
             8 => s.knockback_chance += val,
             10 => { // Strengthen
@@ -359,11 +386,11 @@ pub fn apply_talent_stats(base: &CatRaw, talent_data: &TalentRaw, levels: &HashM
             },
             11 => s.survive += val,
             
-            12 => s.base_destroyer = 1, // Base Destroyer
+            12 => s.base_destroyer = 1,
             13 => s.critical_chance += val,
-            14 => s.zombie_killer = 1,  // Zombie Killer
+            14 => s.zombie_killer = 1,
             15 => s.barrier_breaker_chance += val,
-            16 => s.double_bounty = 1,  // Double Money
+            16 => s.double_bounty = 1,
             
             17 => { // Wave
                 s.wave_chance += val;
@@ -399,13 +426,20 @@ pub fn apply_talent_stats(base: &CatRaw, talent_data: &TalentRaw, levels: &HashM
             },
             58 => s.shield_pierce_chance += val,
             60 => { // Curse
-                s.curse_chance += val;
-                s.curse_duration += val2;
+                if s.curse_chance == 0 {
+                    s.curse_chance += val;
+                    s.curse_duration += val2;
+                } else if group.text_id == 93 {
+                    s.curse_duration += val_duration;
+                } else {
+                    s.curse_chance += val;
+                    if val2 > 0 { s.curse_duration += val2; }
+                }
             },
-            61 => { // TBA
+            61 => { // TBA (Standard)
                 s.time_before_attack_1 = s.time_before_attack_1.saturating_sub(val);
             },
-            82 => { // Attack Frequency Up
+            82 => { // Attack Freq Up (Percentage)
                 let reduction = (s.time_before_attack_1 as f32 * val as f32 / 100.0).round() as i32;
                 s.time_before_attack_1 = s.time_before_attack_1.saturating_sub(reduction);
             },
@@ -415,9 +449,15 @@ pub fn apply_talent_stats(base: &CatRaw, talent_data: &TalentRaw, levels: &HashM
                 s.wave_level = group.min_2 as i32;
             },
             
-            // Slayers
+            // SLAYERS
             63 => s.colossus_slayer = 1,
-            64 => s.behemoth_slayer = 1,
+            64 => { // Behemoth Slayer
+                s.behemoth_slayer = 1;
+                let chance = if val > 0 { val } else { 5 };
+                let duration = if val2 > 0 { val2 } else { 30 };
+                s.behemoth_dodge_chance = chance;
+                s.behemoth_dodge_duration = duration;
+            },
             66 => s.sage_slayer = 1,
             
             65 => { // Mini-Surge
