@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use image::imageops;
 
 pub trait SoftReset {
@@ -22,4 +24,21 @@ pub fn autocrop(img: image::RgbaImage) -> image::RgbaImage {
     }
     if !found { return img; }
     imageops::crop_imm(&img, min_x, min_y, max_x - min_x + 1, max_y - min_y + 1).to_image()
+}
+
+pub fn detect_csv_separator(content: &str) -> char {
+    let mut lines_checked = 0;
+    
+    for line in content.lines() {
+        if line.trim().is_empty() { continue; }
+        
+        if line.contains('|') {
+            return '|';
+        }
+
+        lines_checked += 1;
+        if lines_checked >= 3 { break; }
+    }
+    
+    ','
 }

@@ -4,6 +4,7 @@ use std::fs;
 use std::thread;
 use std::sync::mpsc::{self, Receiver};
 use std::collections::HashMap;
+use crate::core::utils;
 
 #[derive(Clone)]
 pub struct SpriteCut {
@@ -106,8 +107,10 @@ fn parse_imgcut_data(image_file_path: &Path, cut_file_path: &Path) -> Option<(eg
     
     let mut parsed_cuts = HashMap::new();
 
+    let delimiter = utils::detect_csv_separator(&imgcut_content);
+
     for (line_index, file_line) in imgcut_content.lines().enumerate() {
-        let line_parts: Vec<&str> = file_line.split(',').collect();
+        let line_parts: Vec<&str> = file_line.split(delimiter).collect();
         if line_parts.len() < 4 { continue; }
 
         if let (Ok(sprite_x), Ok(sprite_y), Ok(sprite_width), Ok(sprite_height)) = (

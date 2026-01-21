@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 use std::fs;
 use std::path::Path;
+use crate::core::utils;
 
 pub const ICON_SIZE: f32 = 40.0;
 
@@ -126,8 +127,8 @@ pub struct CatRaw {
 }
 
 impl CatRaw {
-    pub fn from_csv_line(csv_line: &str) -> Option<Self> {
-        let line_parts: Vec<&str> = csv_line.split(',').collect();
+    pub fn from_csv_line(csv_line: &str, delimiter: char) -> Option<Self> {
+        let line_parts: Vec<&str> = csv_line.split(delimiter).collect();
         let get_int = |index: usize| line_parts.get(index).and_then(|s: &&str| s.trim().parse::<i32>().ok()).unwrap_or(0);
         let get_int_neg = |index: usize| line_parts.get(index).and_then(|s: &&str| s.trim().parse::<i32>().ok()).unwrap_or(-1);
 
@@ -274,14 +275,22 @@ impl CatRaw {
     }
 }
 
-pub fn load_from_id(cat_id: i32) -> Option<CatRaw> {
+pub fn load_from_id(cat_id: i32) -> Option<Vec<CatRaw>> {
     let file_path_str = format!("game/cats/{:03}/unit{:03}.csv", cat_id, cat_id + 1);
     let path_object = Path::new(&file_path_str);
     
     if path_object.exists() {
         if let Ok(file_content) = fs::read_to_string(path_object) {
-            if let Some(first_line) = file_content.lines().next() {
-                return CatRaw::from_csv_line(first_line);
+            let delimiter = utils::detect_csv_separator(&file_content);
+
+            let mut entries = Vec::new();
+            for line in file_content.lines() {
+                if let Some(raw) = CatRaw::from_csv_line(line, delimiter) {
+                    entries.push(raw);
+                }
+            }
+            if !entries.is_empty() {
+                return Some(entries);
             }
         }
     }

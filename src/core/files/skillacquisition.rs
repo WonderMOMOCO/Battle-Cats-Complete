@@ -3,6 +3,7 @@ use std::fs;
 use std::path::Path;
 use std::collections::HashMap;
 use crate::core::files::img015;
+use crate::core::utils;
 
 #[derive(Debug, Clone)]
 pub struct TalentRaw {
@@ -29,8 +30,10 @@ pub fn load(cats_directory: &Path) -> HashMap<u16, TalentRaw> {
     let mut map = HashMap::new();
     let file_path = cats_directory.join("SkillAcquisition.csv");
     if let Ok(content) = fs::read_to_string(&file_path) {
+        let delimiter = utils::detect_csv_separator(&content);
+
         for line in content.lines() {
-            if let Some(data) = parse_line(line) {
+            if let Some(data) = parse_line(line, delimiter) {
                 map.insert(data.id, data);
             }
         }
@@ -38,8 +41,8 @@ pub fn load(cats_directory: &Path) -> HashMap<u16, TalentRaw> {
     map
 }
 
-fn parse_line(line: &str) -> Option<TalentRaw> {
-    let parts: Vec<&str> = line.split(',').collect();
+fn parse_line(line: &str, delimiter: char) -> Option<TalentRaw> {
+    let parts: Vec<&str> = line.split(delimiter).collect();
     if parts.len() < 2 { return None; }
     let id = parts[0].trim().parse::<u16>().ok()?;
     let type_id = parts[1].trim().parse::<u16>().unwrap_or(0);

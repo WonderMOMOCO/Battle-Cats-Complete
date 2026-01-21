@@ -227,7 +227,6 @@ fn render_single_icon(ui: &mut egui::Ui, item: &AbilityItem, sheet: &SpriteSheet
     // Overlay border if present
     if let Some(border_id) = item.border_id {
         if let Some(border_sprite) = sheet.get_sprite_by_line(border_id) {
-            // Draw the border on top of the existing icon rect
             ui.put(response.rect, border_sprite.fit_to_exact_size(size));
         }
     }
@@ -313,12 +312,17 @@ fn render_conjure_details(
         .show(ui, |ui| {
             let spirit_border = egui::Color32::WHITE;
             
-            let conjure_stats = match stats::load_from_id(parent_stats.conjure_unit_id) {
+            let conjure_stats_vec = match stats::load_from_id(parent_stats.conjure_unit_id) {
                 Some(s) => s,
                 None => {
                     ui.label(egui::RichText::new("Spirit data not found").weak());
                     return;
                 }
+            };
+
+            let conjure_stats = match conjure_stats_vec.first() {
+                Some(s) => s,
+                None => return,
             };
 
             let dmg = curve.as_ref().map_or(
@@ -344,7 +348,7 @@ fn render_conjure_details(
             ui.add_space(settings.ability_padding_y);
 
             let (spirit_head_1, spirit_head_2, spirit_body_1, spirit_body_2, spirit_footer) = abilities::collect_ability_data(
-                &conjure_stats, level, curve, multihit_tex, kamikaze_tex, boss_wave_tex, settings, true,
+                conjure_stats, level, curve, multihit_tex, kamikaze_tex, boss_wave_tex, settings, true,
                 None, // Spirits don't have talents
                 None  // No level map for spirit
             );
@@ -352,8 +356,8 @@ fn render_conjure_details(
             if !spirit_head_1.is_empty() { render_icon_row(ui, &spirit_head_1, sheet, settings, spirit_border); }
             if !spirit_head_2.is_empty() { render_icon_row(ui, &spirit_head_2, sheet, settings, spirit_border); }
             
-            render_list_view(ui, &spirit_body_1, sheet, multihit_tex, kamikaze_tex, boss_wave_tex, 0, level, curve, &conjure_stats, settings, spirit_border);
-            render_list_view(ui, &spirit_body_2, sheet, multihit_tex, kamikaze_tex, boss_wave_tex, 0, level, curve, &conjure_stats, settings, spirit_border);
+            render_list_view(ui, &spirit_body_1, sheet, multihit_tex, kamikaze_tex, boss_wave_tex, 0, level, curve, conjure_stats, settings, spirit_border);
+            render_list_view(ui, &spirit_body_2, sheet, multihit_tex, kamikaze_tex, boss_wave_tex, 0, level, curve, conjure_stats, settings, spirit_border);
             
             if !spirit_footer.is_empty() {
                 render_icon_row(ui, &spirit_footer, sheet, settings, spirit_border);

@@ -26,13 +26,18 @@ pub const EGG_ANIM_PATTERN: &str = concat!(r"^", r"(\d{3})_", r"m", r"\.(png|img
 pub const EGG_MAANIM_PATTERN: &str = concat!(r"^", r"(\d{3})_", r"m", r"(0[0-3])", r"\.maanim$");
 
 // Master files with subfolders
-pub const CAT_UNIVERSAL_PATTERN: &str = concat!(r"^unitevolve_", r"([a-z]{2})", r"\.csv$");
-pub const SKILL_DESC_PATTERN: &str = concat!(r"^SkillDescriptions_", r"([a-z]{2})", r"\.csv$");
+pub const CAT_UNIVERSAL_PATTERN: &str = concat!(r"^unitevolve", r"(?:_([a-z]{2}))?", r"\.csv$");
+pub const SKILL_DESC_PATTERN: &str = concat!(r"^SkillDescriptions", r"(?:_([a-z]{2}))?", r"\.csv$");
 
 // Assets
-pub const ASSET_IMG015_PATTERN: &str = r"^img015_([a-z]{2})\.png$";
-pub const ASSET_015CUT_PATTERN: &str = r"^img015\.imgcut$";
+pub const ASSET_IMG015_PATTERN: &str = r"^img015(?:_([a-z]{2}))?\.png$";
+pub const ASSET_015CUT_PATTERN: &str = r"^img015(?:_([a-z]{2}))?\.imgcut$";
 pub const SKILL_NAME_PATTERN: &str = r"^Skill_name_(\d+)_([a-z]{2})\.png$";
+
+// Gatya Items
+pub const GATYA_ITEM_D_PATTERN: &str = r"^gatyaitemD_(\d{2,3})_([fz])\.png$"; 
+pub const GATYA_ITEM_BUY_PATTERN: &str = r"^Gatyaitembuy\.csv$";
+pub const GATYA_ITEM_NAME_PATTERN: &str = r"^GatyaitemName(?:_([a-z]{2}))?\.csv$";
 
 // Master files for Cat Data
 pub const CAT_UNIVERSAL_FILES: &[&str] = &[
@@ -75,17 +80,12 @@ pub const CHECK_LINE_FILES: &[&str] = &[
     "SkillLevel.csv"
 ];
 
-// Files essential for app function
-// (Folder Path, Filename Prefix, [Required Extensions])
-pub const ESSENTIAL_FILES: &[(&str, &str, &[&str])] = &[
-    ("game/assets/img015", "img015", &["png", "imgcut"]),
-];
-
 // Files that have regional variants but no
 // Country Codes within their source
 pub const REGION_SENSITIVE_FILES: &[&str] = &[
     "img015.imgcut", 
     "img015.png", 
     "SkillDescriptions.csv",
-    "Skill_name_"
+    "Skill_name_",
+    "GatyaitemName.csv"
 ];

@@ -292,213 +292,213 @@ pub fn calculate_talent_display(
     }
 }
 
-fn apply_target_traits(s: &mut CatRaw, name_id: i16, type_id: u16) {
+fn apply_target_traits(stats: &mut CatRaw, name_id: i16, type_id: u16) {
     match name_id {
-        0 => s.target_red = 1,
-        1 => s.target_floating = 1,
-        2 => s.target_black = 1,
-        3 => s.target_metal = 1,
-        4 => s.target_angel = 1,
-        5 => s.target_alien = 1,
-        6 => s.target_zombie = 1,
-        7 => s.target_relic = 1,
-        8 => s.target_traitless = 1,
-        9 => s.target_witch = 1,
-        10 => s.target_eva = 1,
-        11 => s.target_aku = 1,
+        0 => stats.target_red = 1,
+        1 => stats.target_floating = 1,
+        2 => stats.target_black = 1,
+        3 => stats.target_metal = 1,
+        4 => stats.target_angel = 1,
+        5 => stats.target_alien = 1,
+        6 => stats.target_zombie = 1,
+        7 => stats.target_relic = 1,
+        8 => stats.target_traitless = 1,
+        9 => stats.target_witch = 1,
+        10 => stats.target_eva = 1,
+        11 => stats.target_aku = 1,
         _ => {}
     }
 
     if type_id > 0 {
-        if (type_id & (1 << 0)) != 0 { s.target_red = 1; }
-        if (type_id & (1 << 1)) != 0 { s.target_floating = 1; }
-        if (type_id & (1 << 2)) != 0 { s.target_black = 1; }
-        if (type_id & (1 << 3)) != 0 { s.target_metal = 1; }
-        if (type_id & (1 << 4)) != 0 { s.target_angel = 1; }
-        if (type_id & (1 << 5)) != 0 { s.target_alien = 1; }
-        if (type_id & (1 << 6)) != 0 { s.target_zombie = 1; }
-        if (type_id & (1 << 7)) != 0 { s.target_relic = 1; }
-        if (type_id & (1 << 8)) != 0 { s.target_traitless = 1; }
-        if (type_id & (1 << 9)) != 0 { s.target_witch = 1; }
-        if (type_id & (1 << 10)) != 0 { s.target_eva = 1; }
-        if (type_id & (1 << 11)) != 0 { s.target_aku = 1; }
+        if (type_id & (1 << 0)) != 0 { stats.target_red = 1; }
+        if (type_id & (1 << 1)) != 0 { stats.target_floating = 1; }
+        if (type_id & (1 << 2)) != 0 { stats.target_black = 1; }
+        if (type_id & (1 << 3)) != 0 { stats.target_metal = 1; }
+        if (type_id & (1 << 4)) != 0 { stats.target_angel = 1; }
+        if (type_id & (1 << 5)) != 0 { stats.target_alien = 1; }
+        if (type_id & (1 << 6)) != 0 { stats.target_zombie = 1; }
+        if (type_id & (1 << 7)) != 0 { stats.target_relic = 1; }
+        if (type_id & (1 << 8)) != 0 { stats.target_traitless = 1; }
+        if (type_id & (1 << 9)) != 0 { stats.target_witch = 1; }
+        if (type_id & (1 << 10)) != 0 { stats.target_eva = 1; }
+        if (type_id & (1 << 11)) != 0 { stats.target_aku = 1; }
     }
 }
 
-pub fn apply_talent_stats(base: &CatRaw, talent_data: &TalentRaw, levels: &HashMap<u8, u8>) -> CatRaw {
-    let mut s = base.clone();
+pub fn apply_talent_stats(base_stats: &CatRaw, talent_data: &TalentRaw, levels: &HashMap<u8, u8>) -> CatRaw {
+    let mut stats = base_stats.clone();
     
-    for (idx, group) in talent_data.groups.iter().enumerate() {
-        let lv = *levels.get(&(idx as u8)).unwrap_or(&0);
+    for (index, group) in talent_data.groups.iter().enumerate() {
+        let current_level = *levels.get(&(index as u8)).unwrap_or(&0);
         
-        if lv > 0 && group.name_id != -1 {
-            apply_target_traits(&mut s, group.name_id, talent_data.type_id);
+        if current_level > 0 && group.name_id != -1 {
+            apply_target_traits(&mut stats, group.name_id, talent_data.type_id);
         }
 
-        if lv == 0 { continue; }
+        if current_level == 0 { continue; }
         
-        let val = calculate_talent_value(group.min_1, group.max_1, lv, group.max_level);
-        let val2 = calculate_talent_value(group.min_2, group.max_2, lv, group.max_level);
+        let value_1 = calculate_talent_value(group.min_1, group.max_1, current_level, group.max_level);
+        let value_2 = calculate_talent_value(group.min_2, group.max_2, current_level, group.max_level);
 
-        let val_duration = if val != 0 { val } else { val2 };
+        let duration_val = if value_1 != 0 { value_1 } else { value_2 };
 
         match group.ability_id {
             1 => { // Weaken
-                if s.weaken_chance == 0 {
-                    s.weaken_chance = group.min_1 as i32; 
-                    s.weaken_duration = val2;
-                    s.weaken_to = (100 - group.min_3) as i32; 
+                if stats.weaken_chance == 0 {
+                    stats.weaken_chance = group.min_1 as i32; 
+                    stats.weaken_duration = value_2;
+                    stats.weaken_to = (100 - group.min_3) as i32; 
                 } else {
-                    s.weaken_duration += val_duration;
+                    stats.weaken_duration += duration_val;
                 }
             },
             2 => { // Freeze
-                if s.freeze_chance == 0 {
-                    s.freeze_chance = group.min_1 as i32;
-                    s.freeze_duration = val2;
+                if stats.freeze_chance == 0 {
+                    stats.freeze_chance = group.min_1 as i32;
+                    stats.freeze_duration = value_2;
                 } else if group.text_id == 74 {
-                    s.freeze_chance += val;
+                    stats.freeze_chance += value_1;
                 } else {
-                    s.freeze_duration += val_duration;
+                    stats.freeze_duration += duration_val;
                 }
             },
             3 => { // Slow
-                if s.slow_chance == 0 {
-                    s.slow_chance = group.min_1 as i32;
-                    s.slow_duration = val2;
+                if stats.slow_chance == 0 {
+                    stats.slow_chance = group.min_1 as i32;
+                    stats.slow_duration = value_2;
                 } else if group.text_id == 63 {
-                    s.slow_chance += val;
+                    stats.slow_chance += value_1;
                 } else {
-                    s.slow_duration += val_duration;
+                    stats.slow_duration += duration_val;
                 }
             },
             
             // The Sisters
-            5 => s.strong_against = 1, 
-            6 => s.resist = 1,         
-            7 => s.massive_damage = 1, 
+            5 => stats.strong_against = 1, 
+            6 => stats.resist = 1,         
+            7 => stats.massive_damage = 1, 
             
-            8 => s.knockback_chance += val,
+            8 => stats.knockback_chance += value_1,
             10 => { // Strengthen
-                if s.strengthen_boost == 0 {
+                if stats.strengthen_boost == 0 {
                     // Gain Strengthen
-                    s.strengthen_threshold = (100 - group.min_1) as i32;
-                    s.strengthen_boost = val2;
+                    stats.strengthen_threshold = (100 - group.min_1) as i32;
+                    stats.strengthen_boost = value_2;
                 } else {
-                    s.strengthen_boost += if val != 0 { val } else { val2 };
+                    stats.strengthen_boost += if value_1 != 0 { value_1 } else { value_2 };
                 }
             },
-            11 => s.survive += val,
+            11 => stats.survive += value_1,
             
-            12 => s.base_destroyer = 1,
-            13 => s.critical_chance += val,
-            14 => s.zombie_killer = 1,
-            15 => s.barrier_breaker_chance += val,
-            16 => s.double_bounty = 1,
+            12 => stats.base_destroyer = 1,
+            13 => stats.critical_chance += value_1,
+            14 => stats.zombie_killer = 1,
+            15 => stats.barrier_breaker_chance += value_1,
+            16 => stats.double_bounty = 1,
             
             17 => { // Wave
-                s.wave_chance += val;
-                s.wave_level = group.min_2 as i32;
+                stats.wave_chance += value_1;
+                stats.wave_level = group.min_2 as i32;
             },
             
-            25 => s.eoc1_cost -= val, 
-            26 => s.cooldown -= val,
-            27 => s.speed += val,
+            25 => stats.eoc1_cost -= value_1, 
+            26 => stats.cooldown -= value_1,
+            27 => stats.speed += value_1,
             31 => { // Attack Buff
-                let factor = (100 + val) as f32 / 100.0;
-                s.attack_1 = (s.attack_1 as f32 * factor) as i32;
-                s.attack_2 = (s.attack_2 as f32 * factor) as i32;
-                s.attack_3 = (s.attack_3 as f32 * factor) as i32;
+                let factor = (100 + value_1) as f32 / 100.0;
+                stats.attack_1 = (stats.attack_1 as f32 * factor) as i32;
+                stats.attack_2 = (stats.attack_2 as f32 * factor) as i32;
+                stats.attack_3 = (stats.attack_3 as f32 * factor) as i32;
             },
             32 => { // Health Buff
-                let factor = (100 + val) as f32 / 100.0;
-                s.hitpoints = (s.hitpoints as f32 * factor) as i32;
+                let factor = (100 + value_1) as f32 / 100.0;
+                stats.hitpoints = (stats.hitpoints as f32 * factor) as i32;
             },
             50 => { // Savage Blow
-                s.savage_blow_chance += val;
-                s.savage_blow_boost = group.min_2 as i32;
+                stats.savage_blow_chance += value_1;
+                stats.savage_blow_boost = group.min_2 as i32;
             },
             51 => { // Dodge
-                s.dodge_chance += val;
-                s.dodge_duration += val2;
+                stats.dodge_chance += value_1;
+                stats.dodge_duration += value_2;
             },
             56 => { // Surge
-                s.surge_chance += val;
-                s.surge_level = group.min_2 as i32;
-                s.surge_spawn_anchor = group.min_3 as i32 / 4; 
-                s.surge_spawn_span = group.min_4 as i32 / 4;   
+                stats.surge_chance += value_1;
+                stats.surge_level = group.min_2 as i32;
+                stats.surge_spawn_anchor = group.min_3 as i32 / 4; 
+                stats.surge_spawn_span = group.min_4 as i32 / 4;   
             },
-            58 => s.shield_pierce_chance += val,
+            58 => stats.shield_pierce_chance += value_1,
             60 => { // Curse
-                if s.curse_chance == 0 {
-                    s.curse_chance += val;
-                    s.curse_duration += val2;
+                if stats.curse_chance == 0 {
+                    stats.curse_chance += value_1;
+                    stats.curse_duration += value_2;
                 } else if group.text_id == 93 {
-                    s.curse_duration += val_duration;
+                    stats.curse_duration += duration_val;
                 } else {
-                    s.curse_chance += val;
-                    if val2 > 0 { s.curse_duration += val2; }
+                    stats.curse_chance += value_1;
+                    if value_2 > 0 { stats.curse_duration += value_2; }
                 }
             },
             61 | 82 => { // Attack Freq Up
-                let reduction = (s.time_before_attack_1 as f32 * val as f32 / 100.0).round() as i32;
-                s.time_before_attack_1 = s.time_before_attack_1.saturating_sub(reduction);
+                let reduction = (stats.time_before_attack_1 as f32 * value_1 as f32 / 100.0).round() as i32;
+                stats.time_before_attack_1 = stats.time_before_attack_1.saturating_sub(reduction);
             },
             62 => { // Mini-Wave
-                s.mini_wave_flag = 1;
-                s.wave_chance += val;
-                s.wave_level = group.min_2 as i32;
+                stats.mini_wave_flag = 1;
+                stats.wave_chance += value_1;
+                stats.wave_level = group.min_2 as i32;
             },
             
             // Slayers
-            63 => s.colossus_slayer = 1,
+            63 => stats.colossus_slayer = 1,
             64 => { // Behemoth Slayer
-                s.behemoth_slayer = 1;
-                let chance = if val > 0 { val } else { 5 };
-                let duration = if val2 > 0 { val2 } else { 30 };
-                s.behemoth_dodge_chance = chance;
-                s.behemoth_dodge_duration = duration;
+                stats.behemoth_slayer = 1;
+                let chance = if value_1 > 0 { value_1 } else { 5 };
+                let duration = if value_2 > 0 { value_2 } else { 30 };
+                stats.behemoth_dodge_chance = chance;
+                stats.behemoth_dodge_duration = duration;
             },
-            66 => s.sage_slayer = 1,
+            66 => stats.sage_slayer = 1,
             
             65 => { // Mini-Surge
-                s.mini_surge_flag = 1;
-                s.surge_chance += val;
-                s.surge_level = group.min_2 as i32;
-                s.surge_spawn_anchor = group.min_3 as i32 / 4; 
-                s.surge_spawn_span = group.min_4 as i32 / 4;
+                stats.mini_surge_flag = 1;
+                stats.surge_chance += value_1;
+                stats.surge_level = group.min_2 as i32;
+                stats.surge_spawn_anchor = group.min_3 as i32 / 4; 
+                stats.surge_spawn_span = group.min_4 as i32 / 4;
             },
             67 => { // Explosion
-                s.explosion_chance += val;
-                s.explosion_spawn_anchor = group.min_2 as i32 / 4; 
-                s.explosion_spawn_span = group.min_3 as i32 / 4;
+                stats.explosion_chance += value_1;
+                stats.explosion_spawn_anchor = group.min_2 as i32 / 4; 
+                stats.explosion_spawn_span = group.min_3 as i32 / 4;
             },
             
             // Immunities
-            23 => s.wave_immune = 1,
-            29 => s.curse_immune = 1, 
-            44 => s.weaken_immune = 1,
-            45 => s.freeze_immune = 1,
-            46 => s.slow_immune = 1,
-            47 => s.knockback_immune = 1,
-            48 => s.wave_immune = 1,
-            49 => s.warp_immune = 1,
-            53 => s.toxic_immune = 1,
-            55 => s.surge_immune = 1,
-            57 => s.target_aku = 1,
+            23 => stats.wave_immune = 1,
+            29 => stats.curse_immune = 1, 
+            44 => stats.weaken_immune = 1,
+            45 => stats.freeze_immune = 1,
+            46 => stats.slow_immune = 1,
+            47 => stats.knockback_immune = 1,
+            48 => stats.wave_immune = 1,
+            49 => stats.warp_immune = 1,
+            53 => stats.toxic_immune = 1,
+            55 => stats.surge_immune = 1,
+            57 => stats.target_aku = 1,
             
             // Target Traits
-            33 => s.target_red = 1,
-            34 => s.target_floating = 1,
-            35 => s.target_black = 1,
-            36 => s.target_metal = 1,
-            37 => s.target_angel = 1,
-            38 => s.target_alien = 1,
-            39 => s.target_zombie = 1,
-            40 => s.target_relic = 1,
-            41 => s.target_traitless = 1,
+            33 => stats.target_red = 1,
+            34 => stats.target_floating = 1,
+            35 => stats.target_black = 1,
+            36 => stats.target_metal = 1,
+            37 => stats.target_angel = 1,
+            38 => stats.target_alien = 1,
+            39 => stats.target_zombie = 1,
+            40 => stats.target_relic = 1,
+            41 => stats.target_traitless = 1,
             _ => {}
         }
     }
-    s
+    stats
 }

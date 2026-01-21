@@ -11,7 +11,8 @@ use crate::core::cat::talents as talent_logic;
 mod header;
 mod stats;
 mod abilities;
-mod talents; 
+mod talents;
+mod details;
 
 pub fn show(
     ctx: &egui::Context, 
@@ -28,9 +29,11 @@ pub fn show(
     kamikaze_texture: &mut Option<egui::TextureHandle>,
     boss_wave_immune_texture: &mut Option<egui::TextureHandle>,
     talent_name_cache: &mut HashMap<String, egui::TextureHandle>,
+    gatya_item_textures: &mut HashMap<i32, Option<egui::TextureHandle>>,
     skill_descriptions: Option<&Vec<String>>, 
     settings: &Settings, 
-    talent_levels: &mut HashMap<u8, u8>, 
+    talent_levels: &mut HashMap<u8, u8>,
+    cache_version: u64,
 ) {
     img015::ensure_loaded(ctx, sprite_sheet, settings);
 
@@ -144,9 +147,18 @@ pub fn show(
                 });
         },
         DetailTab::Details => {
-            ui.centered_and_justified(|ui| {
-                ui.heading("Details Coming Soon");
-            });
+            egui::ScrollArea::vertical()
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    let fallback = Vec::new();
+                    let desc = cat.description.get(*current_form).unwrap_or(&fallback);
+                    details::render(ui, desc);
+                    
+                    let text_fallback = Vec::new();
+                    let ev_text = cat.evolve_text.get(*current_form).unwrap_or(&text_fallback);
+
+                    details::render_evolve(ui, ctx, &cat.unit_buy, ev_text, *current_form, gatya_item_textures, cache_version);
+                });
         }
     }
 }

@@ -227,7 +227,7 @@ pub fn collect_ability_data(
     push_ability(&mut group_body_2, cat_stats.slow_chance > 0, img015::ICON_SLOW, format!("{}% Chance to Slow {} for {}", cat_stats.slow_chance, target_label, frames_to_seconds(cat_stats.slow_duration)), 3);
     push_ability(&mut group_body_2, cat_stats.knockback_chance > 0, img015::ICON_KNOCKBACK, format!("{}% Chance to Knockback {}", cat_stats.knockback_chance, target_label), 8);
     push_ability(&mut group_body_2, cat_stats.curse_chance > 0, img015::ICON_CURSE, format!("{}% Chance to Curse {} for {}", cat_stats.curse_chance, target_label, frames_to_seconds(cat_stats.curse_duration)), 60);
-    push_ability(&mut group_body_2, cat_stats.warp_chance > 0, img015::ICON_WARP, format!("{}% Chance to Warp {} {}~{} range for {}", cat_stats.warp_chance, target_label, cat_stats.warp_distance_minimum, cat_stats.warp_distance_maximum, frames_to_seconds(cat_stats.warp_duration)), 9);
+    push_ability(&mut group_body_2, cat_stats.warp_chance > 0, img015::ICON_WARP, format!("{}% Chance to Warp {} {}~{} Range for {}", cat_stats.warp_chance, target_label, cat_stats.warp_distance_minimum, cat_stats.warp_distance_maximum, frames_to_seconds(cat_stats.warp_duration)), 9);
 
     // Immunities
     let immunities = [

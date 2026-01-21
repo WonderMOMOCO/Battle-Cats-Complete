@@ -1,6 +1,7 @@
 use eframe::egui;
 use crate::core::{cat, import, settings};
 use crate::ui::views::main_menu;
+use std::path::PathBuf;
 
 #[derive(PartialEq, Clone, Copy, serde::Deserialize, serde::Serialize)]
 enum Page {
@@ -96,7 +97,6 @@ impl eframe::App for BattleCatsApp {
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // Sidebar Logic
         let sidebar_inner_width = 150.0; 
         let sidebar_margin = 15.0;       
         let total_sidebar_width = sidebar_inner_width + (sidebar_margin * 2.0);
@@ -109,6 +109,17 @@ impl eframe::App for BattleCatsApp {
 
         if open_factor > 0.0 && open_factor < 1.0 {
             ctx.request_repaint();
+        }
+
+        let mut reload_queue: Vec<PathBuf> = Vec::new();
+        if let Some(rx) = &self.cat_list_state.watch_receiver {
+            while let Ok(path) = rx.try_recv() {
+                reload_queue.push(path);
+            }
+        }
+
+        for path in reload_queue {
+            self.cat_list_state.handle_event(ctx, &path, &self.settings.game_language);
         }
 
         self.cat_list_state.update_data();
@@ -159,7 +170,6 @@ impl eframe::App for BattleCatsApp {
             }
         }
         
-        // Sidebar Rendering
         let screen_rect = ctx.screen_rect();
         let sidebar_x = screen_rect.width() - visible_sidebar_width;
         let button_gap = 10.0;

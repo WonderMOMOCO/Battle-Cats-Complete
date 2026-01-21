@@ -1,20 +1,27 @@
 use eframe::egui;
-use std::sync::mpsc::{Receiver, TryRecvError};
+use std::sync::mpsc::{channel, Receiver, TryRecvError};
 use std::collections::{HashMap, VecDeque};
-use crate::core::utils::SoftReset; 
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
 pub mod scanner;
 pub mod stats;
 pub mod abilities; 
 pub mod talents; 
+pub mod watcher;
 
 use crate::ui::components::cat_list::CatList; 
 use crate::ui::views::cat_detail; 
+use crate::core::patterns;
 
 use scanner::CatEntry;
 use crate::core::files::imgcut::SpriteSheet; 
 use crate::core::files::skilldescriptions; 
+
+use crate::core::files::unitlevel;
+use crate::core::files::unitbuy;
+use crate::core::files::skillacquisition;
+use crate::core::files::unitevolve;
 
 #[derive(Deserialize, Serialize, PartialEq, Clone, Copy)]
 pub enum DetailTab {
@@ -31,7 +38,9 @@ impl Default for DetailTab {
 #[serde(default)] 
 pub struct CatListState {
     #[serde(skip)] 
-    pub cats: Vec<CatEntry>,
+    pub cats: Vec<CatEntry>,          
+    #[serde(skip)]
+    pub incoming_cats: Vec<CatEntry>, 
     
     #[serde(alias = "persistent_id")] 
     pub selected_cat: Option<u32>,
@@ -51,6 +60,11 @@ pub struct CatListState {
     pub scan_receiver: Option<Receiver<CatEntry>>,
     
     #[serde(skip)]
+    pub watchers: Option<watcher::CatWatchers>,
+    #[serde(skip)]
+    pub watch_receiver: Option<Receiver<PathBuf>>,
+    
+    #[serde(skip)]
     pub detail_texture: Option<egui::TextureHandle>,
     #[serde(skip)]
     pub detail_key: String, 
@@ -66,6 +80,12 @@ pub struct CatListState {
     
     #[serde(skip)]
     pub talent_name_textures: HashMap<String, egui::TextureHandle>, 
+    
+    #[serde(skip)]
+    pub gatya_item_textures: HashMap<i32, Option<egui::TextureHandle>>,
+
+    #[serde(skip)]
+    pub texture_cache_version: u64,
 
     #[serde(skip)]
     pub skill_descriptions: Option<Vec<String>>,
@@ -81,9 +101,12 @@ impl Default for CatListState {
     fn default() -> Self {
         Self {
             cats: Vec::new(),
+            incoming_cats: Vec::new(),
             selected_cat: None,
             cat_list: CatList::default(),
             scan_receiver: None,
+            watchers: None,
+            watch_receiver: None,
             search_query: String::new(),
             selected_form: 0,
             selected_detail_tab: DetailTab::default(),
@@ -96,6 +119,8 @@ impl Default for CatListState {
             kamikaze_texture: None,
             boss_wave_immune_texture: None,
             talent_name_textures: HashMap::new(),
+            gatya_item_textures: HashMap::new(), 
+            texture_cache_version: 0, 
             skill_descriptions: None, 
             initialized: false, 
             talent_levels: HashMap::new(),
@@ -104,42 +129,113 @@ impl Default for CatListState {
     }
 }
 
-impl SoftReset for CatListState {
-    fn reset(&mut self) {
-        self.cats.clear();
-        self.cat_list.clear_cache();
-        self.detail_texture = None;
-        self.detail_key.clear();
-        self.selected_cat = None;
-        self.selected_form = 0; 
-        self.selected_detail_tab = DetailTab::Abilities;
-        self.search_query.clear(); 
-        self.level_input = "50".to_string();
-        self.current_level = 50;
-        self.sprite_sheet = SpriteSheet::default(); 
-        self.multihit_texture = None; 
-        self.kamikaze_texture = None;
-        self.boss_wave_immune_texture = None;
-        self.talent_name_textures.clear(); 
-        self.skill_descriptions = None; 
-        self.scan_receiver = None;
-        self.talent_levels.clear();
-        self.talent_history.clear();
-    }
-}
-
 impl CatListState {
+
+    pub fn init_watcher(&mut self, ctx: &egui::Context) {
+        if self.watchers.is_none() {
+            let (tx, rx) = channel();
+            if let Some(mut w) = watcher::CatWatchers::new(tx, ctx.clone()) {
+                let path = std::path::Path::new("game");
+                if path.exists() {
+                    w.watch_all(path);
+                    self.watchers = Some(w);
+                    self.watch_receiver = Some(rx);
+                }
+            }
+        }
+    }
+
+    pub fn handle_event(&mut self, ctx: &egui::Context, path: &PathBuf, language_code: &str) {
+        let path_str = path.to_string_lossy().to_lowercase();
+        let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+
+        if patterns::CAT_UNIVERSAL_FILES.contains(&file_name) || patterns::CHECK_LINE_FILES.contains(&file_name) {
+            self.restart_scan(language_code);
+            ctx.request_repaint();
+            return;
+        }
+
+        if file_name == "unitbuy.csv" {
+            let cats_dir = std::path::Path::new("game/cats");
+            let new_map = unitbuy::load_unitbuy(cats_dir);
+            for cat in &mut self.cats {
+                if let Some(row) = new_map.get(&cat.id) {
+                    cat.unit_buy = row.clone();
+                }
+            }
+            ctx.request_repaint();
+            return;
+        }
+
+        if path_str.contains("unitevolve") {
+            let cats_dir = std::path::Path::new("game/cats");
+            let new_text_map = unitevolve::load(cats_dir, language_code);
+
+            for cat in &mut self.cats {
+                if let Some(text_arr) = new_text_map.get(&cat.id) {
+                    cat.evolve_text = text_arr.clone();
+                }
+            }
+            if self.selected_cat.is_some() {
+                self.reload_selected_cat_data(language_code);
+            }
+            ctx.request_repaint();
+            return;
+        }
+
+        if path_str.contains("assets") || path_str.contains("gatyaitem") {
+            self.gatya_item_textures.clear();
+            self.texture_cache_version += 1; 
+            ctx.request_repaint();
+            return;
+        }
+        
+        if path_str.contains("cats") {
+             if let Some(id) = self.selected_cat {
+                 let id_str = format!("{:03}", id);
+                 if path_str.contains(&id_str) {
+                     self.reload_selected_cat_data(language_code);
+                     ctx.request_repaint();
+                 }
+            }
+        }
+    }
+
+    pub fn reload_selected_cat_data(&mut self, language_code: &str) {
+        if let Some(id) = self.selected_cat {
+            if let Some(index) = self.cats.iter().position(|c| c.id == id) {
+                
+                let cats_dir = std::path::Path::new("game/cats");
+                let unit_folder = cats_dir.join(format!("{:03}", id));
+                
+                let level_curves = unitlevel::load_level_curves(cats_dir);
+                let unit_buys = unitbuy::load_unitbuy(cats_dir);
+                let talents_map = skillacquisition::load(cats_dir);
+                let evolve_text_map = unitevolve::load(cats_dir, language_code);
+
+                if let Some(new_entry) = scanner::process_cat_entry(
+                    &unit_folder,
+                    &level_curves,
+                    &unit_buys,
+                    &talents_map,
+                    &evolve_text_map,
+                    language_code
+                ) {
+                    self.cats[index] = new_entry;
+                }
+            }
+        }
+    }
+
     pub fn update_data(&mut self) {
         let Some(receiver_handle) = &self.scan_receiver else { return };
 
-        let mut has_new_data = false;
         let mut is_scan_complete = false;
 
         loop {
             match receiver_handle.try_recv() {
                 Ok(cat_entry) => {
-                    self.cats.push(cat_entry);
-                    has_new_data = true;
+                    self.incoming_cats.push(cat_entry);
                 },
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => {
@@ -149,11 +245,10 @@ impl CatListState {
             }
         }
 
-        if has_new_data { 
-            self.cats.sort_by_key(|cat| cat.id);
-        }
-        
         if is_scan_complete {
+            self.incoming_cats.sort_by_key(|cat| cat.id);
+            self.cats = std::mem::take(&mut self.incoming_cats);
+            
             if let Some(target_id) = self.selected_cat {
                 if !self.cats.iter().any(|cat| cat.id == target_id) {
                     if let Some(first_cat) = self.cats.first() {
@@ -172,11 +267,25 @@ impl CatListState {
     }
 
     pub fn restart_scan(&mut self, language_code: &str) {
+        self.skill_descriptions = None; 
+        
         let current_selection_id = self.selected_cat;
         let current_form = self.selected_form;
         let current_tab = self.selected_detail_tab;
 
-        self.reset();
+        self.incoming_cats.clear();
+        
+        self.cat_list.clear_cache(); 
+        self.detail_texture = None;
+        self.detail_key.clear();
+        self.talent_name_textures.clear();
+        self.gatya_item_textures.clear(); 
+        self.texture_cache_version += 1;
+
+        self.sprite_sheet = SpriteSheet::default();
+        self.multihit_texture = None;
+        self.kamikaze_texture = None;
+        self.boss_wave_immune_texture = None;
 
         self.selected_cat = current_selection_id;
         self.selected_form = current_form;
@@ -189,6 +298,8 @@ impl CatListState {
 pub fn show(ctx: &egui::Context, state: &mut CatListState, settings: &crate::core::settings::Settings) {
     if !state.initialized {
         state.initialized = true;
+        state.init_watcher(ctx); 
+        
         if !settings.unit_persistence {
             state.selected_cat = None;
             state.cat_list.reset_scroll();
@@ -215,7 +326,11 @@ pub fn show(ctx: &egui::Context, state: &mut CatListState, settings: &crate::cor
 
             let old_selection_id = state.selected_cat;
             
-            state.cat_list.show(ctx, ui, &state.cats, &mut state.selected_cat, &state.search_query, settings.high_banner_quality);
+            if !state.cats.is_empty() {
+                state.cat_list.show(ctx, ui, &state.cats, &mut state.selected_cat, &state.search_query, settings.high_banner_quality);
+            } else {
+                ui.centered_and_justified(|ui| { ui.spinner(); });
+            }
             
             if state.selected_cat != old_selection_id {
                 state.detail_texture = None; 
@@ -314,9 +429,11 @@ pub fn show(ctx: &egui::Context, state: &mut CatListState, settings: &crate::cor
             &mut state.kamikaze_texture,
             &mut state.boss_wave_immune_texture,
             &mut state.talent_name_textures,
+            &mut state.gatya_item_textures, 
             state.skill_descriptions.as_ref(), 
             settings,
-            talent_map
+            talent_map,
+            state.texture_cache_version
         );
     });
 }
