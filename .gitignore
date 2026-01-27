@@ -3,6 +3,7 @@
 **/*.rs.bk
 
 # Debugging
+Battle Cats Complete.exe
 Battle_Cats_Complete.exe
 /stuff/
 
@@ -13,6 +14,11 @@ Battle_Cats_Complete.exe
 /game/
 /exports/
 /mods/
+
+# Update Leftovers
+tmp_update.zip
+tmp_new_version.exe
+tmp_new_version
 
 # IDE Settings
 .vscode/

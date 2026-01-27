@@ -1,5 +1,5 @@
 use eframe::egui;
-use crate::core::settings::{Settings, lang};
+use crate::core::settings::{Settings, lang, upd::UpdateMode};
 
 pub fn show(ui: &mut egui::Ui, settings: &mut Settings) -> bool {
     let mut refresh_needed = false;
@@ -8,9 +8,29 @@ pub fn show(ui: &mut egui::Ui, settings: &mut Settings) -> bool {
     ui.heading("Updates");
     ui.add_space(10.0);
 
-    ui.checkbox(&mut settings.check_updates_on_startup, "Check for Update at Runtime");
+    ui.horizontal(|ui| {
+        ui.label("Update Handling:");
+        
+        egui::ComboBox::from_id_salt("update_mode_selector")
+            .selected_text(settings.update_mode.label())
+            .show_ui(ui, |ui| {
+                ui.selectable_value(&mut settings.update_mode, UpdateMode::AutoReset, "Auto-Reset")
+                    .on_hover_text("Automatically downloads updates and restarts the app on startup");
+                    
+                ui.selectable_value(&mut settings.update_mode, UpdateMode::AutoLoad, "Auto-Load")
+                    .on_hover_text("Automatically downloads updates but waits until the next run to apply them");
+
+                ui.selectable_value(&mut settings.update_mode, UpdateMode::Prompt, "Prompt")
+                    .on_hover_text("Ask permission before downloading updates or restarting");
+
+                ui.selectable_value(&mut settings.update_mode, UpdateMode::Ignore, "Ignore")
+                    .on_hover_text("Never check for updates on startup");
+            });
+    });
     
-    if ui.button("Check for Update Now").clicked() {
+    ui.add_space(5.0);
+
+    if ui.add_sized([180.0, 30.0], egui::Button::new("Check for Update Now")).clicked() {
         settings.manual_check_requested = true;
     }
     

@@ -1,9 +1,8 @@
 use eframe::egui;
-use crate::core::{cat, import, settings};
-use crate::updater; // Import the new updater module
+use crate::core::{cat, import, settings, utils}; 
+use crate::updater;
 use crate::ui::views::main_menu;
 use std::path::PathBuf;
-use std::process::Command;
 
 #[derive(PartialEq, Clone, Copy, serde::Deserialize, serde::Serialize)]
 enum Page {
@@ -29,8 +28,12 @@ pub struct BattleCatsApp {
     sidebar_open: bool,
     #[serde(skip)]
     import_state: import::ImportState,
+    
     #[serde(skip)]
     updater: updater::Updater,
+    
+    #[serde(skip)]
+    drag_guard: utils::DragGuard,
     
     cat_list_state: cat::CatListState,
     pub settings: settings::Settings,
@@ -45,6 +48,7 @@ impl Default for BattleCatsApp {
             cat_list_state: cat::CatListState::default(),
             settings: settings::Settings::default(),
             updater: updater::Updater::default(),
+            drag_guard: utils::DragGuard::default(),
         }
     }
 }
@@ -60,7 +64,9 @@ impl BattleCatsApp {
         setup_custom_fonts(&cc.egui_ctx);
         app.cat_list_state.restart_scan(&app.settings.game_language);
 
-        if app.settings.check_updates_on_startup {
+        updater::cleanup_temp_files();
+
+        if app.settings.update_mode != settings::upd::UpdateMode::Ignore {
             app.updater.check_for_updates();
         }
 
@@ -70,23 +76,10 @@ impl BattleCatsApp {
 
 fn setup_custom_fonts(ctx: &egui::Context) {
     let mut fonts = egui::FontDefinitions::default();
-
-    fonts.font_data.insert(
-        "jp_font".to_owned(),
-        egui::FontData::from_static(include_bytes!("assets/NotoSansJP-Regular.ttf")),
-    );
-    fonts.font_data.insert(
-        "kr_font".to_owned(),
-        egui::FontData::from_static(include_bytes!("assets/NotoSansKR-Regular.ttf")),
-    );
-    fonts.font_data.insert(
-        "tc_font".to_owned(),
-        egui::FontData::from_static(include_bytes!("assets/NotoSansTC-Regular.ttf")),
-    );
-    fonts.font_data.insert(
-        "thai_font".to_owned(),
-        egui::FontData::from_static(include_bytes!("assets/NotoSansThai-Regular.ttf")),
-    );
+    fonts.font_data.insert("jp_font".to_owned(), egui::FontData::from_static(include_bytes!("assets/NotoSansJP-Regular.ttf")));
+    fonts.font_data.insert("kr_font".to_owned(), egui::FontData::from_static(include_bytes!("assets/NotoSansKR-Regular.ttf")));
+    fonts.font_data.insert("tc_font".to_owned(), egui::FontData::from_static(include_bytes!("assets/NotoSansTC-Regular.ttf")));
+    fonts.font_data.insert("thai_font".to_owned(), egui::FontData::from_static(include_bytes!("assets/NotoSansThai-Regular.ttf")));
 
     let families = [egui::FontFamily::Proportional, egui::FontFamily::Monospace];
     for family in families {
@@ -97,7 +90,6 @@ fn setup_custom_fonts(ctx: &egui::Context) {
             list.push("thai_font".to_owned());
         }
     }
-
     ctx.set_fonts(fonts);
 }
 
@@ -107,115 +99,16 @@ impl eframe::App for BattleCatsApp {
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        
-        // Process Update Messages
         self.updater.update_state();
 
-        // Handle Manual Check Request from Settings
         if self.settings.manual_check_requested {
             self.settings.manual_check_requested = false;
             self.updater.check_for_updates();
         }
 
-        // Update Found Modal
-        if let updater::UpdateStatus::UpdateFound(tag, release) = &self.updater.status {
-            let tag_clone = tag.clone();
-            let release_clone = release.clone();
-            let mut close_modal = false;
-            let mut start_download = false;
-            let mut disable_future = false;
-
-            egui::Window::new("Update Available")
-                .collapsible(false)
-                .resizable(false)
-                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
-                .show(ctx, |ui| {
-                    ui.label(format!("New Battle Cats Complete update found: {}", tag_clone));
-                    ui.add_space(10.0);
-                    ui.label("Would you like to download the update now?");
-                    ui.add_space(20.0);
-
-                    ui.horizontal(|ui| {
-                        if ui.button("Yes").clicked() {
-                            start_download = true;
-                        }
-                        if ui.button("No").clicked() {
-                            close_modal = true;
-                        }
-                        if ui.button("Never").clicked() {
-                            close_modal = true;
-                            disable_future = true;
-                        }
-                    });
-                });
-
-            if start_download {
-                self.updater.download_and_install(release_clone);
-            }
-            if disable_future {
-                self.settings.check_updates_on_startup = false;
-            }
-            if close_modal {
-                self.updater.status = updater::UpdateStatus::Idle;
-            }
-        }
-
-        // Downloading Progress
-        if let updater::UpdateStatus::Downloading(tag) = &self.updater.status {
-             egui::Window::new("Downloading Update")
-                .collapsible(false)
-                .resizable(false)
-                .title_bar(false) 
-                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
-                .show(ctx, |ui| {
-                    ui.add_space(10.0);
-                    ui.horizontal(|ui| {
-                        ui.spinner();
-                        ui.label(format!("Downloading {}...", tag));
-                    });
-                    ui.add_space(10.0);
-                    // Just a visual indeterminate bar
-                    let progress = 0.5; 
-                    ui.add(egui::ProgressBar::new(progress).animate(true));
-                });
-             ctx.request_repaint();
-        }
-
-        // Restart Prompt
-        if let updater::UpdateStatus::RestartPending(tag) = &self.updater.status {
-            let mut should_restart = false;
-            let mut close = false;
-
-            egui::Window::new("Update Complete")
-                .collapsible(false)
-                .resizable(false)
-                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
-                .show(ctx, |ui| {
-                    ui.label(format!("{} update complete!", tag));
-                    ui.add_space(5.0);
-                    ui.label("Would you like to restart and apply the update now?");
-                    ui.add_space(20.0);
-
-                    ui.horizontal(|ui| {
-                        if ui.button("Yes (Restart)").clicked() {
-                            should_restart = true;
-                        }
-                        if ui.button("No (Apply Later)").clicked() {
-                            close = true;
-                        }
-                    });
-                });
-            
-            if should_restart {
-                // Spawn new process
-                let _ = Command::new(std::env::current_exe().unwrap()).spawn();
-                // Exit current process
-                std::process::exit(0);
-            }
-            if close {
-                self.updater.status = updater::UpdateStatus::Idle;
-            }
-        }
+        self.updater.show_ui(ctx, &mut self.settings, &mut self.drag_guard);
+        
+        let screen_rect = ctx.screen_rect();
 
         let sidebar_inner_width = 150.0; 
         let sidebar_margin = 15.0;       
@@ -290,7 +183,6 @@ impl eframe::App for BattleCatsApp {
             }
         }
         
-        let screen_rect = ctx.screen_rect();
         let sidebar_x = screen_rect.width() - visible_sidebar_width;
         let button_gap = 10.0;
         let button_size = 40.0;

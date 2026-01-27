@@ -1,12 +1,36 @@
 #![allow(dead_code)]
 
 use image::imageops;
+use eframe::egui;
 
 pub trait SoftReset {
     fn reset(&mut self);
 }
 
 pub const LANGUAGE_PRIORITY: &[&str] = &["en", "ja", "tw", "ko", "es", "de", "fr", "it", "th", ""];
+
+#[derive(Default)]
+pub struct DragGuard {
+    broken: bool,
+}
+
+impl DragGuard {
+    pub fn update(&mut self, ctx: &egui::Context) -> bool {
+        let screen_rect = ctx.screen_rect();
+        let (pointer_pos, mouse_down) = ctx.input(|i| {
+            (i.pointer.interact_pos(), i.pointer.primary_down())
+        });
+        let in_window = pointer_pos.map_or(false, |p| screen_rect.contains(p));
+
+        if !mouse_down {
+            self.broken = false;
+        } else if !in_window {
+            self.broken = true;
+        }
+
+        in_window && !self.broken
+    }
+}
 
 pub fn autocrop(img: image::RgbaImage) -> image::RgbaImage {
     let (width, height) = img.dimensions();

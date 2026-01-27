@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::sync::mpsc::Receiver;
-
 pub mod lang;
+pub mod upd;
 
 #[derive(Serialize, Deserialize)]
 #[serde(default)] 
@@ -13,11 +13,14 @@ pub struct Settings {
     pub ability_padding_y: f32,
     pub trait_padding_y: f32,
     pub game_language: String, 
-    pub check_updates_on_startup: bool,
-    #[serde(skip)] 
-    pub active_tab: String,
+    
+    pub update_mode: upd::UpdateMode,
+    
     #[serde(skip)]
     pub manual_check_requested: bool,
+    
+    #[serde(skip)] 
+    pub active_tab: String,
     #[serde(skip)]
     pub available_languages: Vec<String>,
     #[serde(skip)]
@@ -34,10 +37,11 @@ impl Default for Settings {
             ability_padding_y: 5.0,
             trait_padding_y: 5.0,
             game_language: "".to_string(), 
-            check_updates_on_startup: true,
+            
+            update_mode: upd::UpdateMode::default(),
+            
             active_tab: "General".to_string(),
             manual_check_requested: false,
-            
             available_languages: Vec::new(),
             rx_lang: None,
         };

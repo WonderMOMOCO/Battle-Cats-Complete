@@ -219,11 +219,11 @@ pub fn collect_ability_data(
     push_ability(&mut group_body_1, cat_stats.savage_blow_chance > 0, img015::ICON_SAVAGE_BLOW, format!("{}% Chance to perform a Savage Blow dealing {}× Damage", cat_stats.savage_blow_chance, savage_multiplier), 50);
 
     push_ability(&mut group_body_1, cat_stats.critical_chance > 0, img015::ICON_CRITICAL_HIT, format!("{}% Chance to perform a Critical Hit dealing 2× Damage\nCritcal Hits bypass Metal resistance", cat_stats.critical_chance), 13);
-    push_ability(&mut group_body_1, cat_stats.strengthen_threshold > 0, img015::ICON_STRENGTHEN, format!("At {}% HP, Damage dealt increases by +{}%", cat_stats.strengthen_threshold, cat_stats.strengthen_boost), 10);
+    push_ability(&mut group_body_1, cat_stats.strengthen_threshold > 0, img015::ICON_STRENGTHEN, format!("Damage dealt increases by +{}% when reduced to {}% HP", cat_stats.strengthen_boost, cat_stats.strengthen_threshold), 10);
     push_ability(&mut group_body_1, cat_stats.survive > 0, img015::ICON_SURVIVE, format!("{}% Chance to Survive a lethal strike", cat_stats.survive), 11);
     push_ability(&mut group_body_1, cat_stats.barrier_breaker_chance > 0, img015::ICON_BARRIER_BREAKER, format!("{}% Chance to break enemy Barriers", cat_stats.barrier_breaker_chance), 15);
     push_ability(&mut group_body_1, cat_stats.shield_pierce_chance > 0, img015::ICON_SHIELD_PIERCER, format!("{}% Chance to pierce enemy Shields", cat_stats.shield_pierce_chance), 58);
-    push_ability(&mut group_body_1, cat_stats.metal_killer_percent > 0, img015::ICON_METAL_KILLER, format!("Deals {}% of a Metal Enemies current HP upon hit", cat_stats.metal_killer_percent), 0);
+    push_ability(&mut group_body_1, cat_stats.metal_killer_percent > 0, img015::ICON_METAL_KILLER, format!("Reduces Metal enemies current HP to {}% upon hit", cat_stats.metal_killer_percent), 0);
 
     if !is_conjure_unit { 
         push_ability(&mut group_body_2, cat_stats.dodge_chance > 0, img015::ICON_DODGE, format!("{}% Chance to Dodge {} for {}", cat_stats.dodge_chance, target_label, frames_to_seconds(cat_stats.dodge_duration)), 51); 

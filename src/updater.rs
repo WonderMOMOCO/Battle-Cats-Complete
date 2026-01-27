@@ -1,10 +1,35 @@
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
+use std::fs;
+use std::path::Path;
 use self_update::cargo_crate_version;
+use eframe::egui;
+use std::process::Command;
+
+use crate::core::settings::{Settings, upd::UpdateMode};
+use crate::core::utils::DragGuard;
 
 const REPO_OWNER: &str = "WonderMOMOCO"; 
 const REPO_NAME: &str = "Battle-Cats-Complete";
 const BIN_NAME: &str = "Battle Cats Complete"; 
+
+const PROMPT_BUTTON_SIZE: [f32; 2] = [80.0, 40.0];  
+const RESTART_BUTTON_SIZE: [f32; 2] = [80.0, 40.0]; 
+
+pub fn cleanup_temp_files() {
+    let temp_files = [
+        "tmp_update.zip",
+        "tmp_new_version.exe",
+        "tmp_new_version",
+    ];
+
+    for file in temp_files {
+        let path = Path::new(file);
+        if path.exists() {
+            let _ = fs::remove_file(path); 
+        }
+    }
+}
 
 #[derive(Clone)]
 pub enum UpdateStatus {
@@ -13,7 +38,6 @@ pub enum UpdateStatus {
     UpdateFound(String, self_update::update::Release),
     Downloading(String),
     RestartPending(String),
-    #[allow(dead_code)]
     Error(String),
     UpToDate,
 }
@@ -68,25 +92,42 @@ impl Updater {
         self.status = UpdateStatus::Downloading(version.clone());
 
         thread::spawn(move || {
+            cleanup_temp_files();
+
             let _ = tx.send(UpdaterMsg::DownloadStarted(version.clone()));
+            
+            let target_tag = if version.starts_with('v') { version.clone() } else { format!("v{}", version) };
+            let target_asset_name = if cfg!(target_os = "windows") { "bcc_windows" } else { "bcc_linux" };
             
             let result = self_update::backends::github::Update::configure()
                 .repo_owner(REPO_OWNER)
                 .repo_name(REPO_NAME)
                 .bin_name(BIN_NAME)
-                .show_download_progress(true)
+                .show_download_progress(false)
+                .show_output(false)            
+                .no_confirm(true)              
                 .current_version(cargo_crate_version!())
-                .target_version_tag(&version) 
+                .target_version_tag(&target_tag)
+                .target(target_asset_name)     
                 .build();
                 
             match result {
                 Ok(update_box) => {
                      match update_box.update() {
-                         Ok(_) => { let _ = tx.send(UpdaterMsg::DownloadFinished(version)); },
-                         Err(e) => { let _ = tx.send(UpdaterMsg::Error(format!("Update failed: {}", e))); }
+                         Ok(_) => { 
+                             cleanup_temp_files();
+                             let _ = tx.send(UpdaterMsg::DownloadFinished(version)); 
+                         },
+                         Err(e) => { 
+                             cleanup_temp_files();
+                             let _ = tx.send(UpdaterMsg::Error(format!("Update failed: {}", e))); 
+                         }
                      }
                 }
-                Err(e) => { let _ = tx.send(UpdaterMsg::Error(format!("Config failed: {}", e))); }
+                Err(e) => { 
+                    cleanup_temp_files();
+                    let _ = tx.send(UpdaterMsg::Error(format!("Config failed: {}", e))); 
+                }
             }
         });
     }
@@ -101,7 +142,6 @@ impl Updater {
                     self.status = UpdateStatus::UpToDate;
                 },
                 UpdaterMsg::Error(e) => {
-                    println!("Updater Error: {}", e);
                     self.status = UpdateStatus::Error(e);
                 },
                 UpdaterMsg::DownloadStarted(ver) => {
@@ -111,6 +151,186 @@ impl Updater {
                     self.status = UpdateStatus::RestartPending(ver);
                 },
             }
+        }
+    }
+
+    pub fn show_ui(&mut self, ctx: &egui::Context, settings: &mut Settings, drag_guard: &mut DragGuard) {
+        
+        let allow_drag = if !matches!(self.status, UpdateStatus::Idle) {
+            drag_guard.update(ctx)
+        } else {
+            false
+        };
+
+        let screen_rect = ctx.screen_rect();
+
+        match &self.status {
+            UpdateStatus::UpdateFound(tag, release) => {
+                match settings.update_mode {
+                    UpdateMode::AutoReset | UpdateMode::AutoLoad => {
+                        self.download_and_install(release.clone());
+                        return; 
+                    }
+                    UpdateMode::Prompt => { }
+                    UpdateMode::Ignore => { }
+                }
+
+                ctx.request_repaint();
+                let mut start_download = false;
+                let mut close_modal = false;
+                let mut disable_future = false;
+                let display_ver = if tag.starts_with('v') { tag.clone() } else { format!("v{}", tag) };
+
+                egui::Window::new("Update Available")
+                    .collapsible(false).resizable(false).order(egui::Order::Tooltip)
+                    .constrain(true).movable(allow_drag).pivot(egui::Align2::CENTER_CENTER)
+                    .default_pos(screen_rect.center()) 
+                    .show(ctx, |ui| {
+                        ui.vertical_centered(|ui| {
+                            ui.label(format!("New Battle Cats Complete update found: {}", display_ver));
+                            ui.add_space(10.0);
+                            ui.label("Would you like to download the update now?");
+                        });
+                        ui.add_space(20.0);
+
+                        let mut style: egui::Style = (**ui.style()).clone();
+                        style.visuals.widgets.inactive.rounding = egui::Rounding::same(4.0);
+                        style.visuals.widgets.active.rounding = egui::Rounding::same(4.0);
+                        style.visuals.widgets.hovered.rounding = egui::Rounding::same(4.0);
+                        ui.set_style(style);
+
+                        ui.horizontal(|ui| {
+                            ui.spacing_mut().item_spacing.x = 10.0; 
+
+                            let btn_w = PROMPT_BUTTON_SIZE[0];
+                            let count = 3.0; 
+                            let spacing = 10.0;
+                            let total_w = (btn_w * count) + (spacing * (count - 1.0)); 
+                            
+                            let available_w = ui.available_width();
+                            let margin_left = (available_w - total_w) / 2.0;
+                            if margin_left > 0.0 {
+                                ui.add_space(margin_left);
+                            }
+
+                            if ui.add_sized(PROMPT_BUTTON_SIZE, egui::Button::new("Yes")).clicked() { start_download = true; }
+                            if ui.add_sized(PROMPT_BUTTON_SIZE, egui::Button::new("No")).clicked() { close_modal = true; }
+                            if ui.add_sized(PROMPT_BUTTON_SIZE, egui::Button::new("Never")).clicked() {
+                                close_modal = true;
+                                disable_future = true;
+                            }
+                        });
+                    });
+
+                if start_download {
+                    self.download_and_install(release.clone());
+                }
+                if disable_future {
+                    settings.update_mode = UpdateMode::Ignore;
+                    close_modal = true;
+                }
+                if close_modal {
+                    self.status = UpdateStatus::Idle;
+                }
+            }
+
+            UpdateStatus::Downloading(tag) => {
+                ctx.request_repaint();
+                egui::Window::new("Downloading Update")
+                    .collapsible(false).resizable(false).title_bar(false) 
+                    .order(egui::Order::Tooltip).constrain(true).movable(allow_drag)
+                    .pivot(egui::Align2::CENTER_CENTER).default_pos(screen_rect.center())
+                    .show(ctx, |ui| {
+                        ui.add_space(10.0);
+                        ui.vertical_centered(|ui| {
+                            let display_tag = if tag.starts_with('v') { tag.clone() } else { format!("v{}", tag) };
+                            ui.label(format!("Downloading {}...", display_tag));
+                            ui.add_space(10.0);
+                            let progress = (ctx.input(|i| i.time) % 1.0) as f32;
+                            ui.add(egui::ProgressBar::new(progress).animate(false)); 
+                        });
+                    });
+            }
+
+            UpdateStatus::RestartPending(tag) => {
+                match settings.update_mode {
+                    UpdateMode::AutoReset => {
+                        let _ = Command::new(std::env::current_exe().unwrap()).spawn();
+                        std::process::exit(0);
+                    }
+                    UpdateMode::AutoLoad => { self.status = UpdateStatus::Idle; return; }
+                    _ => {}
+                }
+
+                ctx.request_repaint();
+                let mut should_restart = false;
+                let mut close = false;
+                let display_tag = if tag.starts_with('v') { tag.clone() } else { format!("v{}", tag) };
+
+                egui::Window::new("Update Complete")
+                    .collapsible(false).resizable(false).order(egui::Order::Tooltip)
+                    .constrain(true).movable(allow_drag).pivot(egui::Align2::CENTER_CENTER)
+                    .default_pos(screen_rect.center())
+                    .show(ctx, |ui| {
+                        ui.vertical_centered(|ui| {
+                            ui.label(format!("{} update complete!", display_tag));
+                            ui.add_space(5.0);
+                            ui.label("Would you like to restart and apply the update now?");
+                        });
+                        ui.add_space(20.0);
+
+                        let mut style: egui::Style = (**ui.style()).clone();
+                        style.visuals.widgets.inactive.rounding = egui::Rounding::same(4.0);
+                        style.visuals.widgets.active.rounding = egui::Rounding::same(4.0);
+                        style.visuals.widgets.hovered.rounding = egui::Rounding::same(4.0);
+                        ui.set_style(style);
+
+                        ui.horizontal(|ui| {
+                            ui.spacing_mut().item_spacing.x = 10.0; 
+
+                            let btn_w = RESTART_BUTTON_SIZE[0];
+                            let count = 2.0; 
+                            let spacing = 10.0;
+                            let total_w = (btn_w * count) + (spacing * (count - 1.0)); 
+                            
+                            let available_w = ui.available_width();
+                            let margin_left = (available_w - total_w) / 2.0;
+                            if margin_left > 0.0 {
+                                ui.add_space(margin_left);
+                            }
+
+                            if ui.add_sized(RESTART_BUTTON_SIZE, egui::Button::new("Yes")).clicked() { should_restart = true; }
+                            if ui.add_sized(RESTART_BUTTON_SIZE, egui::Button::new("No")).clicked() { close = true; }
+                        });
+                    });
+                
+                if should_restart {
+                    let _ = Command::new(std::env::current_exe().unwrap()).spawn();
+                    std::process::exit(0);
+                }
+                if close { self.status = UpdateStatus::Idle; }
+            }
+
+            UpdateStatus::Error(e) => {
+                let mut close = false;
+                egui::Window::new("Update Failed")
+                    .collapsible(false).resizable(false).order(egui::Order::Tooltip)
+                    .constrain(true).movable(allow_drag).pivot(egui::Align2::CENTER_CENTER)
+                    .default_pos(screen_rect.center())
+                    .show(ctx, |ui| {
+                        ui.vertical_centered(|ui| {
+                            ui.label("An error occurred during update:");
+                            ui.add_space(5.0);
+                            ui.label(e);
+                        });
+                        ui.add_space(20.0);
+                        if ui.button("Close").clicked() { close = true; }
+                    });
+                
+                if close { self.status = UpdateStatus::Idle; }
+            }
+            
+            _ => {}
         }
     }
 }
@@ -128,6 +348,5 @@ fn check_remote() -> Result<Option<self_update::update::Release>, Box<dyn std::e
             return Ok(Some(latest.clone()));
         }
     }
-    
     Ok(None)
 }
