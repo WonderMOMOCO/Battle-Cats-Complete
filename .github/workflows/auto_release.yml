@@ -1,8 +1,8 @@
-name: Auto Build & Draft
+name: Auto Build & Release
 
 on:
   push:
-    branches: [ "main" ] # Removed master
+    branches: [ "main" ]
     paths:
       - 'Cargo.toml'
   workflow_dispatch:
@@ -12,76 +12,36 @@ env:
   BIN_NAME: "Battle Cats Complete"
 
 jobs:
-  create-release:
-    name: Create Draft Release
-    runs-on: ubuntu-latest
-    outputs:
-      should_release: ${{ steps.check.outputs.should_release }}
-      app_version: ${{ steps.get_version.outputs.version }}
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Get version from Cargo.toml
-        id: get_version
-        run: |
-          VERSION=$(grep "^version" Cargo.toml | head -1 | awk -F '"' '{print $2}')
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Found version: $VERSION"
-      - name: Check if tag exists
-        id: check
-        env:
-          GH_TOKEN: ${{ secrets.MY_RELEASE_TOKEN }}
-        run: |
-          VERSION=${{ steps.get_version.outputs.version }}
-          TAG="v$VERSION"
-          if gh release view "$TAG" > /dev/null 2>&1; then
-            echo "Version $TAG already exists."
-            echo "should_release=false" >> $GITHUB_OUTPUT
-          else
-            echo "Version $TAG is new! Preparing release..."
-            echo "should_release=true" >> $GITHUB_OUTPUT
-          fi
-      - name: Create Release Draft (Empty)
-        id: create_release
-        if: steps.check.outputs.should_release == 'true' || github.event_name == 'workflow_dispatch'
-        uses: softprops/action-gh-release@v1
-        with:
-          token: ${{ secrets.MY_RELEASE_TOKEN }}
-          tag_name: v${{ steps.get_version.outputs.version }}
-          name: Battle Cats Complete v${{ steps.get_version.outputs.version }}
-          draft: true
-          prerelease: true
-          generate_release_notes: true
-
   build-windows:
     name: Build Windows
-    needs: create-release
-    if: needs.create-release.outputs.should_release == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Get version
+        id: get_version
+        run: |
+          $VERSION = Select-String -Path Cargo.toml -Pattern '^version' | Select-Object -First 1
+          $VERSION = $VERSION.Line.Split('"')[1]
+          echo "version=$VERSION" >> $env:GITHUB_OUTPUT
       - name: Cache Cargo Dependencies
         uses: swatinem/rust-cache@v2
         with:
            key: windows-release
       - name: Build Release
         run: cargo build --release --verbose
-      - name: Rename and Zip (Windows)
+      - name: Rename and Zip
         run: |
           move target/release/*.exe "${{ env.BIN_NAME }}.exe"
           Compress-Archive -Path "${{ env.BIN_NAME }}.exe" -DestinationPath bcc_windows.zip
-      - name: Upload Windows Asset
-        uses: softprops/action-gh-release@v1
+      - name: Upload Windows Artifact
+        uses: actions/upload-artifact@v4
         with:
-          token: ${{ secrets.MY_RELEASE_TOKEN }}
-          tag_name: v${{ needs.create-release.outputs.app_version }}
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          files: bcc_windows.zip
+          name: windows-asset
+          path: bcc_windows.zip
+          if-no-files-found: error
 
   build-linux:
     name: Build Linux
-    needs: create-release
-    if: needs.create-release.outputs.should_release == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -91,16 +51,44 @@ jobs:
            key: linux-release
       - name: Build Release
         run: cargo build --release --verbose
-      - name: Prepare and Zip (Linux)
+      - name: Prepare and Zip
         run: |
           ORIGINAL_BIN_NAME=$(sed -n 's/^name = "\(.*\)"/\1/p' Cargo.toml | head -1)
           mv "target/release/$ORIGINAL_BIN_NAME" "${{ env.BIN_NAME }}"
           chmod +x "${{ env.BIN_NAME }}"
           zip bcc_linux.zip "${{ env.BIN_NAME }}"
-      - name: Upload Linux Asset
+      - name: Upload Linux Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-asset
+          path: bcc_linux.zip
+          if-no-files-found: error
+
+  create-release:
+    name: Draft Release
+    needs: [build-windows, build-linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get version
+        id: get_version
+        run: |
+          VERSION=$(grep "^version" Cargo.toml | head -1 | awk -F '"' '{print $2}')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: *-asset
+          merge-multiple: true
+      - name: Create Release & Upload Files
         uses: softprops/action-gh-release@v1
         with:
           token: ${{ secrets.MY_RELEASE_TOKEN }}
-          tag_name: v${{ needs.create-release.outputs.app_version }}
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          files: bcc_linux.zip
+          tag_name: v${{ steps.get_version.outputs.version }}
+          name: Battle Cats Complete v${{ steps.get_version.outputs.version }}
+          draft: true
+          prerelease: true
+          generate_release_notes: true
+          files: |
+            bcc_windows.zip
+            bcc_linux.zip
