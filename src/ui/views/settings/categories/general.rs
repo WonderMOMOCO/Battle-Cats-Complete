@@ -8,6 +8,12 @@ pub fn show(ui: &mut egui::Ui, settings: &mut Settings) -> bool {
     ui.heading("Updates");
     ui.add_space(10.0);
 
+    if ui.add_sized([180.0, 30.0], egui::Button::new("Check for Update Now")).clicked() {
+        settings.manual_check_requested = true;
+    }
+
+    ui.add_space(5.0);
+
     ui.horizontal(|ui| {
         ui.label("Update Handling:");
         
@@ -27,13 +33,7 @@ pub fn show(ui: &mut egui::Ui, settings: &mut Settings) -> bool {
                     .on_hover_text("Never check for updates on startup");
             });
     });
-    
-    ui.add_space(5.0);
 
-    if ui.add_sized([180.0, 30.0], egui::Button::new("Check for Update Now")).clicked() {
-        settings.manual_check_requested = true;
-    }
-    
     ui.add_space(20.0);
     ui.heading("Visual");
     ui.add_space(10.0);

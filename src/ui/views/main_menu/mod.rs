@@ -15,17 +15,31 @@ pub fn show(ctx: &egui::Context) {
             ui.add_space(20.0);
             ui.label(egui::RichText::new("User-Handled Battle Cats Database").size(16.0));
         });
+    });
 
-        ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
-            ui.add_space(10.0);
+    egui::Area::new("version_area".into())
+        .anchor(egui::Align2::LEFT_BOTTOM, [10.0, -10.0]) 
+        .show(ctx, |ui| {
+            ui.style_mut().text_styles.insert(
+                egui::TextStyle::Body,
+                egui::FontId::new(13.0, egui::FontFamily::Proportional),
+            );
+            ui.label(format!("v{}", env!("CARGO_PKG_VERSION")));
+        });
+
+    egui::Area::new("social_links_area".into())
+        .anchor(egui::Align2::RIGHT_BOTTOM, [-10.0, -10.0]) 
+        .show(ctx, |ui| {
             ui.horizontal(|ui| {
-                ui.add_space(10.0);
-                ui.label(
-                    egui::RichText::new(format!("v{}", env!("CARGO_PKG_VERSION")))
-                        .size(12.0)
-                        .color(egui::Color32::GRAY)
+                // FORCE SAME STYLE
+                ui.style_mut().text_styles.insert(
+                    egui::TextStyle::Body, 
+                    egui::FontId::new(13.0, egui::FontFamily::Proportional),
                 );
+                
+                if ui.hyperlink_to("Discord", "https://discord.gg/YOUR_INVITE_CODE").clicked() { }
+                ui.label("|");
+                ui.hyperlink_to("GitHub", "https://github.com/WonderMOMOCO/Battle-Cats-Complete");
             });
         });
-    });
 }
