@@ -5,7 +5,7 @@ on:
     branches: [ "main" ]
     paths:
       - 'Cargo.toml'
-  workflow_dispatch:
+  workflow_dispatch: {}
 
 env:
   CARGO_TERM_COLOR: always
@@ -65,7 +65,7 @@ jobs:
           if-no-files-found: error
 
   create-release:
-    name: Draft Release
+    name: Publish Release
     needs: [build-windows, build-linux]
     runs-on: ubuntu-latest
     steps:
