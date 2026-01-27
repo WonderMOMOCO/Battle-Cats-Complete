@@ -15,5 +15,17 @@ pub fn show(ctx: &egui::Context) {
             ui.add_space(20.0);
             ui.label(egui::RichText::new("User-Handled Battle Cats Database").size(16.0));
         });
+
+        ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
+            ui.add_space(10.0);
+            ui.horizontal(|ui| {
+                ui.add_space(10.0);
+                ui.label(
+                    egui::RichText::new(format!("v{}", env!("CARGO_PKG_VERSION")))
+                        .size(12.0)
+                        .color(egui::Color32::GRAY)
+                );
+            });
+        });
     });
 }

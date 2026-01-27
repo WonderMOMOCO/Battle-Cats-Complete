@@ -4,7 +4,7 @@ use crate::core::settings::Settings;
 use super::imgcut::SpriteSheet;
 
 // Each Number corrosponds to the abiltiies
-// line on a generic text editor
+// line on a generic text editor(?)
 
 // Traits
 pub const ICON_TRAIT_RED: usize = 224;
@@ -235,7 +235,6 @@ pub fn ensure_loaded(ctx: &egui::Context, sheet: &mut SpriteSheet, settings: &Se
     let base_dir = std::path::Path::new("game/assets/img015");
     let current_language = &settings.game_language;
     
-    // Updated to use shared config from utils
     let codes_to_try: Vec<String> = if current_language.is_empty() {
         crate::core::utils::LANGUAGE_PRIORITY
             .iter()

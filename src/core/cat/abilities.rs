@@ -171,6 +171,14 @@ pub fn collect_ability_data(
         }
     }
 
+    // Collapse if all ranges are the same
+    if range_strings.len() > 1 {
+        let first = &range_strings[0];
+        if range_strings.iter().all(|s| s == first) {
+            range_strings.truncate(1);
+        }
+    }
+
     if !range_strings.is_empty() {
         let range_description = format!(
             "Damage dealt between ranges {}\nStands at {} Range relative to Enemy Base", 
@@ -210,7 +218,7 @@ pub fn collect_ability_data(
     let savage_multiplier = (cat_stats.savage_blow_boost as f32 + 100.0) / 100.0;
     push_ability(&mut group_body_1, cat_stats.savage_blow_chance > 0, img015::ICON_SAVAGE_BLOW, format!("{}% Chance to perform a Savage Blow dealing {}× Damage", cat_stats.savage_blow_chance, savage_multiplier), 50);
 
-    push_ability(&mut group_body_1, cat_stats.critical_chance > 0, img015::ICON_CRITICAL_HIT, format!("{}% Chance to perform a Critical Hit dealing 2× Damage while bypassing Metal resistance", cat_stats.critical_chance), 13);
+    push_ability(&mut group_body_1, cat_stats.critical_chance > 0, img015::ICON_CRITICAL_HIT, format!("{}% Chance to perform a Critical Hit dealing 2× Damage\nCritcal Hits bypass Metal resistance", cat_stats.critical_chance), 13);
     push_ability(&mut group_body_1, cat_stats.strengthen_threshold > 0, img015::ICON_STRENGTHEN, format!("At {}% HP, Damage dealt increases by +{}%", cat_stats.strengthen_threshold, cat_stats.strengthen_boost), 10);
     push_ability(&mut group_body_1, cat_stats.survive > 0, img015::ICON_SURVIVE, format!("{}% Chance to Survive a lethal strike", cat_stats.survive), 11);
     push_ability(&mut group_body_1, cat_stats.barrier_breaker_chance > 0, img015::ICON_BARRIER_BREAKER, format!("{}% Chance to break enemy Barriers", cat_stats.barrier_breaker_chance), 15);

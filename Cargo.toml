@@ -18,6 +18,7 @@ rayon = "1.10"
 serde = { version = "1", features = ["derive"] }
 notify = "8.2.0"
 notify-debouncer-mini = "0.7.0"
+self_update = { version = "0.41", features = ["archive-zip", "compression-zip-deflate"] }
 
 # dev
 aes = { version = "0.8", optional = true }
@@ -30,5 +31,6 @@ hex = { version = "0.4", optional = true }
 [profile.release]
 strip = true
 opt-level = 3
-lto = "thin"
+lto = true
+codegen-units = 1
 panic = "abort"

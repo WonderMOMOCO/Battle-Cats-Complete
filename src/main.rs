@@ -2,7 +2,8 @@
 
 mod app;
 mod core; 
-mod ui; 
+mod ui;
+mod updater;
 #[cfg(feature = "dev")]
 pub mod dev;
 

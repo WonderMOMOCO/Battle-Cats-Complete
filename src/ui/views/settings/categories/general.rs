@@ -5,6 +5,16 @@ pub fn show(ui: &mut egui::Ui, settings: &mut Settings) -> bool {
     let mut refresh_needed = false;
     
     ui.add_space(5.0);
+    ui.heading("Updates");
+    ui.add_space(10.0);
+
+    ui.checkbox(&mut settings.check_updates_on_startup, "Check for Update at Runtime");
+    
+    if ui.button("Check for Update Now").clicked() {
+        settings.manual_check_requested = true;
+    }
+    
+    ui.add_space(20.0);
     ui.heading("Visual");
     ui.add_space(10.0);
     
