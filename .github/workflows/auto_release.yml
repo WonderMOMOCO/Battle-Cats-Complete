@@ -2,7 +2,7 @@ name: Auto Build & Draft
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main" ] # Removed master
     paths:
       - 'Cargo.toml'
   workflow_dispatch:
@@ -41,7 +41,6 @@ jobs:
             echo "Version $TAG is new! Preparing release..."
             echo "should_release=true" >> $GITHUB_OUTPUT
           fi
-
       - name: Create Release Draft (Empty)
         id: create_release
         if: steps.check.outputs.should_release == 'true' || github.event_name == 'workflow_dispatch'
@@ -75,7 +74,8 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           token: ${{ secrets.MY_RELEASE_TOKEN }}
-          upload_url: ${{ needs.create-release.outputs.upload_url }} 
+          tag_name: v${{ needs.create-release.outputs.app_version }}
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
           files: bcc_windows.zip
 
   build-linux:
@@ -101,5 +101,6 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           token: ${{ secrets.MY_RELEASE_TOKEN }}
+          tag_name: v${{ needs.create-release.outputs.app_version }}
           upload_url: ${{ needs.create-release.outputs.upload_url }}
           files: bcc_linux.zip
