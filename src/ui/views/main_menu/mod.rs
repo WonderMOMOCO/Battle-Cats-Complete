@@ -31,13 +31,12 @@ pub fn show(ctx: &egui::Context) {
         .anchor(egui::Align2::RIGHT_BOTTOM, [-10.0, -10.0]) 
         .show(ctx, |ui| {
             ui.horizontal(|ui| {
-                // FORCE SAME STYLE
                 ui.style_mut().text_styles.insert(
                     egui::TextStyle::Body, 
                     egui::FontId::new(13.0, egui::FontFamily::Proportional),
                 );
                 
-                if ui.hyperlink_to("Discord", "https://discord.gg/YOUR_INVITE_CODE").clicked() { }
+                if ui.hyperlink_to("Discord", "https://discord.com/invite/SNSE8HNhmP").clicked() { }
                 ui.label("|");
                 ui.hyperlink_to("GitHub", "https://github.com/WonderMOMOCO/Battle-Cats-Complete");
             });
