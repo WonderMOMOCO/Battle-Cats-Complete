@@ -10,6 +10,25 @@ pub fn show(ui: &mut egui::Ui, settings: &mut Settings) -> bool {
     ui.add_space(10.0);
 
     ui.horizontal(|ui| {
+        ui.label("Preferred Banner Form");
+        
+        egui::ComboBox::from_id_salt("pref_banner")
+            .selected_text(match settings.preferred_banner_form {
+                0 => "Normal",
+                1 => "Evolved",
+                2 => "True",
+                3 => "Ultra",
+                _ => "Normal",
+            })
+            .show_ui(ui, |ui| {
+                if ui.selectable_value(&mut settings.preferred_banner_form, 0, "Normal").clicked() { refresh_needed = true; }
+                if ui.selectable_value(&mut settings.preferred_banner_form, 1, "Evolved").clicked() { refresh_needed = true; }
+                if ui.selectable_value(&mut settings.preferred_banner_form, 2, "True").clicked() { refresh_needed = true; }
+                if ui.selectable_value(&mut settings.preferred_banner_form, 3, "Ultra").clicked() { refresh_needed = true; }
+            });
+    });
+
+    ui.horizontal(|ui| {
         if toggle_ui(ui, &mut settings.high_banner_quality).changed() {
             refresh_needed = true;
         }

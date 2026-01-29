@@ -62,7 +62,8 @@ impl BattleCatsApp {
         };
 
         setup_custom_fonts(&cc.egui_ctx);
-        app.cat_list_state.restart_scan(&app.settings.game_language);
+        
+        app.cat_list_state.restart_scan(&app.settings.game_language, app.settings.preferred_banner_form);
 
         updater::cleanup_temp_files();
 
@@ -132,7 +133,7 @@ impl eframe::App for BattleCatsApp {
         }
 
         for path in reload_queue {
-            self.cat_list_state.handle_event(ctx, &path, &self.settings.game_language);
+            self.cat_list_state.handle_event(ctx, &path, &self.settings.game_language, self.settings.preferred_banner_form);
         }
 
         self.cat_list_state.update_data();
@@ -142,7 +143,7 @@ impl eframe::App for BattleCatsApp {
 
         let import_finished = self.import_state.update(ctx, &mut self.settings);
         if import_finished {
-            self.cat_list_state.restart_scan(&self.settings.game_language);
+            self.cat_list_state.restart_scan(&self.settings.game_language, self.settings.preferred_banner_form);
             ctx.request_repaint();
         }
 
@@ -159,7 +160,7 @@ impl eframe::App for BattleCatsApp {
         ctx.set_style(style);
 
         match self.current_page {
-            Page::MainMenu => main_menu::show(ctx),
+            Page::MainMenu => main_menu::show(ctx, &mut self.drag_guard),
             Page::ImportData => {
                 crate::ui::views::import::show(ctx, &mut self.import_state); 
             },
@@ -178,7 +179,7 @@ impl eframe::App for BattleCatsApp {
                 
                 if refresh_needed {
                     self.cat_list_state.cat_list.clear_cache();
-                    self.cat_list_state.restart_scan(&self.settings.game_language);
+                    self.cat_list_state.restart_scan(&self.settings.game_language, self.settings.preferred_banner_form);
                 }
             }
         }

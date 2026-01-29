@@ -1,8 +1,8 @@
-use crate::core::files::img015;
+use crate::data::global::img015;
 use crate::core::settings::Settings;
 use super::stats::{self, CatRaw};
 use eframe::egui;
-use crate::core::files::skillacquisition::TalentRaw;
+use crate::data::cat::skillacquisition::TalentRaw;
 use std::collections::HashMap;
 
 pub struct AbilityItem {
@@ -55,7 +55,6 @@ pub fn collect_ability_data(
                 return Some(border);
             }
 
-            // Wave Immune can be 23 or 48
             if ability_id == 23 {
                 if let Some(border) = check_id(48) { return Some(border); }
             }
@@ -93,7 +92,7 @@ pub fn collect_ability_data(
     push_ability(&mut group_headline_2, cat_stats.zombie_killer > 0, img015::ICON_ZOMBIE_KILLER, "Prevents Zombies from reviving".into(), 14);
     push_ability(&mut group_headline_2, cat_stats.soulstrike > 0, img015::ICON_SOULSTRIKE, "Will attack Zombie corpses".into(), 59);
     push_ability(&mut group_headline_2, cat_stats.wave_block > 0, img015::ICON_WAVE_BLOCK, "When hit with a Wave Attack, nullifies its Damage and prevents its advancement".into(), 0);
-    push_ability(&mut group_headline_2, cat_stats.counter_surge > 0, img015::ICON_COUNTER_SURGE, "When hit with a Surge Attack, create a surge of equal level and range".into(), 0);
+    push_ability(&mut group_headline_2, cat_stats.counter_surge > 0, img015::ICON_COUNTER_SURGE, "When hit with a Surge Attack, create a surge of equal Level and Range".into(), 0);
     push_ability(&mut group_headline_2, cat_stats.colossus_slayer > 0, img015::ICON_COLOSSUS_SLAYER, "Deals 1.6× Damage to and takes 0.7× Damage from Colossus Enemies".into(), 63);
     
     if cat_stats.behemoth_slayer > 0 {
@@ -180,8 +179,10 @@ pub fn collect_ability_data(
     }
 
     if !range_strings.is_empty() {
+        let label_prefix = if range_strings.len() > 1 { "Range split" } else { "Effective Range" };
         let range_description = format!(
-            "Damage dealt between ranges {}\nStands at {} Range relative to Enemy Base", 
+            "{} {}\nStands at {} Range relative to Enemy Base", 
+            label_prefix,
             range_strings.join(" / "), 
             enemy_base_range
         );
@@ -223,7 +224,7 @@ pub fn collect_ability_data(
     push_ability(&mut group_body_1, cat_stats.survive > 0, img015::ICON_SURVIVE, format!("{}% Chance to Survive a lethal strike", cat_stats.survive), 11);
     push_ability(&mut group_body_1, cat_stats.barrier_breaker_chance > 0, img015::ICON_BARRIER_BREAKER, format!("{}% Chance to break enemy Barriers", cat_stats.barrier_breaker_chance), 15);
     push_ability(&mut group_body_1, cat_stats.shield_pierce_chance > 0, img015::ICON_SHIELD_PIERCER, format!("{}% Chance to pierce enemy Shields", cat_stats.shield_pierce_chance), 58);
-    push_ability(&mut group_body_1, cat_stats.metal_killer_percent > 0, img015::ICON_METAL_KILLER, format!("Reduces Metal enemies current HP to {}% upon hit", cat_stats.metal_killer_percent), 0);
+    push_ability(&mut group_body_1, cat_stats.metal_killer_percent > 0, img015::ICON_METAL_KILLER, format!("Reduces Metal enemies current HP by {}% upon hit", cat_stats.metal_killer_percent), 0);
 
     if !is_conjure_unit { 
         push_ability(&mut group_body_2, cat_stats.dodge_chance > 0, img015::ICON_DODGE, format!("{}% Chance to Dodge {} for {}", cat_stats.dodge_chance, target_label, frames_to_seconds(cat_stats.dodge_duration)), 51); 

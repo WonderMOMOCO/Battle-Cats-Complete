@@ -3,6 +3,7 @@ use std::fs;
 use std::path::Path;
 use std::collections::HashMap;
 use crate::core::utils;
+use crate::paths::cat;
 
 #[derive(Debug, Clone)]
 pub struct TalentCost {
@@ -11,21 +12,18 @@ pub struct TalentCost {
 
 pub fn load(cats_directory: &Path) -> HashMap<u8, TalentCost> {
     let mut map = HashMap::new();
-    let file_path = cats_directory.join("SkillLevel.csv");
+    let file_path = cats_directory.join(cat::SKILL_LEVEL);
     
     if let Ok(content) = fs::read_to_string(&file_path) {
         let delimiter = utils::detect_csv_separator(&content);
-
         for line in content.lines() {
             let parts: Vec<&str> = line.split(delimiter).collect();
             if parts.is_empty() { continue; }
-            
             if let Ok(id) = parts[0].trim().parse::<u8>() {
                 let costs: Vec<u16> = parts.iter()
                     .skip(1)
                     .filter_map(|s| s.trim().parse::<u16>().ok())
                     .collect();
-                
                 map.insert(id, TalentCost { costs });
             }
         }

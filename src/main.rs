@@ -1,9 +1,11 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod app;
+mod paths;
 mod core; 
 mod ui;
 mod updater;
+mod data;
 #[cfg(feature = "dev")]
 pub mod dev;
 

@@ -2,8 +2,9 @@
 use std::fs;
 use std::path::Path;
 use std::collections::HashMap;
-use crate::core::files::img015;
+use crate::data::global::img015;
 use crate::core::utils;
+use crate::paths::cat;
 
 #[derive(Debug, Clone)]
 pub struct TalentRaw {
@@ -28,10 +29,9 @@ pub struct TalentGroupRaw {
 
 pub fn load(cats_directory: &Path) -> HashMap<u16, TalentRaw> {
     let mut map = HashMap::new();
-    let file_path = cats_directory.join("SkillAcquisition.csv");
+    let file_path = cats_directory.join(cat::SKILL_ACQUISITION);
     if let Ok(content) = fs::read_to_string(&file_path) {
         let delimiter = utils::detect_csv_separator(&content);
-
         for line in content.lines() {
             if let Some(data) = parse_line(line, delimiter) {
                 map.insert(data.id, data);

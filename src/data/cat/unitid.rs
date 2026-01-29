@@ -2,6 +2,7 @@
 use std::fs;
 use std::path::Path;
 use crate::core::utils;
+use crate::paths::cat;
 
 pub const ICON_SIZE: f32 = 40.0;
 
@@ -276,8 +277,7 @@ impl CatRaw {
 }
 
 pub fn load_from_id(cat_id: i32) -> Option<Vec<CatRaw>> {
-    let file_path_str = format!("game/cats/{:03}/unit{:03}.csv", cat_id, cat_id + 1);
-    let path_object = Path::new(&file_path_str);
+    let path_object = cat::stats(Path::new(cat::DIR_CATS), cat_id as u32);
     
     if path_object.exists() {
         if let Ok(file_content) = fs::read_to_string(path_object) {

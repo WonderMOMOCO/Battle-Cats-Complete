@@ -2,7 +2,8 @@ use eframe::egui;
 use std::collections::HashMap;
 use std::path::Path;
 use image::GenericImageView; 
-use crate::core::files::unitbuy::UnitBuyRow;
+use crate::data::cat::unitbuy::UnitBuyRow;
+use crate::paths::global;
 
 pub fn render(ui: &mut egui::Ui, description: &[String]) {
     ui.add_space(10.0);
@@ -204,80 +205,72 @@ pub fn render_evolve(
 }
 
 fn load_material_icon_legacy(ctx: &egui::Context, id: i32, version: u64) -> Option<egui::TextureHandle> {
-    let possible_paths = [
-        format!("game/assets/gatyaitemD/gatyaitemD_{:03}_f.png", id),
-        format!("game/assets/gatyaitemD/gatyaitemD_{:02}_f.png", id),
-        format!("game/assets/gatyaitemD/gatyaitemD_{}_f.png", id),
-    ];
+    let path_opt = global::gatya_item_icon(Path::new(""), id);
 
     let mut final_image = egui::ColorImage::new([128, 128], egui::Color32::TRANSPARENT);
     let mut loaded = false;
 
-    for path_str in &possible_paths {
-        let path = Path::new(path_str);
-        if path.exists() {
-            if let Ok(mut img) = image::open(path) {
-                let (w, h) = img.dimensions();
-                
-                let mut min_x = w;
-                let mut min_y = h;
-                let mut max_x = 0;
-                let mut max_y = 0;
-                let mut has_pixels = false;
-                
-                let rgba = img.to_rgba8();
-                for (x, y, pixel) in rgba.enumerate_pixels() {
-                    if pixel[3] > 0 { 
-                        if x < min_x { min_x = x; }
-                        if x > max_x { max_x = x; }
-                        if y < min_y { min_y = y; }
-                        if y > max_y { max_y = y; }
-                        has_pixels = true;
-                    }
+    if let Some(path) = path_opt {
+        if let Ok(mut img) = image::open(path) {
+            let (w, h) = img.dimensions();
+            
+            let mut min_x = w;
+            let mut min_y = h;
+            let mut max_x = 0;
+            let mut max_y = 0;
+            let mut has_pixels = false;
+            
+            let rgba = img.to_rgba8();
+            for (x, y, pixel) in rgba.enumerate_pixels() {
+                if pixel[3] > 0 { 
+                    if x < min_x { min_x = x; }
+                    if x > max_x { max_x = x; }
+                    if y < min_y { min_y = y; }
+                    if y > max_y { max_y = y; }
+                    has_pixels = true;
                 }
+            }
 
-                if has_pixels {
-                    let crop_w = max_x - min_x + 1;
-                    let crop_h = max_y - min_y + 1;
+            if has_pixels {
+                let crop_w = max_x - min_x + 1;
+                let crop_h = max_y - min_y + 1;
+                
+                if crop_w > 128 || crop_h > 128 {
+                    let sub_img = img.crop(min_x, min_y, crop_w, crop_h);
+                    let resized = sub_img.resize(128, 128, image::imageops::FilterType::Lanczos3);
+                    let (r_w, r_h) = resized.dimensions();
                     
-                    if crop_w > 128 || crop_h > 128 {
-                        let sub_img = img.crop(min_x, min_y, crop_w, crop_h);
-                        let resized = sub_img.resize(128, 128, image::imageops::FilterType::Lanczos3);
-                        let (r_w, r_h) = resized.dimensions();
-                        
-                        let target_x = (128 - r_w) / 2;
-                        let target_y = (128 - r_h) / 2;
-                        
-                        let r_rgba = resized.to_rgba8();
-                        for y in 0..r_h {
-                            for x in 0..r_w {
-                                let src_pixel = r_rgba.get_pixel(x, y);
-                                let color = egui::Color32::from_rgba_unmultiplied(
-                                    src_pixel[0], src_pixel[1], src_pixel[2], src_pixel[3]
-                                );
+                    let target_x = (128 - r_w) / 2;
+                    let target_y = (128 - r_h) / 2;
+                    
+                    let r_rgba = resized.to_rgba8();
+                    for y in 0..r_h {
+                        for x in 0..r_w {
+                            let src_pixel = r_rgba.get_pixel(x, y);
+                            let color = egui::Color32::from_rgba_unmultiplied(
+                                src_pixel[0], src_pixel[1], src_pixel[2], src_pixel[3]
+                            );
+                            final_image[( (target_x + x) as usize, (target_y + y) as usize )] = color;
+                        }
+                    }
+                } else {
+                    let target_x = (128 - crop_w) / 2;
+                    let target_y = (128 - crop_h) / 2;
+
+                    for y in 0..crop_h {
+                        for x in 0..crop_w {
+                            let src_pixel = rgba.get_pixel(min_x + x, min_y + y);
+                            let color = egui::Color32::from_rgba_unmultiplied(
+                                src_pixel[0], src_pixel[1], src_pixel[2], src_pixel[3]
+                            );
+                            if target_x + x < 128 && target_y + y < 128 {
                                 final_image[( (target_x + x) as usize, (target_y + y) as usize )] = color;
                             }
                         }
-                    } else {
-                        let target_x = (128 - crop_w) / 2;
-                        let target_y = (128 - crop_h) / 2;
-
-                        for y in 0..crop_h {
-                            for x in 0..crop_w {
-                                let src_pixel = rgba.get_pixel(min_x + x, min_y + y);
-                                let color = egui::Color32::from_rgba_unmultiplied(
-                                    src_pixel[0], src_pixel[1], src_pixel[2], src_pixel[3]
-                                );
-                                if target_x + x < 128 && target_y + y < 128 {
-                                    final_image[( (target_x + x) as usize, (target_y + y) as usize )] = color;
-                                }
-                            }
-                        }
                     }
-                    loaded = true;
                 }
-                break; 
-            } 
+                loaded = true;
+            }
         }
     }
     
@@ -289,59 +282,51 @@ fn load_material_icon_legacy(ctx: &egui::Context, id: i32, version: u64) -> Opti
 }
 
 fn load_xp_icon_trimmed(ctx: &egui::Context, id: i32, version: u64) -> Option<egui::TextureHandle> {
-    let possible_paths = [
-        format!("game/assets/gatyaitemD/gatyaitemD_{:03}_f.png", id),
-        format!("game/assets/gatyaitemD/gatyaitemD_{:02}_f.png", id),
-        format!("game/assets/gatyaitemD/gatyaitemD_{}_f.png", id),
-    ];
+    let path_opt = global::gatya_item_icon(Path::new(""), id);
 
     let mut final_image = egui::ColorImage::new([1, 1], egui::Color32::TRANSPARENT);
     let mut loaded = false;
 
-    for path_str in &possible_paths {
-        let path = Path::new(path_str);
-        if path.exists() {
-             if let Ok(img) = image::open(path) {
-                let (w, h) = img.dimensions();
-                let rgba = img.to_rgba8();
+    if let Some(path) = path_opt {
+         if let Ok(img) = image::open(path) {
+            let (w, h) = img.dimensions();
+            let rgba = img.to_rgba8();
+            
+            let mut min_x = w;
+            let mut min_y = h;
+            let mut max_x = 0;
+            let mut max_y = 0;
+            let mut has_pixels = false;
+
+            for (x, y, pixel) in rgba.enumerate_pixels() {
+                if pixel[3] > 0 { 
+                    if x < min_x { min_x = x; }
+                    if x > max_x { max_x = x; }
+                    if y < min_y { min_y = y; }
+                    if y > max_y { max_y = y; }
+                    has_pixels = true;
+                }
+            }
+
+            if has_pixels {
+                let crop_w = max_x - min_x + 1;
+                let crop_h = max_y - min_y + 1;
                 
-                let mut min_x = w;
-                let mut min_y = h;
-                let mut max_x = 0;
-                let mut max_y = 0;
-                let mut has_pixels = false;
+                final_image = egui::ColorImage::new(
+                    [crop_w as usize, crop_h as usize], 
+                    egui::Color32::TRANSPARENT
+                );
 
-                for (x, y, pixel) in rgba.enumerate_pixels() {
-                    if pixel[3] > 0 { 
-                        if x < min_x { min_x = x; }
-                        if x > max_x { max_x = x; }
-                        if y < min_y { min_y = y; }
-                        if y > max_y { max_y = y; }
-                        has_pixels = true;
+                for y in 0..crop_h {
+                    for x in 0..crop_w {
+                        let src_pixel = rgba.get_pixel(min_x + x, min_y + y);
+                        let color = egui::Color32::from_rgba_unmultiplied(
+                            src_pixel[0], src_pixel[1], src_pixel[2], src_pixel[3]
+                        );
+                        final_image[(x as usize, y as usize)] = color;
                     }
                 }
-
-                if has_pixels {
-                    let crop_w = max_x - min_x + 1;
-                    let crop_h = max_y - min_y + 1;
-                    
-                    final_image = egui::ColorImage::new(
-                        [crop_w as usize, crop_h as usize], 
-                        egui::Color32::TRANSPARENT
-                    );
-
-                    for y in 0..crop_h {
-                        for x in 0..crop_w {
-                            let src_pixel = rgba.get_pixel(min_x + x, min_y + y);
-                            let color = egui::Color32::from_rgba_unmultiplied(
-                                src_pixel[0], src_pixel[1], src_pixel[2], src_pixel[3]
-                            );
-                            final_image[(x as usize, y as usize)] = color;
-                        }
-                    }
-                    loaded = true;
-                }
-                break; 
+                loaded = true;
             }
         }
     }

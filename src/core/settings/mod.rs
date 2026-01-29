@@ -14,6 +14,8 @@ pub struct Settings {
     pub trait_padding_y: f32,
     pub game_language: String, 
     
+    pub preferred_banner_form: usize,
+
     pub update_mode: upd::UpdateMode,
     
     #[serde(skip)]
@@ -37,6 +39,7 @@ impl Default for Settings {
             ability_padding_y: 5.0,
             trait_padding_y: 5.0,
             game_language: "".to_string(), 
+            preferred_banner_form: 0,
             
             update_mode: upd::UpdateMode::default(),
             

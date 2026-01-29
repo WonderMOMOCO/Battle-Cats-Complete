@@ -3,19 +3,21 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
+use std::time::Duration;
 use image::imageops;
 
 use crate::core::cat::scanner::CatEntry; 
 
 struct LoadedImage {
     id: u32,
-    img: egui::ColorImage,
+    img: Option<egui::ColorImage>,
 }
 
 struct LoadRequest {
     id: u32,
     path: PathBuf,
     high_banner_quality: bool,
+    ctx: egui::Context,
 }
 
 pub struct CatList {
@@ -24,6 +26,8 @@ pub struct CatList {
     tx_request: Sender<LoadRequest>,
     rx_result: Receiver<LoadedImage>,
     pending_requests: HashSet<u32>,
+    invalidated_ids: HashSet<u32>,
+    missing_ids: HashSet<u32>,
     hovered_id: Option<egui::Id>, 
     hover_start_time: f64,
     hover_lost_time: Option<f64>,
@@ -40,7 +44,7 @@ impl Default for CatList {
 
         thread::spawn(move || {
             let bg_cache = {
-                const BG_BYTES: &[u8] = include_bytes!("../../assets/udi_f.png");
+                const BG_BYTES: &[u8] = include_bytes!("../../../assets/udi_f.png");
                 image::load_from_memory(BG_BYTES).ok().map(|img| img.to_rgba8())
             };
             
@@ -49,11 +53,13 @@ impl Default for CatList {
             while let Ok(req) = rx_request.recv() {
                 let tx = tx_result.clone();
                 let bg = bg_cache.clone();
+                let ctx = req.ctx.clone(); 
 
                 rayon::spawn(move || {
-                    if let Some(color_image) = process_image(req.id, &req.path, &bg, req.high_banner_quality) {
-                        let _ = tx.send(LoadedImage { id: req.id, img: color_image });
-                    }
+                    let result = process_image_robust(req.id, &req.path, &bg, req.high_banner_quality);
+                    let _ = tx.send(LoadedImage { id: req.id, img: result });
+                    
+                    ctx.request_repaint();
                 });
             }
         });
@@ -64,6 +70,8 @@ impl Default for CatList {
             tx_request,
             rx_result,
             pending_requests: HashSet::new(),
+            invalidated_ids: HashSet::new(),
+            missing_ids: HashSet::new(),
             hovered_id: None,
             hover_start_time: 0.0,
             hover_lost_time: None,
@@ -79,9 +87,17 @@ impl CatList {
     pub fn clear_cache(&mut self) {
         self.texture_cache.clear();
         self.pending_requests.clear();
+        self.invalidated_ids.clear();
+        self.missing_ids.clear();
         self.hovered_id = None;
         self.hover_lost_time = None;
         self.last_unit_count = 0; 
+    }
+
+    pub fn flush_icon(&mut self, id: u32) {
+        self.invalidated_ids.insert(id);
+        self.missing_ids.remove(&id);
+        self.pending_requests.remove(&id);
     }
 
     pub fn reset_scroll(&mut self) {
@@ -90,7 +106,7 @@ impl CatList {
 
     pub fn show(&mut self, ctx: &egui::Context, ui: &mut egui::Ui, units: &[CatEntry], selected_id: &mut Option<u32>, search_query: &str, high_banner_quality: bool) {
         if self.placeholder_texture.is_none() {
-            const BG_BYTES: &[u8] = include_bytes!("../../assets/udi_f.png");
+            const BG_BYTES: &[u8] = include_bytes!("../../../assets/udi_f.png");
             if let Ok(img) = image::load_from_memory(BG_BYTES) {
                 let rgba = img.to_rgba8();
                 let size = [rgba.width() as usize, rgba.height() as usize];
@@ -104,13 +120,22 @@ impl CatList {
         }
 
         while let Ok(loaded) = self.rx_result.try_recv() {
-            let texture = ctx.load_texture(
-                format!("unit_{}", loaded.id),
-                loaded.img,
-                egui::TextureOptions::LINEAR
-            );
-            self.texture_cache.insert(loaded.id, texture);
+            if let Some(img) = loaded.img {
+                let texture = ctx.load_texture(
+                    format!("unit_{}", loaded.id),
+                    img,
+                    egui::TextureOptions::LINEAR
+                );
+                self.texture_cache.insert(loaded.id, texture);
+                self.missing_ids.remove(&loaded.id);
+            } else {
+                self.texture_cache.remove(&loaded.id);
+                self.missing_ids.insert(loaded.id);
+            }
+            
             self.pending_requests.remove(&loaded.id);
+            self.invalidated_ids.remove(&loaded.id); 
+            
         }
 
         if search_query != self.last_search_query || units.len() != self.last_unit_count {
@@ -163,13 +188,24 @@ impl CatList {
     fn render_list_row(&mut self, ui: &mut egui::Ui, units: &[CatEntry], real_index: usize, selected_id: &mut Option<u32>, hq: bool, now: f64) -> Option<egui::Id> {
         let unit = &units[real_index];
 
-        if !self.texture_cache.contains_key(&unit.id) && !self.pending_requests.contains(&unit.id) {
-            self.pending_requests.insert(unit.id);
-            let _ = self.tx_request.send(LoadRequest {
-                id: unit.id,
-                path: unit.image_path.clone(),
-                high_banner_quality: hq, 
-            });
+        let is_cached = self.texture_cache.contains_key(&unit.id);
+        let is_missing = self.missing_ids.contains(&unit.id);
+        let is_invalidated = self.invalidated_ids.contains(&unit.id);
+
+        let needs_load = (!is_cached && !is_missing) || is_invalidated;
+
+        if needs_load && !self.pending_requests.contains(&unit.id) {
+            if let Some(path) = &unit.image_path {
+                self.pending_requests.insert(unit.id);
+                let _ = self.tx_request.send(LoadRequest {
+                    id: unit.id,
+                    path: path.clone(),
+                    high_banner_quality: hq, 
+                    ctx: ui.ctx().clone(),
+                });
+            } else {
+                self.missing_ids.insert(unit.id);
+            }
         }
 
         let texture = self.texture_cache.get(&unit.id);
@@ -263,43 +299,57 @@ fn render_tooltip(ui: &mut egui::Ui, unit: &CatEntry) {
     }
 }
 
-fn process_image(_id: u32, path: &PathBuf, bg_cache: &Option<image::RgbaImage>, high_banner_quality: bool) -> Option<egui::ColorImage> {
-    let image_buffer = image::open(path).ok()?;
-    let mut unit_img = image_buffer.to_rgba8();
-    let bg = bg_cache.as_ref()?;
+fn process_image_robust(_id: u32, path: &PathBuf, bg_cache: &Option<image::RgbaImage>, high_banner_quality: bool) -> Option<egui::ColorImage> {
+    for _ in 0..3 {
+        if !path.exists() {
+            return None; 
+        }
 
-    let mut final_image = bg.clone();
-    let bg_w = final_image.width() as i64;
-    let bg_h = final_image.height() as i64;
-    let (w, h) = unit_img.dimensions();
-    
-    let is_transparent_unit = w > 311 && h > 2 && unit_img.get_pixel(311, 2)[3] == 0;
+        match image::open(path) {
+            Ok(image_buffer) => {
+                let mut unit_img = image_buffer.to_rgba8();
+                if let Some(bg) = bg_cache.as_ref() {
+                    let mut final_image = bg.clone();
+                    let bg_w = final_image.width() as i64;
+                    let bg_h = final_image.height() as i64;
+                    let (w, h) = unit_img.dimensions();
+                    
+                    let is_transparent_unit = w > 311 && h > 2 && unit_img.get_pixel(311, 2)[3] == 0;
 
-    let (x, y) = if is_transparent_unit {
-        (-2, 9)
-    } else {
-        unit_img = autocrop(unit_img);
-        let unit_w = unit_img.width() as i64;
-        let unit_h = unit_img.height() as i64;
-        ((bg_w - unit_w) / 2, (bg_h - unit_h) / 2)
-    };
+                    let (x, y) = if is_transparent_unit {
+                        (-2, 9)
+                    } else {
+                        unit_img = autocrop(unit_img);
+                        let unit_w = unit_img.width() as i64;
+                        let unit_h = unit_img.height() as i64;
+                        ((bg_w - unit_w) / 2, (bg_h - unit_h) / 2)
+                    };
 
-    imageops::overlay(&mut final_image, &unit_img, x, y);
+                    imageops::overlay(&mut final_image, &unit_img, x, y);
 
-    let (target_h, filter) = if high_banner_quality {
-        (100, imageops::FilterType::Lanczos3)
-    } else {
-        (50, imageops::FilterType::Nearest)
-    };
+                    let (target_h, filter) = if high_banner_quality {
+                        (100, imageops::FilterType::Lanczos3)
+                    } else {
+                        (50, imageops::FilterType::Nearest)
+                    };
 
-    let ratio = target_h as f32 / final_image.height() as f32;
-    let target_w = (final_image.width() as f32 * ratio) as u32;
-    
-    let final_image = imageops::resize(&final_image, target_w, target_h, filter);
-    let size = [final_image.width() as usize, final_image.height() as usize];
-    let pixels = final_image.as_flat_samples();
-    
-    Some(egui::ColorImage::from_rgba_unmultiplied(size, pixels.as_slice()))
+                    let ratio = target_h as f32 / final_image.height() as f32;
+                    let target_w = (final_image.width() as f32 * ratio) as u32;
+                    
+                    let final_image = imageops::resize(&final_image, target_w, target_h, filter);
+                    let size = [final_image.width() as usize, final_image.height() as usize];
+                    let pixels = final_image.as_flat_samples();
+                    
+                    return Some(egui::ColorImage::from_rgba_unmultiplied(size, pixels.as_slice()));
+                }
+                return None;
+            },
+            Err(_) => {
+                thread::sleep(Duration::from_millis(50));
+            }
+        }
+    }
+    None
 }
 
 fn autocrop(img: image::RgbaImage) -> image::RgbaImage {

@@ -6,6 +6,8 @@ use crate::core::settings::Settings;
 use crate::core::utils::autocrop; 
 use crate::ui::components::name_box;
 
+use crate::paths::cat::{self, AssetType};
+
 pub fn render(
     ctx: &egui::Context,
     ui: &mut egui::Ui,
@@ -106,41 +108,46 @@ fn render_cat_icon(
     current_key: &mut String,
     texture_cache: &mut Option<egui::TextureHandle>
 ) {
-    let expected_path = get_icon_path(cat, form);
+    let expected_path_str = if let Some(path) = cat::image(
+        Path::new(cat::DIR_CATS),
+        AssetType::Icon,
+        cat.id,
+        form,
+        cat.egg_ids
+    ) {
+        path.to_string_lossy().to_string()
+    } else {
+        String::new() 
+    };
 
-    if *current_key != expected_path {
-        *current_key = expected_path.clone();
-        *texture_cache = load_icon_texture(ctx, &expected_path);
+    if *current_key != expected_path_str {
+        *current_key = expected_path_str.clone();
+        *texture_cache = if !expected_path_str.is_empty() {
+             load_icon_texture(ctx, &expected_path_str)
+        } else {
+             None
+        };
     }
 
     if let Some(tex) = texture_cache { 
-        ui.image(&*tex); 
+        ui.image((tex.id(), tex.size_vec2())); 
     } else { 
         ui.allocate_space(egui::vec2(64.0, 64.0)); 
     }
 }
 
-fn get_icon_path(cat: &CatEntry, form: usize) -> String {
-    let (egg_norm, egg_evol) = cat.egg_ids;
-    if form == 0 && egg_norm != -1 {
-        return format!("game/cats/egg_{:03}/f/uni{:03}_m00.png", egg_norm, egg_norm);
-    }
-    if form == 1 && egg_evol != -1 {
-        return format!("game/cats/egg_{:03}/c/uni{:03}_m01.png", egg_evol, egg_evol);
-    }
-    
-    let form_char = match form { 0 => "f", 1 => "c", 2 => "s", _ => "u" };
-    format!("game/cats/{:03}/{}/uni{:03}_{}00.png", cat.id, form_char, cat.id, form_char)
-}
-
 fn load_icon_texture(ctx: &egui::Context, path_str: &str) -> Option<egui::TextureHandle> {
     let path = Path::new(path_str);
-    let fallback = Path::new("game/cats/uni.png");
+    let fallback = Path::new(cat::FALLBACK_ICON);
     
     let final_path = if path.exists() { path } else if fallback.exists() { fallback } else { return None };
 
     let img = image::open(final_path).ok()?;
-    let rgba = autocrop(img.to_rgba8());
+    let mut rgba = autocrop(img.to_rgba8());
+    
+    if rgba.width() != 110 || rgba.height() != 85 {
+        rgba = image::imageops::resize(&rgba, 110, 85, image::imageops::FilterType::Lanczos3);
+    }
     
     let size = [rgba.width() as usize, rgba.height() as usize];
     let pixels = rgba.as_flat_samples();

@@ -2,9 +2,7 @@
 use eframe::egui;
 use crate::core::settings::Settings;
 use super::imgcut::SpriteSheet;
-
-// Each Number corrosponds to the abiltiies
-// line on a generic text editor(?)
+use crate::paths::global;
 
 // Traits
 pub const ICON_TRAIT_RED: usize = 224;
@@ -232,13 +230,13 @@ pub fn ensure_loaded(ctx: &egui::Context, sheet: &mut SpriteSheet, settings: &Se
         return;
     }
 
-    let base_dir = std::path::Path::new("game/assets/img015");
+    let base_dir = global::img015_folder(std::path::Path::new(""));
     let current_language = &settings.game_language;
     
     let codes_to_try: Vec<String> = if current_language.is_empty() {
         crate::core::utils::LANGUAGE_PRIORITY
             .iter()
-            .map(|language_code| language_code.to_string()) // RENAMED s -> language_code
+            .map(|language_code| language_code.to_string())
             .collect()
     } else {
         vec![current_language.clone()]

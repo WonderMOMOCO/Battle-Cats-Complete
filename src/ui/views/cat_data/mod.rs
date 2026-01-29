@@ -3,8 +3,8 @@ use std::collections::HashMap;
 
 use crate::core::cat::scanner::CatEntry;
 use crate::core::cat::DetailTab;
-use crate::core::files::imgcut::SpriteSheet;
-use crate::core::files::img015;
+use crate::data::global::imgcut::SpriteSheet;
+use crate::data::global::img015;
 use crate::core::settings::Settings;
 use crate::core::cat::talents as talent_logic; 
 
@@ -13,6 +13,7 @@ mod stats;
 mod abilities;
 mod talents;
 mod details;
+pub mod list;
 
 pub fn show(
     ctx: &egui::Context, 

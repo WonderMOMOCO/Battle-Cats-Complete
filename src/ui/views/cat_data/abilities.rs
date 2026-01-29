@@ -1,13 +1,13 @@
 use eframe::egui;
-use crate::core::definitions;
+use crate::core::utils;
 use crate::core::cat::scanner::CatEntry;
 use crate::core::cat::stats::{self, CatRaw};
 use crate::core::cat::abilities::{self, AbilityItem};
-use crate::core::files::imgcut::SpriteSheet;
+use crate::data::global::imgcut::SpriteSheet;
 use crate::core::settings::Settings;
 use crate::ui::components::shared::{render_fallback_icon, text_with_superscript};
-use crate::core::files::img015;
-use crate::core::files::skillacquisition::TalentRaw;
+use crate::data::global::img015;
+use crate::data::cat::skillacquisition::TalentRaw;
 use std::collections::HashMap;
 
 pub fn render(
@@ -119,7 +119,7 @@ fn render_traits(
 
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing = egui::vec2(settings.ability_padding_x, settings.ability_padding_y);
-        for &line_num in definitions::UI_TRAIT_ORDER {
+        for &line_num in utils::UI_TRAIT_ORDER {
             let has_trait = check_trait(s, line_num);
             if has_trait {
                 let tooltip = get_trait_tooltip(line_num);

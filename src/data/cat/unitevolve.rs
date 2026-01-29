@@ -2,6 +2,7 @@ use std::fs;
 use std::path::Path;
 use std::collections::HashMap;
 use crate::core::utils; 
+use crate::paths::cat;
 
 pub fn load(cats_directory: &Path, language_code: &str) -> HashMap<u32, [Vec<String>; 4]> {
     let mut final_map: HashMap<u32, [Vec<String>; 4]> = HashMap::new();
@@ -18,7 +19,7 @@ pub fn load(cats_directory: &Path, language_code: &str) -> HashMap<u32, [Vec<Str
         p
     };
 
-    let base_dir = cats_directory.join("unitevolve");
+    let base_dir = cats_directory.join(cat::DIR_UNIT_EVOLVE);
 
     for code in priorities {
         let fname = format!("unitevolve_{}.csv", code);
@@ -45,7 +46,6 @@ pub fn load(cats_directory: &Path, language_code: &str) -> HashMap<u32, [Vec<Str
 
             let get_text = |idx: usize| -> String {
                 let raw = parts.get(idx).map(|s| s.trim()).unwrap_or("");
-                // Strip common empty placeholder
                 if raw == "@" || raw == "＠" || raw.is_empty() {
                     String::new() 
                 } else {
@@ -53,8 +53,6 @@ pub fn load(cats_directory: &Path, language_code: &str) -> HashMap<u32, [Vec<Str
                 }
             };
 
-            // 0-2 True Form
-            // 4-6: Ultra Form
             let tf_new = vec![get_text(0), get_text(1), get_text(2)];
             let uf_new = vec![get_text(4), get_text(5), get_text(6)];
 

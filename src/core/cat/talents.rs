@@ -1,6 +1,6 @@
-use crate::core::files::skillacquisition::{TalentRaw, TalentGroupRaw};
-use crate::core::files::unitid::CatRaw;
-use crate::core::files::unitlevel::CatLevelCurve;
+use crate::data::cat::skillacquisition::{TalentRaw, TalentGroupRaw};
+use crate::data::cat::unitid::CatRaw;
+use crate::data::cat::unitlevel::CatLevelCurve;
 use std::collections::HashMap;
 
 pub fn calculate_talent_value(min: u16, max: u16, level: u8, max_level: u8) -> i32 {
