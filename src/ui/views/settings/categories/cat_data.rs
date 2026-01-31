@@ -40,6 +40,13 @@ pub fn show(ui: &mut egui::Ui, settings: &mut Settings) -> bool {
         ui.label("Selected Unit Persistence");
     });
 
+    ui.horizontal(|ui| {
+        if toggle_ui(ui, &mut settings.show_invalid_units).changed() {
+            refresh_needed = true;
+        }
+        ui.label("Show Invalid Units");
+    });
+
     ui.add_space(20.0);
     ui.heading("Ability Display");
     ui.add_space(10.0);

@@ -2,8 +2,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::Sender;
 use std::sync::atomic::{AtomicI32, Ordering};
-use zip::ZipArchive;
 use rayon::prelude::*;
+use zip::ZipArchive;
 
 pub fn import_from_folder(path_str: &str, tx: Sender<String>) -> Result<bool, String> {
     let source = Path::new(path_str);
@@ -89,7 +89,108 @@ pub fn import_from_folder(path_str: &str, tx: Sender<String>) -> Result<bool, St
     Ok(true)
 }
 
-pub fn import_from_zip(path_str: &str, tx: Sender<String>) -> Result<bool, String> {
+pub fn import_from_archive(path_str: &str, tx: Sender<String>) -> Result<bool, String> {
+    if path_str.to_lowercase().ends_with(".zip") {
+        import_legacy_zip(path_str, tx)
+    } else {
+        import_tar_zst(path_str, tx)
+    }
+}
+
+fn import_tar_zst(path_str: &str, tx: Sender<String>) -> Result<bool, String> {
+    let game_root = Path::new("game");
+    let raw_dir = game_root.join("raw");
+
+    // Scan
+    let _ = tx.send("Scanning archive structure...".to_string());
+    
+    let file = fs::File::open(path_str).map_err(|e| e.to_string())?;
+    let decoder = zstd::stream::read::Decoder::new(file).map_err(|e| e.to_string())?;
+    let mut archive = tar::Archive::new(decoder);
+
+    let mut smart_prefix = None;
+    
+    for entry_result in archive.entries().map_err(|e| e.to_string())? {
+        if let Ok(entry) = entry_result {
+            if let Ok(path) = entry.path() {
+                let path_str = path.to_string_lossy();
+                if let Some(idx) = path_str.find("assets/img015") {
+                    smart_prefix = Some(path_str[..idx].to_string());
+                    break; 
+                }
+            }
+        }
+    }
+
+    // Extract tar.zst
+    let file = fs::File::open(path_str).map_err(|e| e.to_string())?;
+    let decoder = zstd::stream::read::Decoder::new(file).map_err(|e| e.to_string())?;
+    let mut archive = tar::Archive::new(decoder);
+    
+    let mut extracted = 0;
+
+    if let Some(prefix) = smart_prefix {
+        let _ = tx.send("Smart Import: Valid backup detected in Archive.".to_string());
+        
+        for entry_result in archive.entries().map_err(|e| e.to_string())? {
+            let mut entry = entry_result.map_err(|e| e.to_string())?;
+            if entry.header().entry_type().is_dir() { continue; }
+            
+            let path_buf = entry.path().map_err(|e| e.to_string())?.to_path_buf();
+            let name = path_buf.to_string_lossy().to_string();
+
+            if !name.starts_with(&prefix) { continue; }
+
+            let rel_name = &name[prefix.len()..];
+            if rel_name.is_empty() { continue; }
+
+            let clean_rel = rel_name.trim_start_matches(|c| c == '/' || c == '\\');
+            let dest = game_root.join(clean_rel);
+
+            if let Some(parent) = dest.parent() {
+                if !parent.exists() { let _ = fs::create_dir_all(parent); }
+            }
+
+            if entry.unpack(&dest).is_ok() {
+                extracted += 1;
+                if extracted % 100 == 0 {
+                    let simple_name = path_buf.file_name().unwrap_or_default().to_string_lossy();
+                    let _ = tx.send(format!("Extracted {} files | Current: {}", extracted, simple_name));
+                }
+            }
+        }
+        let _ = tx.send("Success! Smart Import complete.".to_string());
+        return Ok(false);
+    }
+
+    if !raw_dir.exists() { 
+        fs::create_dir_all(&raw_dir).map_err(|e| e.to_string())?; 
+    }
+    
+    let _ = tx.send("Standard Scan: No structure found. Extracting to raw...".to_string());
+
+    for entry_result in archive.entries().map_err(|e| e.to_string())? {
+        let mut entry = entry_result.map_err(|e| e.to_string())?;
+        if entry.header().entry_type().is_dir() { continue; }
+        
+        let path_buf = entry.path().map_err(|e| e.to_string())?.to_path_buf();
+        let simple_name = path_buf.file_name().unwrap_or_default().to_string_lossy().to_string();
+        
+        let dest = raw_dir.join(&simple_name);
+        
+        if entry.unpack(&dest).is_ok() {
+            extracted += 1;
+            if extracted % 100 == 0 { 
+                let _ = tx.send(format!("Extracted {} files | Current: {}", extracted, simple_name)); 
+            }
+        }
+    }
+    
+    Ok(true)
+}
+
+// Extract game.zip
+fn import_legacy_zip(path_str: &str, tx: Sender<String>) -> Result<bool, String> {
     let f = fs::File::open(path_str).map_err(|e| e.to_string())?;
     let mut archive = ZipArchive::new(f).map_err(|e| e.to_string())?;
     let game_root = Path::new("game");

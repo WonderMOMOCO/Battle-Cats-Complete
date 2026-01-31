@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::mpsc::Receiver;
 pub mod lang;
 pub mod upd;
+pub mod handle;
 
 #[derive(Serialize, Deserialize)]
 #[serde(default)] 
@@ -9,6 +10,8 @@ pub struct Settings {
     pub high_banner_quality: bool,
     pub unit_persistence: bool,
     pub expand_spirit_details: bool,
+    pub show_invalid_units: bool,
+    
     pub ability_padding_x: f32,
     pub ability_padding_y: f32,
     pub trait_padding_y: f32,
@@ -18,6 +21,11 @@ pub struct Settings {
 
     pub update_mode: upd::UpdateMode,
     
+    pub enable_ultra_compression: bool,
+    pub last_compression_level: i32,
+    
+    pub app_folder_persistence: bool,
+
     #[serde(skip)]
     pub manual_check_requested: bool,
     
@@ -35,6 +43,8 @@ impl Default for Settings {
             high_banner_quality: false,
             unit_persistence: true,
             expand_spirit_details: false,
+            show_invalid_units: false,
+            
             ability_padding_x: 3.0,
             ability_padding_y: 5.0,
             trait_padding_y: 5.0,
@@ -43,6 +53,11 @@ impl Default for Settings {
             
             update_mode: upd::UpdateMode::default(),
             
+            enable_ultra_compression: false,
+            last_compression_level: 9, 
+            
+            app_folder_persistence: false,
+
             active_tab: "General".to_string(),
             manual_check_requested: false,
             available_languages: Vec::new(),

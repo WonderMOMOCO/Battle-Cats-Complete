@@ -45,6 +45,7 @@ pub fn show(ctx: &egui::Context, settings: &mut Settings, tabs: &[&str]) -> bool
             let result = match settings.active_tab.as_str() {
                 "General" => categories::general::show(ui, settings),
                 "Cat Data" => categories::cat_data::show(ui, settings),
+                "Game Data" => categories::game_data::show(ui, settings),
                 _ => {
                     ui.vertical_centered(|ui| {
                         ui.add_space(50.0);

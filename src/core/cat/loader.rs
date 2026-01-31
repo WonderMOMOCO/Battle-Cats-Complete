@@ -10,6 +10,7 @@ use crate::data::cat::unitbuy;
 use crate::data::cat::skillacquisition;
 use crate::data::cat::unitevolve;
 use crate::paths::cat;
+use crate::core::settings::handle::ScannerConfig;
 
 pub fn ensure_global_data_loaded(state: &mut CatListState, language_code: &str) {
     let cats_dir = Path::new(cat::DIR_CATS);
@@ -28,8 +29,8 @@ pub fn ensure_global_data_loaded(state: &mut CatListState, language_code: &str) 
     }
 }
 
-pub fn refresh_cat(state: &mut CatListState, id: u32, language_code: &str, preferred_form: usize) {
-    ensure_global_data_loaded(state, language_code);
+pub fn refresh_cat(state: &mut CatListState, id: u32, config: ScannerConfig) {
+    ensure_global_data_loaded(state, &config.language);
 
     let cats_dir = Path::new(cat::DIR_CATS);
     let unit_folder = cats_dir.join(format!("{:03}", id));
@@ -40,8 +41,7 @@ pub fn refresh_cat(state: &mut CatListState, id: u32, language_code: &str, prefe
         state.cached_unit_buy.as_ref().unwrap(),
         state.cached_talents.as_ref().unwrap(),
         state.cached_evolve_text.as_ref().unwrap(),
-        language_code,
-        preferred_form
+        &config 
     );
 
     match new_entry {
@@ -64,9 +64,9 @@ pub fn refresh_cat(state: &mut CatListState, id: u32, language_code: &str, prefe
     }
 }
 
-pub fn reload_selected_cat_data(state: &mut CatListState, language_code: &str, preferred_form: usize) {
+pub fn reload_selected_cat_data(state: &mut CatListState, config: ScannerConfig) {
     if let Some(id) = state.selected_cat {
-        refresh_cat(state, id, language_code, preferred_form);
+        refresh_cat(state, id, config);
     }
 }
 
@@ -140,7 +140,7 @@ pub fn update_data(state: &mut CatListState) {
     }
 }
 
-pub fn restart_scan(state: &mut CatListState, language_code: &str, preferred_form: usize) {
+pub fn restart_scan(state: &mut CatListState, config: ScannerConfig) {
     state.skill_descriptions = None; 
     
     let current_selection_id = state.selected_cat;
@@ -173,5 +173,5 @@ pub fn restart_scan(state: &mut CatListState, language_code: &str, preferred_for
     state.selected_form = current_form;
     state.selected_detail_tab = current_tab;
 
-    state.scan_receiver = Some(scanner::start_scan(language_code.to_string(), preferred_form));
+    state.scan_receiver = Some(scanner::start_scan(config));
 }

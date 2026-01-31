@@ -6,8 +6,6 @@ mod core;
 mod ui;
 mod updater;
 mod data;
-#[cfg(feature = "dev")]
-pub mod dev;
 
 use eframe::egui;
 

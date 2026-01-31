@@ -1,73 +1,49 @@
 use eframe::egui;
-use std::sync::mpsc;
-use std::thread;
-use crate::core::import::{ImportState, ImportMode, game_data, sort};
+use crate::core::import::{ImportState, ImportSubTab};
+use crate::core::settings::Settings;
+use super::import_tab::{adb_view, raw_view, decrypt_view}; 
 
-pub fn show(ui: &mut egui::Ui, state: &mut ImportState) {
-    ui.label(egui::RichText::new("Import/Restore game files.").strong());
-    ui.add_space(10.0);
-    
+pub fn show(ui: &mut egui::Ui, state: &mut ImportState, settings: &Settings) {
     ui.horizontal(|ui| {
-        ui.label("Source:");
-        ui.radio_value(&mut state.import_mode, ImportMode::Zip, "game.zip");
-        ui.radio_value(&mut state.import_mode, ImportMode::Folder, "Folder");
-    });
-    
-    ui.add_space(5.0);
+        ui.spacing_mut().item_spacing.x = 5.0;
 
-    ui.horizontal(|ui| {
-        let enabled = state.rx.is_none() && state.import_mode != ImportMode::None;
-        if ui.add_enabled(enabled, egui::Button::new("Select Source")).clicked() {
-            let res = match state.import_mode {
-                ImportMode::Zip => rfd::FileDialog::new().add_filter("ZIP", &["zip"]).pick_file(),
-                ImportMode::Folder => rfd::FileDialog::new().pick_folder(),
-                _ => None,
-            };
-            if let Some(path) = res {
-                state.set_import_path(path.display().to_string());
-                state.status_message = "Source selected.".to_string();
-                state.log_content.clear();
-            }
+        let active_color = egui::Color32::from_rgb(31, 106, 165);
+        let inactive_color = egui::Color32::from_gray(60);
+
+        let is_adb = state.import_sub_tab == ImportSubTab::Emulator;
+        if ui.add(egui::Button::new(egui::RichText::new("Emulator").color(egui::Color32::WHITE).size(14.0))
+            .fill(if is_adb { active_color } else { inactive_color })
+            .min_size(egui::vec2(80.0, 30.0)))
+            .clicked() 
+        {
+            state.import_sub_tab = ImportSubTab::Emulator;
         }
-        ui.monospace(&state.import_censored);
+
+        let is_decrypt = state.import_sub_tab == ImportSubTab::Decrypt;
+        if ui.add(egui::Button::new(egui::RichText::new("Encrypted").color(egui::Color32::WHITE).size(14.0))
+            .fill(if is_decrypt { active_color } else { inactive_color })
+            .min_size(egui::vec2(80.0, 30.0)))
+            .clicked() 
+        {
+            state.import_sub_tab = ImportSubTab::Decrypt;
+        }
+
+        let is_sort = state.import_sub_tab == ImportSubTab::Sort;
+        if ui.add(egui::Button::new(egui::RichText::new("Decrypted").color(egui::Color32::WHITE).size(14.0))
+            .fill(if is_sort { active_color } else { inactive_color })
+            .min_size(egui::vec2(80.0, 30.0)))
+            .clicked() 
+        {
+            state.import_sub_tab = ImportSubTab::Sort;
+        }
     });
 
     ui.add_space(15.0);
-    
-    let can_start = !state.import_path.is_empty() && state.rx.is_none() && state.import_mode != ImportMode::None;
-    
-    if ui.add_enabled(can_start, egui::Button::new("Start Import")).clicked() {
-        state.status_message = "Starting worker...".to_string();
-        state.log_content.clear();
-        let (tx, rx) = mpsc::channel();
-        state.rx = Some(rx);
-        
-        let path = state.import_path.clone();
-        let mode = state.import_mode;
 
-        thread::spawn(move || {
-            let import_result = match mode {
-                ImportMode::Folder => game_data::import_standard_folder(&path, tx.clone()),
-                ImportMode::Zip => game_data::import_standard_zip(&path, tx.clone()),
-                _ => Err("Invalid mode".to_string()),
-            };
-
-            match import_result {
-                Ok(should_sort) => {
-                    if should_sort {
-                        let _ = tx.send("Starting Sort...".to_string());
-                        if let Err(e) = sort::sort_game_files(tx.clone()) {
-                            let _ = tx.send(format!("Error Sorting: {}", e));
-                        } else {
-                            let _ = tx.send("Success! Files imported and sorted.".to_string());
-                        }
-                    } else {
-                    }
-                },
-                Err(e) => {
-                    let _ = tx.send(format!("Error Importing: {}", e));
-                }
-            }
-        });
+    // Render the active view
+    match state.import_sub_tab {
+        ImportSubTab::Emulator => adb_view::show(ui, state, settings),
+        ImportSubTab::Decrypt => decrypt_view::show(ui, state),
+        ImportSubTab::Sort => raw_view::show(ui, state),
     }
 }

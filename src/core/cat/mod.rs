@@ -22,6 +22,7 @@ use crate::data::cat::skilldescriptions;
 use crate::data::cat::unitlevel::CatLevelCurve;
 use crate::data::cat::unitbuy::UnitBuyRow;
 use crate::data::cat::skillacquisition::TalentRaw;
+use crate::core::settings::handle::ScannerConfig;
 
 #[derive(Deserialize, Serialize, PartialEq, Clone, Copy)]
 pub enum DetailTab {
@@ -155,16 +156,16 @@ impl CatListState {
         watcher::init(self, ctx);
     }
 
-    pub fn handle_event(&mut self, ctx: &egui::Context, path: &PathBuf, language_code: &str, preferred_form: usize) {
-        watcher::handle_event(self, ctx, path, language_code, preferred_form);
+    pub fn handle_event(&mut self, ctx: &egui::Context, path: &PathBuf, config: ScannerConfig) {
+        watcher::handle_event(self, ctx, path, config);
     }
 
     pub fn update_data(&mut self) {
         loader::update_data(self);
     }
 
-    pub fn restart_scan(&mut self, language_code: &str, preferred_form: usize) {
-        loader::restart_scan(self, language_code, preferred_form);
+    pub fn restart_scan(&mut self, config: ScannerConfig) {
+        loader::restart_scan(self, config);
     }
 }
 
@@ -267,7 +268,7 @@ pub fn show(ctx: &egui::Context, state: &mut CatListState, settings: &crate::cor
                         ui.label("Check that 'unitbuy.csv' exists and unit folders are present.");
                         ui.add_space(15.0);
                         if ui.button("Retry Scan").clicked() {
-                            state.restart_scan(&settings.game_language, settings.preferred_banner_form);
+                            state.restart_scan(settings.scanner_config());
                             ui.ctx().request_repaint();
                         }
                     }

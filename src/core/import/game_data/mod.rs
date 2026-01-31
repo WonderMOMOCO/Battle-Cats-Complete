@@ -8,18 +8,12 @@ pub fn import_standard_folder(path: &str, tx: Sender<String>) -> Result<bool, St
     import::import_from_folder(path, tx)
 }
 
-pub fn import_standard_zip(path: &str, tx: Sender<String>) -> Result<bool, String> {
-    import::import_from_zip(path, tx)
-}
-
-// Dev
-#[cfg(feature = "dev")]
-pub fn run_dev_decryption(path: &str, region: &str, tx: Sender<String>) -> Result<String, String> {
-    crate::dev::run_decryption(path, region, tx)
-        .map(|_| "Success! Decryption complete.".to_string())
+// Imoport
+pub fn import_standard_archive(path: &str, tx: Sender<String>) -> Result<bool, String> {
+    import::import_from_archive(path, tx)
 }
 
 // Export
-pub fn create_game_zip(tx: Sender<String>, level: i32, filename: String) -> Result<(), String> {
-    export::create_game_zip(tx, level, filename)
+pub fn create_game_archive(tx: Sender<String>, level: i32, filename: String) -> Result<(), String> {
+    export::create_game_archive(tx, level, filename)
 }

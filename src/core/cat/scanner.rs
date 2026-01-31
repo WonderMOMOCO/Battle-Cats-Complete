@@ -13,6 +13,7 @@ use crate::data::cat::skillacquisition::{self, TalentRaw};
 use crate::data::cat::unitevolve; 
 use crate::core::utils; 
 use crate::paths::cat::{self, AssetType, AnimType};
+use crate::core::settings::handle::ScannerConfig;
 
 #[derive(Clone, Debug)]
 pub struct CatEntry {
@@ -30,7 +31,7 @@ pub struct CatEntry {
     pub evolve_text: [Vec<String>; 4], 
 }
 
-pub fn start_scan(language_code: String, preferred_form: usize) -> Receiver<CatEntry> {
+pub fn start_scan(config: ScannerConfig) -> Receiver<CatEntry> {
     let (cat_sender, cat_receiver) = mpsc::channel();
 
     thread::spawn(move || {
@@ -39,7 +40,7 @@ pub fn start_scan(language_code: String, preferred_form: usize) -> Receiver<CatE
         let level_curves_arc = Arc::new(unitlevel::load_level_curves(cats_directory));
         let unit_buy_map_arc = Arc::new(unitbuy::load_unitbuy(cats_directory));
         let talent_map_arc = Arc::new(skillacquisition::load(cats_directory));
-        let evolve_text_map_arc = Arc::new(unitevolve::load(cats_directory, &language_code));
+        let evolve_text_map_arc = Arc::new(unitevolve::load(cats_directory, &config.language));
         
         let folder_entries: Vec<PathBuf> = match fs::read_dir(cats_directory) {
             Ok(read_dir_iter) => read_dir_iter
@@ -63,8 +64,7 @@ pub fn start_scan(language_code: String, preferred_form: usize) -> Receiver<CatE
                 &unit_buys_clone, 
                 &talents_clone, 
                 &evolve_text_clone, 
-                &language_code,
-                preferred_form 
+                &config
             ) {
                 let _ = sender_clone.send(cat_entry);
             }
@@ -79,8 +79,7 @@ pub fn process_cat_entry(
     unit_buys: &std::collections::HashMap<u32, UnitBuyRow>,
     talents_map: &std::collections::HashMap<u16, TalentRaw>, 
     evolve_text_map: &std::collections::HashMap<u32, [Vec<String>; 4]>, 
-    language_code: &str,
-    preferred_form: usize 
+    config: &ScannerConfig
 ) -> Option<CatEntry> {
     
     let folder_stem = original_folder_path.file_name()?.to_str()?;
@@ -89,7 +88,9 @@ pub fn process_cat_entry(
     let ub_row = unit_buys.get(&cat_id)?;
 
     let is_egg_unit = ub_row.egg_id_normal != -1;
-    if !is_egg_unit && ub_row.guide_order == -1 && cat_id != 673 {
+    let is_hidden = ub_row.guide_order == -1 && cat_id != 673;
+
+    if !config.show_invalid && !is_egg_unit && is_hidden {
         return None; 
     }
 
@@ -103,20 +104,24 @@ pub fn process_cat_entry(
     }
 
     let mut final_image_path_opt = None;
-    for form_idx in (0..=preferred_form).rev() {
+    for form_idx in (0..=config.preferred_form).rev() {
         if let Some(path) = cat::image(cats_root_dir, AssetType::Banner, cat_id, form_idx, egg_ids) {
             final_image_path_opt = Some(path);
             break;
         }
     }
 
-    if let Some(path) = &final_image_path_opt {
-        match image::open(path) {
-            Ok(img) => {
-                let (w, h) = img.dimensions();
-                if w < 50 || h < 30 { return None; }
-            },
-            Err(_) => { return None; }
+    if !config.show_invalid {
+        if let Some(path) = &final_image_path_opt {
+            match image::open(path) {
+                Ok(img) => {
+                    let (w, h) = img.dimensions();
+                    if w < 50 || h < 30 { return None; }
+                },
+                Err(_) => { return None; }
+            }
+        } else {
+            return None;
         }
     }
 
@@ -145,10 +150,10 @@ pub fn process_cat_entry(
     let target_file_id = cat_id + 1;
     let lang_directory = cat::lang(cats_root_dir, cat_id);
 
-    let language_codes_to_check: Vec<&str> = if language_code.is_empty() {
+    let language_codes_to_check: Vec<&str> = if config.language.is_empty() {
         utils::LANGUAGE_PRIORITY.to_vec()
     } else {
-        vec![language_code]
+        vec![&config.language]
     };
 
     for code in language_codes_to_check {

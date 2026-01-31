@@ -12,6 +12,7 @@ use crate::data::cat::unitbuy;
 use crate::data::cat::unitevolve;
 use crate::data::global::imgcut::SpriteSheet;
 use crate::paths::cat;
+use crate::core::settings::handle::ScannerConfig;
 
 pub struct CatWatchers {
     _watcher: RecommendedWatcher,
@@ -76,14 +77,14 @@ pub fn init(state: &mut CatListState, ctx: &egui::Context) {
     }
 }
 
-pub fn handle_event(state: &mut CatListState, ctx: &egui::Context, path: &PathBuf, language_code: &str, preferred_form: usize) {
+pub fn handle_event(state: &mut CatListState, ctx: &egui::Context, path: &PathBuf, config: ScannerConfig) {
     let path_str = path.to_string_lossy().to_lowercase();
     let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
     
     let cats_dir = Path::new(cat::DIR_CATS);
 
     if patterns::CAT_UNIVERSAL_FILES.contains(&file_name) || patterns::CHECK_LINE_FILES.contains(&file_name) {
-        loader::restart_scan(state, language_code, preferred_form);
+        loader::restart_scan(state, config);
         ctx.request_repaint();
         return;
     }
@@ -102,7 +103,7 @@ pub fn handle_event(state: &mut CatListState, ctx: &egui::Context, path: &PathBu
     }
 
     if path_str.contains(cat::DIR_UNIT_EVOLVE) || path_str.contains("unitevolve") {
-        state.cached_evolve_text = Some(unitevolve::load(cats_dir, language_code));
+        state.cached_evolve_text = Some(unitevolve::load(cats_dir, &config.language));
             if let Some(ref map) = state.cached_evolve_text {
             for cat in &mut state.cats {
                 if let Some(text_arr) = map.get(&cat.id) {
@@ -111,7 +112,7 @@ pub fn handle_event(state: &mut CatListState, ctx: &egui::Context, path: &PathBu
             }
         }
         if state.selected_cat.is_some() {
-            loader::reload_selected_cat_data(state, language_code, preferred_form);
+            loader::reload_selected_cat_data(state, config);
         }
         ctx.request_repaint();
         return;
@@ -136,7 +137,7 @@ pub fn handle_event(state: &mut CatListState, ctx: &egui::Context, path: &PathBu
                         state.detail_key.clear();
                         state.texture_cache_version += 1; 
                     }
-                    loader::refresh_cat(state, id, language_code, preferred_form);
+                    loader::refresh_cat(state, id, config);
                     ctx.request_repaint();
                 }
             }

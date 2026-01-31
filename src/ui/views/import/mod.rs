@@ -1,12 +1,12 @@
 use eframe::egui;
 use crate::core::import::{ImportState, DataTab};
+use crate::core::settings::Settings;
+
+pub mod import_tab;
 pub mod import_view;
 pub mod export_view;
 
-#[cfg(feature = "dev")]
-pub mod decrypt_view;
-
-pub fn show(ctx: &egui::Context, state: &mut ImportState) {
+pub fn show(ctx: &egui::Context, state: &mut ImportState, settings: &mut Settings) {
     egui::CentralPanel::default().show(ctx, |ui| {
         ui.heading("Game Data Management");
         ui.add_space(10.0);
@@ -15,8 +15,6 @@ pub fn show(ctx: &egui::Context, state: &mut ImportState) {
             ui.spacing_mut().item_spacing.x = 5.0; 
             
             let mut tabs = Vec::new();
-            #[cfg(feature = "dev")]
-            tabs.push((DataTab::Decrypt, "Decrypt"));
             tabs.push((DataTab::Import, "Import"));
             tabs.push((DataTab::Export, "Export"));
 
@@ -36,21 +34,23 @@ pub fn show(ctx: &egui::Context, state: &mut ImportState) {
         ui.add_space(15.0);
 
         match state.active_tab {
-            DataTab::Import => import_view::show(ui, state),
-            DataTab::Export => export_view::show(ui, state),
-            #[cfg(feature = "dev")]
-            DataTab::Decrypt => decrypt_view::show(ui, state),
+            DataTab::Import => import_view::show(ui, state, settings),
+            DataTab::Export => export_view::show(ui, state, settings),
         }
 
         ui.add_space(15.0);
         ui.separator(); 
 
-        if state.rx.is_some() && !state.status_message.contains("Success") && !state.status_message.contains("Error") {
+        if (state.rx.is_some() || state.is_adb_busy) && !state.status_message.contains("Success") && !state.status_message.contains("Error") {
             ui.horizontal(|ui| { ui.spinner(); ui.label(&state.status_message); });
         } else {
-            let color = if state.status_message.contains("Error") { egui::Color32::RED } 
-                       else if state.status_message.contains("Success") { egui::Color32::GREEN } 
-                       else { egui::Color32::LIGHT_BLUE };
+            let color = if state.status_message.contains("Error") || state.status_message.contains("Failed") { 
+                egui::Color32::LIGHT_RED 
+            } else if state.status_message.contains("Success") || state.status_message.contains("Complete") { 
+                egui::Color32::LIGHT_GREEN 
+            } else { 
+                egui::Color32::LIGHT_BLUE 
+            };
             ui.colored_label(color, &state.status_message);
         }
         
