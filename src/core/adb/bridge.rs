@@ -71,7 +71,8 @@ pub fn spawn_full_import(tx: Sender<AdbEvent>, base_output_dir: PathBuf, mode: A
                 let _ = tx.send(AdbEvent::Status("Starting Decryption...".to_string()));
                 
                 let region_code = match suffix {
-                    "" => "jp",
+                    "" => "ja",
+                    "kr" => "ko",
                     other => other,
                 };
                 

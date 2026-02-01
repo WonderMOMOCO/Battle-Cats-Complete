@@ -63,6 +63,10 @@ impl BattleCatsApp {
 
         setup_custom_fonts(&cc.egui_ctx);
         
+        if app.settings.rx_lang.is_none() {
+            app.settings.rx_lang = Some(crate::core::settings::lang::start_scan());
+        }
+
         app.cat_list_state.restart_scan(app.settings.scanner_config());
 
         updater::cleanup_temp_files();
@@ -100,6 +104,11 @@ impl eframe::App for BattleCatsApp {
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        if self.settings.rx_lang.is_some() {
+            self.settings.update_language_list();
+            ctx.request_repaint(); 
+        }
+
         self.updater.update_state();
 
         if self.settings.manual_check_requested {

@@ -32,14 +32,14 @@ pub fn show(ui: &mut egui::Ui, state: &mut ImportState, settings: &Settings) {
         ui.label("Game Region:");
         egui::ComboBox::from_id_salt("adb_region_combo")
             .selected_text(match state.adb_region {
-                AdbRegion::English => "English",
+                AdbRegion::English => "Global",
                 AdbRegion::Japanese => "Japanese",
                 AdbRegion::Taiwan => "Taiwan",
                 AdbRegion::Korean => "Korean",
                 AdbRegion::All => "All Regions",
             })
             .show_ui(ui, |ui| {
-                ui.selectable_value(&mut state.adb_region, AdbRegion::English, "English");
+                ui.selectable_value(&mut state.adb_region, AdbRegion::English, "Global");
                 ui.selectable_value(&mut state.adb_region, AdbRegion::Japanese, "Japanese");
                 ui.selectable_value(&mut state.adb_region, AdbRegion::Taiwan, "Taiwan");
                 ui.selectable_value(&mut state.adb_region, AdbRegion::Korean, "Korean");

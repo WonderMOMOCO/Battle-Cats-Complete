@@ -13,6 +13,9 @@ const ADB_USB_WIN: &[u8] = include_bytes!("../../assets/adb/win/AdbWinUsbApi.dll
 #[cfg(target_os = "linux")]
 const ADB_BIN_LINUX: &[u8] = include_bytes!("../../assets/adb/linux/adb");
 
+#[cfg(target_os = "macos")]
+const ADB_BIN_MAC: &[u8] = include_bytes!("../../assets/adb/mac/adb");
+
 pub fn get_adb_command() -> Result<PathBuf, String> {
     let temp_dir = env::temp_dir().join("battle_cats_manager_adb");
     if !temp_dir.exists() {
@@ -46,7 +49,21 @@ pub fn get_adb_command() -> Result<PathBuf, String> {
         Ok(adb_path)
     }
 
-    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
+    #[cfg(target_os = "macos")]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let adb_path = temp_dir.join("adb");
+
+        if !adb_path.exists() {
+            fs::write(&adb_path, ADB_BIN_MAC).map_err(|e| e.to_string())?;
+            let mut perms = fs::metadata(&adb_path).map_err(|e| e.to_string())?.permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(&adb_path, perms).map_err(|e| e.to_string())?;
+        }
+        Ok(adb_path)
+    }
+
+    #[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
     Err("Unsupported OS for bundled ADB.".to_string())
 }
 

@@ -114,7 +114,14 @@ impl Updater {
             let _ = tx.send(UpdaterMsg::DownloadStarted(version.clone()));
             
             let target_tag = if version.starts_with('v') { version.clone() } else { format!("v{}", version) };
-            let target_asset_name = if cfg!(target_os = "windows") { "bcc_windows" } else { "bcc_linux" };
+            
+            let target_asset_name = if cfg!(target_os = "windows") { 
+                "bcc_windows" 
+            } else if cfg!(target_os = "macos") {
+                "bcc_mac"
+            } else { 
+                "bcc_linux" 
+            };
             
             let result = self_update::backends::github::Update::configure()
                 .repo_owner(REPO_OWNER)
