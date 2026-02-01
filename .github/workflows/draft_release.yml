@@ -92,9 +92,35 @@ jobs:
           path: bcc_linux.zip
           retention-days: 1
 
+  build-macos:
+    name: Build MacOS
+    needs: check-version
+    if: needs.check-version.outputs.should_release == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cache Cargo Dependencies
+        uses: swatinem/rust-cache@v2
+        with:
+           key: macos-release
+      - name: Build Release
+        run: cargo build --release --verbose
+      - name: Prepare and Zip (Mac)
+        run: |
+          ORIGINAL_BIN_NAME=$(sed -n 's/^name = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          mv "target/release/$ORIGINAL_BIN_NAME" "${{ env.BIN_NAME }}"
+          chmod +x "${{ env.BIN_NAME }}"
+          zip bcc_mac.zip "${{ env.BIN_NAME }}"
+      - name: Upload Mac Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-build
+          path: bcc_mac.zip
+          retention-days: 1
+
   create-release:
     name: Create Release Draft
-    needs: [check-version, build-windows, build-linux]
+    needs: [check-version, build-windows, build-linux, build-macos]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -111,5 +137,4 @@ jobs:
           name: Battle Cats Complete v${{ needs.check-version.outputs.app_version }}
           draft: true
           prerelease: true
-          generate_release_notes: true
           files: artifacts/*
