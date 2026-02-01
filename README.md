@@ -23,7 +23,18 @@ Heres what the app is currently capable of:
   - Descriptions
   - Evolution Info
 
-*This app will trigger Windows Defender Firewall: "Windows protected your PC" as I am not a registered publisher. You must click "More Info" and "Run Anyways" to use this app.*
+### Setup
+Because this app is an open-source hobby project and not signed with a paid certificate, your OS may flag it on the first run.
+
+> 🛡️ **Windows Users:**
+> You may see a blue popup saying **"Windows protected your PC"** (Microsoft Defender SmartScreen).
+>
+> To start the app, click **More info**, then click **Run anyway**.
+
+> 🍎 **MacOS Users:**
+> You may see an error saying **"App is damaged and can't be opened"** or **"Unidentified Developer"** (Gatekeeper).
+>
+> To fix this, type the following command in Terminal: `xattr -cr`, then drag the app file into the terminal window to auto-fill the path.
 
 ## Credit
 Various people have motivated and helped me create this project:
