@@ -14,7 +14,6 @@ jobs:
         id: latest_release
         run: |
           # Fetch the latest release (including pre-releases)
-          # Change to /releases/latest if you only want full production releases
           RELEASE_DATA=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             "https://api.github.com/repos/${{ github.repository }}/releases" | jq '.[0]')
           
@@ -29,8 +28,9 @@ jobs:
       - name: Send Rich Message to Discord
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          # FIX 1: Pass body as ENV var to prevent shell injection errors (like "??? command not found")
+          RELEASE_BODY_EVENT: ${{ github.event.release.body }}
         run: |
-          # Determine values based on trigger type
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             REL_NAME="${{ steps.latest_release.outputs.name }}"
             REL_URL="${{ steps.latest_release.outputs.url }}"
@@ -40,13 +40,13 @@ jobs:
             REL_NAME="${{ github.event.release.name }}"
             REL_URL="${{ github.event.release.html_url }}"
             REL_DATE=$(echo "${{ github.event.release.published_at }}" | cut -c1-10)
-            MESSAGE_BODY=$(cat <<EOF
-          ${{ github.event.release.body }}
-          EOF
-          )
+            MESSAGE_BODY="$RELEASE_BODY_EVENT"
           fi
 
-          # Prepare body text for JSON
+          if [ ${#MESSAGE_BODY} -gt 4000 ]; then
+            MESSAGE_BODY="${MESSAGE_BODY:0:4000} ...\n\n**[Read full release notes]($REL_URL)**"
+          fi
+
           CLEAN_BODY=$(echo "$MESSAGE_BODY" | jq -aRs .)
 
           curl -H "Content-Type: application/json" \
