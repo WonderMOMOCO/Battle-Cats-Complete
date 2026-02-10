@@ -41,7 +41,7 @@ jobs:
           fi
 
           if [ ${#MESSAGE_BODY} -gt 2000 ]; then
-            MESSAGE_BODY="${MESSAGE_BODY:0:2000} ...\n\n**[Read full release notes]($REL_URL)**"
+            MESSAGE_BODY=$(printf "%s ...\n\n**[Read full release notes](%s)**" "${MESSAGE_BODY:0:2000}" "$REL_URL")
           fi
 
           CLEAN_BODY=$(echo "$MESSAGE_BODY" | jq -Rs .)
