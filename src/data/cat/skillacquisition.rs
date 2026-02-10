@@ -36,7 +36,11 @@ pub fn load(cats_directory: &Path) -> HashMap<u16, TalentRaw> {
             let p: Vec<&str> = line.split(delimiter).collect();
             if p.len() < 2 { continue; }
 
-            let id = p[0].trim().parse::<u16>().unwrap_or(0);
+            let id = match p[0].trim().parse::<u16>() {
+                Ok(val) => val,
+                Err(_) => continue, 
+            };
+
             let type_id = p[1].trim().parse::<u16>().unwrap_or(0);
             
             let mut groups = Vec::new();

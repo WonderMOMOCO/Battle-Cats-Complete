@@ -40,32 +40,31 @@ fn render_form_buttons(ui: &mut egui::Ui, cat: &CatEntry, current_form: &mut usi
             
             for index in 0..4 {
                 let exists = cat.forms.get(index).copied().unwrap_or(false);
+                let is_selected = *current_form == index;
 
-                if exists { 
-                    let is_selected = *current_form == index;
-                    let (fill, stroke, text) = if is_selected {
-                        (egui::Color32::from_rgb(0, 100, 200), egui::Stroke::new(2.0, egui::Color32::WHITE), egui::Color32::WHITE)
-                    } else {
-                        (egui::Color32::from_gray(40), egui::Stroke::new(1.0, egui::Color32::from_gray(100)), egui::Color32::from_gray(200))
-                    };
-                    
-                    let btn = egui::Button::new(egui::RichText::new(form_labels[index]).color(text))
-                        .fill(fill)
-                        .stroke(stroke)
-                        .rounding(egui::Rounding::ZERO)
-                        .min_size(egui::vec2(60.0, 30.0));
-                    
-                    if ui.add(btn).clicked() { 
-                        *current_form = index; 
-                        
-                        // Switch back to abilities if talents aren't available for this form
-                        if index < 2 && *current_tab == DetailTab::Talents {
-                            *current_tab = DetailTab::Abilities;
-                        }
-                    }
+                // Style logic: Selected vs Exists vs Disabled
+                let (fill, stroke, text) = if is_selected {
+                    (egui::Color32::from_rgb(0, 100, 200), egui::Stroke::new(2.0, egui::Color32::WHITE), egui::Color32::WHITE)
+                } else if exists {
+                    (egui::Color32::from_gray(40), egui::Stroke::new(1.0, egui::Color32::from_gray(100)), egui::Color32::from_gray(200))
                 } else {
-                    ui.allocate_space(egui::vec2(60.0, 30.0)); 
-                } 
+                    // Disabled style
+                    (egui::Color32::from_gray(15), egui::Stroke::new(1.0, egui::Color32::from_gray(50)), egui::Color32::from_gray(120))
+                };
+                
+                let btn = egui::Button::new(egui::RichText::new(form_labels[index]).color(text))
+                    .fill(fill)
+                    .stroke(stroke)
+                    .rounding(egui::Rounding::ZERO)
+                    .min_size(egui::vec2(60.0, 30.0));
+                
+                if ui.add_enabled(exists, btn).clicked() { 
+                    *current_form = index; 
+                    
+                    if index < 2 && *current_tab == DetailTab::Talents {
+                        *current_tab = DetailTab::Abilities;
+                    }
+                }
             }
 
             ui.add(egui::Separator::default().vertical().spacing(20.0));
@@ -78,16 +77,23 @@ fn render_form_buttons(ui: &mut egui::Ui, cat: &CatEntry, current_form: &mut usi
             ];
 
             for (tab_enum, label) in tabs {
-                // Hide talents tab if not applicable
-                if tab_enum == DetailTab::Talents && (*current_form < 2 || cat.talent_data.is_none()) {
-                    continue;
-                }
+                // Determine availability
+                let is_talents = tab_enum == DetailTab::Talents;
+                let enabled = if is_talents {
+                    *current_form >= 2 && cat.talent_data.is_some()
+                } else {
+                    true
+                };
 
                 let is_selected = *current_tab == tab_enum;
+                
+                // Style logic
                 let (fill, stroke, text) = if is_selected {
                     (egui::Color32::from_rgb(0, 100, 200), egui::Stroke::new(2.0, egui::Color32::WHITE), egui::Color32::WHITE)
-                } else {
+                } else if enabled {
                     (egui::Color32::from_gray(40), egui::Stroke::new(1.0, egui::Color32::from_gray(100)), egui::Color32::from_gray(200))
+                } else {
+                    (egui::Color32::from_gray(15), egui::Stroke::new(1.0, egui::Color32::from_gray(50)), egui::Color32::from_gray(120))
                 };
 
                 let btn = egui::Button::new(egui::RichText::new(label).color(text))
@@ -96,7 +102,7 @@ fn render_form_buttons(ui: &mut egui::Ui, cat: &CatEntry, current_form: &mut usi
                     .rounding(egui::Rounding::from(5.0)) 
                     .min_size(egui::vec2(60.0, 30.0));
 
-                if ui.add(btn).clicked() { *current_tab = tab_enum; }
+                if ui.add_enabled(enabled, btn).clicked() { *current_tab = tab_enum; }
             }
         });
     });
