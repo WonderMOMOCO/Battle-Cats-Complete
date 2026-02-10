@@ -61,7 +61,7 @@ pub fn start_scan() -> Receiver<Vec<String>> {
         let base_path = Path::new("game/assets/img015");
         let mut found_languages = Vec::new();
 
-        // Scan for specific language files (img015_XX.png)
+        // Scan for specific language files
         if base_path.exists() && base_path.is_dir() {
             if let Ok(entries) = fs::read_dir(base_path) {
                 for entry in entries.flatten() {

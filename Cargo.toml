@@ -1,13 +1,13 @@
 [package]
 name = "Battle_Cats_Complete"
-version = "0.7.1"
+version = "0.8.0"
 edition = "2024"
 
 [features]
 default = []
 
 [dependencies]
-eframe = { version = "0.29", features = ["persistence"] }
+eframe = { version = "0.29", features = ["persistence", "glow"] }
 image = { version = "0.25", features = ["png", "ico"] }
 rfd = "0.15"
 zip = "0.6"
@@ -19,6 +19,8 @@ serde = { version = "1", features = ["derive"] }
 notify = "8.2.0"
 notify-debouncer-mini = "0.7.0"
 self_update = { version = "0.41", features = ["archive-zip", "compression-zip-deflate"] }
+bytemuck = { version = "1", features = ["derive"] }
+glow = "0.13"
 aes = "0.8"
 cbc = "0.1"
 ecb = "0.1"

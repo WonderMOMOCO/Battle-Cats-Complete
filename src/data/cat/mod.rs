@@ -5,3 +5,4 @@ pub mod unitevolve;
 pub mod skillacquisition;
 pub mod skilllevel;
 pub mod skilldescriptions;
+pub mod unitexplanation;

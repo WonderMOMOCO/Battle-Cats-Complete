@@ -60,7 +60,6 @@ pub fn calculate_talent_display(
 
     match group.ability_id {
         // State Talents
-        // REMOVED 67 from this list
         5 | 6 | 7 | 12 | 14 | 16 | 23 | 29 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 
         44 | 45 | 46 | 47 | 48 | 49 | 53 | 55 | 57 | 63 | 66 | 92 => {
             return Some(fmt_state(talent_level));

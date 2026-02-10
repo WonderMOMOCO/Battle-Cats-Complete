@@ -27,27 +27,31 @@ pub fn render(
     
     let sidebar_pad = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("sidebar_visible_width"))).unwrap_or(0.0);
 
-    ui.vertical(|ui| {
-        ui.spacing_mut().item_spacing = egui::vec2(0.0, 8.0); 
+    egui::ScrollArea::vertical()
+        .auto_shrink([false, false]) 
+        .show(ui, |ui| {
+            ui.vertical(|ui| {
+                ui.spacing_mut().item_spacing = egui::vec2(0.0, 8.0); 
 
-        for (index, group) in talent_data.groups.iter().enumerate() {
-            render_talent_group(
-                ui, 
-                cat_id, 
-                index, 
-                group, 
-                sheet, 
-                name_cache, 
-                descriptions, 
-                settings, 
-                current_stats, 
-                curve, 
-                unit_level, 
-                talent_levels, 
-                sidebar_pad
-            );
-        }
-    });
+                for (index, group) in talent_data.groups.iter().enumerate() {
+                    render_talent_group(
+                        ui, 
+                        cat_id, 
+                        index, 
+                        group, 
+                        sheet, 
+                        name_cache, 
+                        descriptions, 
+                        settings, 
+                        current_stats, 
+                        curve, 
+                        unit_level, 
+                        talent_levels, 
+                        sidebar_pad
+                    );
+                }
+            });
+        });
 }
 
 fn render_talent_group(
@@ -79,7 +83,9 @@ fn render_talent_group(
         .rounding(5.0)
         .inner_margin(6.0)
         .show(ui, |ui| {
-            let target_width = ui.available_width() - sidebar_pad;
+            let scrollbar_padding = 12.0; 
+            
+            let target_width = ui.available_width() - sidebar_pad - scrollbar_padding;
             ui.set_width(target_width.max(10.0));
 
             ui.vertical(|ui| {
@@ -121,9 +127,16 @@ fn render_header(
             ui.spacing_mut().item_spacing.x = 8.0;
             
             if let Some(icon_id) = skillacquisition::map_ability_to_icon(group.ability_id) {
-                if let Some(sprite) = sheet.get_sprite_by_line(icon_id) {
-                    ui.add(sprite.fit_to_exact_size(egui::vec2(40.0, 40.0)));
-                } else {
+                let size = egui::vec2(40.0, 40.0);
+                
+                let drawn = if let Some(cut) = sheet.cuts_map.get(&icon_id) {
+                    if let Some(tex) = &sheet.texture_handle {
+                        ui.add(egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)).uv(cut.uv_coordinates));
+                        true
+                    } else { false }
+                } else { false };
+
+                if !drawn {
                     ui.label(egui::RichText::new("?").strong());
                 }
             } else {

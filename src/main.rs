@@ -19,7 +19,8 @@ fn main() -> eframe::Result<()> {
             .with_title("Battle Cats Complete")
             .with_drag_and_drop(true)
             .with_icon(icon)
-            .with_app_id("battle_cats_complete"), 
+            .with_app_id("battle_cats_complete"),
+        multisampling: 0, 
         ..Default::default()
     };
 

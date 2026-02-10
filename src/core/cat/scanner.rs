@@ -11,9 +11,11 @@ use crate::data::cat::unitbuy::{self, UnitBuyRow};
 use crate::data::cat::unitlevel::{self, CatLevelCurve};
 use crate::data::cat::skillacquisition::{self, TalentRaw}; 
 use crate::data::cat::unitevolve; 
+use crate::data::cat::unitexplanation; 
 use crate::core::utils; 
 use crate::paths::cat::{self, AssetType, AnimType};
 use crate::core::settings::handle::ScannerConfig;
+use crate::data::global::maanim::Animation;
 
 #[derive(Clone, Debug)]
 pub struct CatEntry {
@@ -88,7 +90,7 @@ pub fn process_cat_entry(
     let ub_row = unit_buys.get(&cat_id)?;
 
     let is_egg_unit = ub_row.egg_id_normal != -1;
-    let is_hidden = ub_row.guide_order == -1 && cat_id != 673;
+    let is_hidden = ub_row.guide_order == -1;
 
     if !config.show_invalid && !is_egg_unit && is_hidden {
         return None; 
@@ -130,7 +132,7 @@ pub fn process_cat_entry(
         if forms_existence[i] {
             let anim_path = cat::anim(cats_root_dir, cat_id, i, egg_ids, AnimType::Maanim);
             if let Ok(file_content) = fs::read_to_string(&anim_path) {
-                attack_anim_frames[i] = parse_anim_length(&file_content);
+                attack_anim_frames[i] = Animation::scan_duration(&file_content);
             }
         }
     }
@@ -161,44 +163,25 @@ pub fn process_cat_entry(
         if all_found { break; }
 
         if let Some(name_file_path) = find_name_file_for_code(&lang_directory, target_file_id, code) {
-            if let Ok(file_bytes) = fs::read(&name_file_path) {
-                let file_content = String::from_utf8_lossy(&file_bytes);
-                let separator_char = utils::detect_csv_separator(&file_content);
-                let mut current_lang_names = vec![String::new(); 4];
-                let mut current_lang_descs = vec![Vec::new(); 4];
-
-                for (line_index, file_line) in file_content.lines().enumerate().take(4) {
-                    let parts: Vec<&str> = file_line.split(separator_char).collect();
-                    if let Some(name_part) = parts.get(0) {
-                        let trimmed_name = name_part.trim();
-                        if !trimmed_name.is_empty() && !looks_like_garbage_id(trimmed_name) {
-                            current_lang_names[line_index] = trimmed_name.to_string();
-                        }
-                    }
-                    let desc_lines: Vec<String> = parts.iter().skip(1).take(3).map(|s| s.trim().to_string()).collect();
-                    current_lang_descs[line_index] = desc_lines;
-                }
-
+            if let Some(explanation) = unitexplanation::UnitExplanation::load(&name_file_path) {
                 for i in 0..4 {
-                    if !cat_names[i].is_empty() && forms_existence[i] { continue; }
-                    if !forms_existence[i] { continue; }
-                    let candidate = &current_lang_names[i];
+                    if !forms_existence[i] || !cat_names[i].is_empty() { continue; }
+                    
+                    let candidate = &explanation.names[i];
                     if candidate.is_empty() { continue; }
+
                     if i > 0 {
-                        let prev_name_source = &current_lang_names[i-1];
+                        let prev_name_source = &explanation.names[i-1];
                         if candidate == prev_name_source { continue; }
                     }
+
                     cat_names[i] = candidate.clone();
-                    cat_descriptions[i] = current_lang_descs[i].clone(); 
+                    cat_descriptions[i] = explanation.descriptions[i].clone(); 
                 }
             }
         }
     }
     
-    if cat_id == 673 && cat_names[0].is_empty() {
-        cat_names[0] = "Cheetah Cat".to_string();
-    }
-
     let talent_data = talents_map.get(&(cat_id as u16)).cloned();
     let evolve_text = evolve_text_map.get(&cat_id).cloned().unwrap_or_default();
 
@@ -216,10 +199,6 @@ pub fn process_cat_entry(
         unit_buy: ub_row.clone(),
         evolve_text,
     })
-}
-
-fn looks_like_garbage_id(text: &str) -> bool {
-    text.chars().all(|char_check| char_check.is_ascii_digit() || char_check == '-' || char_check == '_')
 }
 
 fn find_name_file_for_code(lang_directory: &Path, target_id: u32, region_code: &str) -> Option<PathBuf> {
@@ -246,24 +225,4 @@ fn find_name_file_for_code(lang_directory: &Path, target_id: u32, region_code: &
         }
     }
     None
-}
-
-fn parse_anim_length(file_content: &str) -> i32 {
-    let mut max_frame_count = 0;
-    let delimiter = utils::detect_csv_separator(file_content);
-    let maanim_lines: Vec<Vec<i32>> = file_content.lines().map(|line| {
-            line.split(delimiter).filter_map(|component| component.trim().parse::<i32>().ok()).collect()
-        }).collect();
-    for (line_index, line_values) in maanim_lines.iter().enumerate() {
-        if line_values.len() < 5 { continue; }
-        let following_lines_count = maanim_lines.get(line_index + 1).and_then(|l| l.get(0)).cloned().unwrap_or(0) as usize;
-        if following_lines_count == 0 { continue; }
-        let first_frame = maanim_lines.get(line_index + 2).and_then(|l| l.get(0)).cloned().unwrap_or(0);
-        let last_frame = maanim_lines.get(line_index + following_lines_count + 1).and_then(|l| l.get(0)).cloned().unwrap_or(0);
-        let animation_duration = last_frame - first_frame;
-        let loop_repeats = std::cmp::max(line_values[2], 1); 
-        let final_frame_used = (animation_duration * loop_repeats) + first_frame;
-        max_frame_count = std::cmp::max(final_frame_used, max_frame_count);
-    }
-    max_frame_count + 1 
 }

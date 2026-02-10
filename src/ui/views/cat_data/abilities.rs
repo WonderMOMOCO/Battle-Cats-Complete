@@ -117,8 +117,9 @@ fn render_traits(
         }
     }
 
+    ui.spacing_mut().item_spacing = egui::vec2(settings.ability_padding_x, settings.ability_padding_y);
+    
     ui.horizontal_wrapped(|ui| {
-        ui.spacing_mut().item_spacing = egui::vec2(settings.ability_padding_x, settings.ability_padding_y);
         for &line_num in utils::UI_TRAIT_ORDER {
             let has_trait = check_trait(s, line_num);
             if has_trait {
@@ -130,13 +131,19 @@ fn render_traits(
                     None
                 };
 
-                let r = if let Some(sprite) = sheet.get_sprite_by_line(line_num) {
-                    let size = egui::vec2(stats::ICON_SIZE, stats::ICON_SIZE);
-                    let resp = ui.add(sprite.fit_to_exact_size(size));
+                let size = egui::vec2(stats::ICON_SIZE, stats::ICON_SIZE);
+                let r = if let Some(cut) = sheet.cuts_map.get(&line_num) {
+                    let resp = if let Some(tex) = &sheet.texture_handle {
+                         ui.add(egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)).uv(cut.uv_coordinates))
+                    } else {
+                         ui.allocate_response(size, egui::Sense::hover())
+                    };
                     
                     if let Some(bid) = border_sprite_id {
-                        if let Some(b_sprite) = sheet.get_sprite_by_line(bid) {
-                            ui.put(resp.rect, b_sprite.fit_to_exact_size(size));
+                        if let Some(b_cut) = sheet.cuts_map.get(&bid) {
+                            if let Some(tex) = &sheet.texture_handle {
+                                ui.put(resp.rect, egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)).uv(b_cut.uv_coordinates));
+                            }
                         }
                     }
                     resp
@@ -202,8 +209,8 @@ fn get_trait_tooltip(line: usize) -> &'static str {
 }
 
 pub fn render_icon_row(ui: &mut egui::Ui, items: &Vec<AbilityItem>, sheet: &SpriteSheet, settings: &Settings, border_color: egui::Color32) {
+    ui.spacing_mut().item_spacing = egui::vec2(settings.ability_padding_x, settings.ability_padding_y);
     ui.horizontal_wrapped(|ui| {
-        ui.spacing_mut().item_spacing = egui::vec2(settings.ability_padding_x, settings.ability_padding_y);
         for item in items {
             let r = render_single_icon(ui, item, sheet, border_color);
             r.on_hover_ui(|ui| text_with_superscript(ui, &item.text));
@@ -213,21 +220,24 @@ pub fn render_icon_row(ui: &mut egui::Ui, items: &Vec<AbilityItem>, sheet: &Spri
 
 fn render_single_icon(ui: &mut egui::Ui, item: &AbilityItem, sheet: &SpriteSheet, border: egui::Color32) -> egui::Response {
     let size = egui::vec2(stats::ICON_SIZE, stats::ICON_SIZE);
-    
-    // Draw the main icon
     let response = if let Some(tex_id) = item.custom_tex {
         ui.add(egui::Image::new(egui::load::SizedTexture::new(tex_id, size)))
-    } else if let Some(sprite) = sheet.get_sprite_by_line(item.icon_id) {
-        ui.add(sprite.fit_to_exact_size(size))
+    } else if let Some(cut) = sheet.cuts_map.get(&item.icon_id) {
+        if let Some(tex) = &sheet.texture_handle {
+             ui.add(egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)).uv(cut.uv_coordinates))
+        } else {
+             ui.allocate_response(size, egui::Sense::hover())
+        }
     } else {
         let alt = img015::img015_alt(item.icon_id);
         render_fallback_icon(ui, alt, border)
     };
 
-    // Overlay border if present
     if let Some(border_id) = item.border_id {
-        if let Some(border_sprite) = sheet.get_sprite_by_line(border_id) {
-            ui.put(response.rect, border_sprite.fit_to_exact_size(size));
+        if let Some(b_cut) = sheet.cuts_map.get(&border_id) {
+            if let Some(tex) = &sheet.texture_handle {
+                ui.put(response.rect, egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)).uv(b_cut.uv_coordinates));
+            }
         }
     }
 
@@ -335,8 +345,11 @@ fn render_conjure_details(
                 let icon = img015::ICON_AREA_ATTACK;
                 
                 let size = egui::vec2(stats::ICON_SIZE, stats::ICON_SIZE);
-                if let Some(sprite) = sheet.get_sprite_by_line(icon) {
-                    ui.add(sprite.fit_to_exact_size(size));
+                
+                if let Some(cut) = sheet.cuts_map.get(&icon) {
+                    if let Some(tex) = &sheet.texture_handle {
+                         ui.add(egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)).uv(cut.uv_coordinates));
+                    }
                 } else {
                     let alt = img015::img015_alt(icon);
                     render_fallback_icon(ui, alt, spirit_border);

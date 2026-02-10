@@ -26,10 +26,10 @@ pub enum AssetType {
 
 #[derive(Copy, Clone, PartialEq)]
 pub enum AnimType {
-    Maanim,
-    Mamodel,
-    Imgcut,
-    Png,
+    Maanim,  // Animation Data
+    Mamodel, // Model Data
+    Imgcut,  // Sprite Cuts
+    Png,     // Sprite Sheet
 }
 
 impl AnimType {
@@ -43,7 +43,34 @@ impl AnimType {
     }
 }
 
-// Unit Specific Paths
+
+pub fn anim_folder(root: &Path, id: u32, form: usize, egg_ids: (i32, i32)) -> PathBuf {
+    let (egg_norm, egg_evol) = egg_ids;
+    let form_char = match form { 0 => "f", 1 => "c", 2 => "s", _ => "u" };
+
+    if form == 0 && egg_norm != -1 {
+        root.join(format!("egg_{:03}", egg_norm)).join(DIR_ANIM)
+    } else if form == 1 && egg_evol != -1 {
+        root.join(format!("egg_{:03}", egg_evol)).join(DIR_ANIM)
+    } else {
+        root.join(format!("{:03}", id)).join(form_char).join(DIR_ANIM)
+    }
+}
+
+pub fn anim_base_filename(id: u32, form: usize, egg_ids: (i32, i32)) -> String {
+    let (egg_norm, egg_evol) = egg_ids;
+    let form_char = match form { 0 => "f", 1 => "c", 2 => "s", _ => "u" };
+    
+    if form == 0 && egg_norm != -1 {
+         format!("{:03}_m", egg_norm)
+    } else if form == 1 && egg_evol != -1 {
+         format!("{:03}_m", egg_evol)
+    } else {
+         format!("{:03}_{}", id, form_char)
+    }
+}
+
+// Path Functions
 
 pub fn folder(root: &Path, id: u32, form: usize, egg_ids: (i32, i32)) -> PathBuf {
     let (egg_norm, egg_evol) = egg_ids;
@@ -91,25 +118,19 @@ pub fn image(root: &Path, asset_type: AssetType, id: u32, form: usize, egg_ids: 
     None
 }
 
+/// Retrieves paths for standard animation files (Png, Imgcut, Mamodel)
 pub fn anim(root: &Path, id: u32, form: usize, egg_ids: (i32, i32), file_type: AnimType) -> PathBuf {
-    let (egg_norm, egg_evol) = egg_ids;
-    let form_char = match form { 0 => "f", 1 => "c", 2 => "s", _ => "u" };
+    let folder = anim_folder(root, id, form, egg_ids);
+    let filename = anim_base_filename(id, form, egg_ids);
     let ext = file_type.ext();
+    folder.join(format!("{}.{}", filename, ext))
+}
 
-    if form == 0 && egg_norm != -1 {
-        return root.join(format!("egg_{:03}", egg_norm))
-                   .join(DIR_ANIM)
-                   .join(format!("{:03}_m02.{}", egg_norm, ext));
-    }
-    if form == 1 && egg_evol != -1 {
-        return root.join(format!("egg_{:03}", egg_evol))
-                   .join(DIR_ANIM)
-                   .join(format!("{:03}_m02.{}", egg_evol, ext));
-    }
-    root.join(format!("{:03}", id))
-        .join(form_char)
-        .join(DIR_ANIM)
-        .join(format!("{:03}_{}02.{}", id, form_char, ext))
+/// Retrieves paths specifically for Maanim files, handling the 2-digit index suffix.
+pub fn maanim(root: &Path, id: u32, form: usize, egg_ids: (i32, i32), index: usize) -> PathBuf {
+    let folder = anim_folder(root, id, form, egg_ids);
+    let filename = anim_base_filename(id, form, egg_ids);
+    folder.join(format!("{}{:02}.maanim", filename, index))
 }
 
 pub fn stats(root: &Path, id: u32) -> PathBuf {
