@@ -40,7 +40,6 @@ pub fn show(ui: &mut egui::Ui, state: &mut ImportState, settings: &Settings) {
 
     ui.add_space(15.0);
 
-    // Render the active view
     match state.import_sub_tab {
         ImportSubTab::Emulator => adb_view::show(ui, state, settings),
         ImportSubTab::Decrypt => decrypt_view::show(ui, state),

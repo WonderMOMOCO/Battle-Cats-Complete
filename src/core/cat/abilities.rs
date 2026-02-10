@@ -107,7 +107,7 @@ pub fn collect_ability_data(
     push_ability(&mut group_headline_2, cat_stats.eva_killer > 0, img015::ICON_EVA_KILLER, "Deals 5× Damage to and takes 0.2× Damage from Eva Angels".into(), 0);
     push_ability(&mut group_headline_2, cat_stats.witch_killer > 0, img015::ICON_WITCH_KILLER, "Deals 5× Damage to and takes 0.1× Damage from Witches".into(), 0);
 
-    if !is_conjure_unit && cat_stats.kamikaze > 0 {
+    if !is_conjure_unit && cat_stats.kamikaze == 2 {
         push_custom(&mut group_headline_2, kamikaze_texture, "Unit disappears after a single attack".to_string());
     }
 

@@ -17,6 +17,8 @@ use crate::ui::views::cat_data as cat_detail;
 
 use scanner::CatEntry;
 use crate::data::global::imgcut::SpriteSheet; 
+use crate::data::global::mamodel::Model; 
+use crate::ui::components::anim_viewer::AnimViewer;
 use crate::data::cat::skilldescriptions; 
 
 use crate::data::cat::unitlevel::CatLevelCurve;
@@ -29,6 +31,7 @@ pub enum DetailTab {
     Abilities,
     Details,
     Talents,
+    Animation,
 }
 
 impl Default for DetailTab {
@@ -86,7 +89,15 @@ pub struct CatListState {
     pub detail_key: String, 
     
     #[serde(skip)]
+    pub icon_sheet: SpriteSheet,   
+    #[serde(skip)]
     pub sprite_sheet: SpriteSheet, 
+    
+    #[serde(skip)]
+    pub model_data: Option<Model>,
+    #[serde(skip)]
+    pub anim_viewer: AnimViewer,
+
     #[serde(skip)]
     pub multihit_texture: Option<egui::TextureHandle>,
     #[serde(skip)]
@@ -136,7 +147,13 @@ impl Default for CatListState {
             current_level: 50,
             detail_texture: None,
             detail_key: String::new(),
+            
+            icon_sheet: SpriteSheet::default(), 
             sprite_sheet: SpriteSheet::default(), 
+            
+            model_data: None,
+            anim_viewer: AnimViewer::default(),
+
             multihit_texture: None,
             kamikaze_texture: None,
             boss_wave_immune_texture: None,
@@ -211,16 +228,18 @@ pub fn show(ctx: &egui::Context, state: &mut CatListState, settings: &crate::cor
                 ui.centered_and_justified(|ui| { ui.spinner(); });
             }
             
+            // Cat Change Logic
             if state.selected_cat != old_selection_id {
                 state.detail_texture = None; 
                 state.detail_key.clear();
+                state.sprite_sheet = SpriteSheet::default();
+                state.model_data = None;
 
                 if let Some(new_id) = state.selected_cat {
                     if let Some(pos) = state.talent_history.iter().position(|&id| id == new_id) {
                         state.talent_history.remove(pos);
                     }
                     state.talent_history.push_back(new_id);
-                    
                     while state.talent_history.len() > 3 {
                         if let Some(popped_id) = state.talent_history.pop_front() {
                             state.talent_levels.remove(&popped_id);
@@ -232,15 +251,12 @@ pub fn show(ctx: &egui::Context, state: &mut CatListState, settings: &crate::cor
                         for (i, &exists) in new_cat.forms.iter().enumerate() {
                             if exists { max_form_index = i; }
                         }
-
                         if state.selected_form > max_form_index || !new_cat.forms[state.selected_form] {
                             state.selected_form = max_form_index;
                         }
-
                         if state.selected_detail_tab == DetailTab::Talents {
                             let form_valid = state.selected_form >= 2;
                             let has_data = new_cat.talent_data.is_some();
-
                             if !form_valid || !has_data {
                                 state.selected_detail_tab = DetailTab::Abilities;
                             }
@@ -252,11 +268,10 @@ pub fn show(ctx: &egui::Context, state: &mut CatListState, settings: &crate::cor
 
     egui::CentralPanel::default().show(ctx, |ui| {
         if state.cats.is_empty() {
-            ui.centered_and_justified(|ui| {
+             ui.centered_and_justified(|ui| {
                 ui.vertical_centered(|ui| {
                     ui.add_space(ui.available_height() * 0.4);
                     ui.set_max_width(400.0);
-
                     if state.scan_receiver.is_some() {
                         ui.spinner();
                         ui.add_space(10.0);
@@ -265,8 +280,6 @@ pub fn show(ctx: &egui::Context, state: &mut CatListState, settings: &crate::cor
                         ui.heading("No Data Found");
                         ui.label(egui::RichText::new("Could not find any units in game/cats.").color(ui.visuals().weak_text_color()));
                         ui.add_space(5.0);
-                        ui.label("Check that 'unitbuy.csv' exists and unit folders are present.");
-                        ui.add_space(15.0);
                         if ui.button("Retry Scan").clicked() {
                             state.restart_scan(settings.scanner_config());
                             ui.ctx().request_repaint();
@@ -278,12 +291,8 @@ pub fn show(ctx: &egui::Context, state: &mut CatListState, settings: &crate::cor
         }
 
         let Some(selected_id) = state.selected_cat else {
-            if state.scan_receiver.is_some() {
-                 ui.centered_and_justified(|ui| { ui.spinner(); });
-            } else {
-                 ui.centered_and_justified(|ui| { ui.label("Select a Unit"); });
-            }
-            return;
+             ui.centered_and_justified(|ui| { ui.label("Select a Unit"); });
+             return;
         };
 
         let Some(cat_entry) = state.cats.iter().find(|cat| cat.id == selected_id) else {
@@ -292,6 +301,9 @@ pub fn show(ctx: &egui::Context, state: &mut CatListState, settings: &crate::cor
         };
         
         let talent_map = state.talent_levels.entry(selected_id).or_default();
+        
+        // Capture previous form state
+        let prev_form = state.selected_form;
 
         cat_detail::show(
             ctx, 
@@ -303,7 +315,10 @@ pub fn show(ctx: &egui::Context, state: &mut CatListState, settings: &crate::cor
             &mut state.current_level, 
             &mut state.detail_texture, 
             &mut state.detail_key,
+            &mut state.icon_sheet,
             &mut state.sprite_sheet,
+            &mut state.model_data,
+            &mut state.anim_viewer,
             &mut state.multihit_texture,
             &mut state.kamikaze_texture,
             &mut state.boss_wave_immune_texture,
@@ -314,5 +329,13 @@ pub fn show(ctx: &egui::Context, state: &mut CatListState, settings: &crate::cor
             talent_map,
             state.texture_cache_version
         );
+
+        // Check if form changed during the render
+        if state.selected_form != prev_form {
+            // Reset Animation Data
+            state.sprite_sheet = SpriteSheet::default();
+            state.model_data = None;
+            // Also reset scroll or view
+        }
     });
 }

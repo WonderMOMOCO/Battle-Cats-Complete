@@ -4,13 +4,15 @@ version = 4
 
 [[package]]
 name = "Battle_Cats_Complete"
-version = "0.7.1"
+version = "0.8.0"
 dependencies = [
  "aes",
  "block-padding",
+ "bytemuck",
  "cbc",
  "ecb",
  "eframe",
+ "glow 0.13.1",
  "hex",
  "image",
  "md5",

@@ -66,54 +66,51 @@ pub fn spawn_full_import(tx: Sender<AdbEvent>, base_output_dir: PathBuf, mode: A
                 continue; 
             }
 
-            // Decryption
-            if mode == AdbImportType::All {
-                let _ = tx.send(AdbEvent::Status("Starting Decryption...".to_string()));
-                
-                let region_code = match suffix {
-                    "" => "ja",
-                    "kr" => "ko",
-                    other => other,
-                };
-                
-                let (d_tx, d_rx) = std::sync::mpsc::channel();
-                let tx_clone = tx.clone();
-                thread::spawn(move || {
-                    while let Ok(msg) = d_rx.recv() {
-                        let _ = tx_clone.send(AdbEvent::Status(msg));
-                    }
-                });
-
-                if let Err(decrypt_error) = decrypt::run(target_dir.to_str().unwrap(), region_code, d_tx) {
-                     let _ = tx.send(AdbEvent::Status(format!("Decryption Failed: {}", decrypt_error)));
-                     continue;
+            let _ = tx.send(AdbEvent::Status("Starting Decryption...".to_string()));
+            
+            let region_code = match suffix {
+                "" => "ja",
+                "kr" => "ko",
+                other => other,
+            };
+            
+            let (d_tx, d_rx) = std::sync::mpsc::channel();
+            let tx_clone = tx.clone();
+            thread::spawn(move || {
+                while let Ok(msg) = d_rx.recv() {
+                    let _ = tx_clone.send(AdbEvent::Status(msg));
                 }
+            });
 
-                // Clean-up
-                if config.keep_app_folder { 
-                    let _ = tx.send(AdbEvent::Status("Skipping app folder cleanup (Persistence On)...".to_string()));
-                } else {
-                    let _ = tx.send(AdbEvent::Status("Cleaning up temporary app files...".to_string()));
-                    if base_output_dir.exists() {
-                         let _ = fs::remove_dir_all(&base_output_dir);
-                    }
+            if let Err(decrypt_error) = decrypt::run(target_dir.to_str().unwrap(), region_code, d_tx) {
+                    let _ = tx.send(AdbEvent::Status(format!("Decryption Failed: {}", decrypt_error)));
+                    continue;
+            }
+
+            // Clean-up
+            if config.keep_app_folder { 
+                let _ = tx.send(AdbEvent::Status("Skipping app folder cleanup (Persistence On)...".to_string()));
+            } else {
+                let _ = tx.send(AdbEvent::Status("Cleaning up temporary app files...".to_string()));
+                if base_output_dir.exists() {
+                        let _ = fs::remove_dir_all(&base_output_dir);
                 }
+            }
 
-                // Sort
-                let _ = tx.send(AdbEvent::Status("Starting Sort...".to_string()));
-                let (s_tx, s_rx) = std::sync::mpsc::channel();
-                let tx_clone_2 = tx.clone();
-                thread::spawn(move || {
-                    while let Ok(msg) = s_rx.recv() {
-                        let _ = tx_clone_2.send(AdbEvent::Status(msg));
-                    }
-                });
-
-                if let Err(sort_error) = sort::sort_game_files(s_tx) {
-                    let _ = tx.send(AdbEvent::Status(format!("Sort Failed: {}", sort_error)));
-                } else {
-                    let _ = tx.send(AdbEvent::Status("Region processed successfully.".to_string()));
+            // Sort
+            let _ = tx.send(AdbEvent::Status("Starting Sort...".to_string()));
+            let (s_tx, s_rx) = std::sync::mpsc::channel();
+            let tx_clone_2 = tx.clone();
+            thread::spawn(move || {
+                while let Ok(msg) = s_rx.recv() {
+                    let _ = tx_clone_2.send(AdbEvent::Status(msg));
                 }
+            });
+
+            if let Err(sort_error) = sort::sort_game_files(s_tx) {
+                let _ = tx.send(AdbEvent::Status(format!("Sort Failed: {}", sort_error)));
+            } else {
+                let _ = tx.send(AdbEvent::Status("Region processed successfully.".to_string()));
             }
 
             thread::sleep(Duration::from_secs(1));

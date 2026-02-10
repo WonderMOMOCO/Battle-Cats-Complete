@@ -22,6 +22,13 @@ Heres what the app is currently capable of:
   - Talents
   - Descriptions
   - Evolution Info
+- Play Animations
+  - Walk
+  - Idle
+  - Attack
+  - Knockback
+  - Spirit
+
 
 ### Setup
 Because this app is an open-source hobby project and not signed with a paid certificate, your OS may flag it on the first run.
@@ -39,9 +46,9 @@ Because this app is an open-source hobby project and not signed with a paid cert
 ## Credit
 Various people have motivated and helped me create this project:
 - **TheWWRNerdGuy:** Provided a repo which holds Rust code for reading raw game data, also gave coding tips.
+- **SweetDonut0:** Used their Cat Stats Tool & Animation Viewer web-app hosted on the Wiki as a reference for code.
 - **fieryhenry:** Coder with many Battle Cats related projects of their own, of which I took inspiration from.
 - **Timtams:** Did field research to confirm certain game data quirks, also supplied some custom assets.
-- **SweetDonut0:** Used their Cat Stats Tool web-app hosted on the Wiki as a reference for level scaling code.
 
 ## Legal
 This project is for educational purposes only. Assets are copyright PONOS Corp. Please support the official release.
