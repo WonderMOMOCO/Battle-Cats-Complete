@@ -36,14 +36,24 @@ fn encode_via_pipe(
 
     let out_path_str = temp_path.to_string_lossy();
     
-    let mut avif_cmd = Command::new(avif_path)
-        .args(&["--stdin", "--speed", "8", "-q", "60", "--qalpha", "60", "-o", &out_path_str])
+    let mut cmd = Command::new(avif_path);
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000);
+    }
+    let mut avif_cmd = cmd.args(&["--stdin", "--speed", "8", "-q", "60", "--qalpha", "60", "-o", &out_path_str])
         .stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::null()).spawn().expect("Avifenc Fail");
 
     let avif_stdin = avif_cmd.stdin.take().expect("Stdin Fail");
 
-    let mut ffmpeg_cmd = Command::new(ffmpeg_path)
-        .args(&["-f", "rawvideo", "-pixel_format", "rgba", "-video_size", &format!("{}x{}", config.width, config.height), "-framerate", &config.fps.to_string(), "-i", "-", "-f", "yuv4mpegpipe", "-strict", "-1", "-pix_fmt", "yuva444p", "-"])
+    let mut cmd = Command::new(ffmpeg_path);
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000);
+    }
+    let mut ffmpeg_cmd = cmd.args(&["-f", "rawvideo", "-pixel_format", "rgba", "-video_size", &format!("{}x{}", config.width, config.height), "-framerate", &config.fps.to_string(), "-i", "-", "-f", "yuv4mpegpipe", "-strict", "-1", "-pix_fmt", "yuva444p", "-"])
         .stdin(Stdio::piped()).stdout(Stdio::from(avif_stdin)).stderr(Stdio::null()).spawn().expect("FFmpeg Fail");
 
     let mut ff_stdin = ffmpeg_cmd.stdin.take().expect("FF Stdin Fail");
@@ -130,8 +140,13 @@ fn encode_via_folder(
     ];
     for p in &frame_paths { args.push(p.to_string_lossy().to_string()); }
 
-    let mut child = Command::new(avifenc_path)
-        .args(&args)
+    let mut cmd = Command::new(avifenc_path);
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000);
+    }
+    let mut child = cmd.args(&args)
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()

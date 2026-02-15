@@ -123,8 +123,14 @@ pub fn encode(
     args.push("-y".to_string());
     args.push(temp_path.to_string_lossy().to_string());
 
-    let mut child = Command::new(ffmpeg_path)
-        .args(&args)
+    let mut cmd = Command::new(ffmpeg_path);
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000);
+    }
+    
+    let mut child = cmd.args(&args)
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
