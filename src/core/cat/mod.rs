@@ -18,7 +18,7 @@ use crate::ui::views::cat_data as cat_detail;
 use scanner::CatEntry;
 use crate::data::global::imgcut::SpriteSheet; 
 use crate::data::global::mamodel::Model; 
-use crate::ui::components::anim_viewer::AnimViewer;
+use crate::ui::components::anim::viewer::AnimViewer;
 use crate::data::cat::skilldescriptions; 
 
 use crate::data::cat::unitlevel::CatLevelCurve;

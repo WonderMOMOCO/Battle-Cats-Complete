@@ -2,10 +2,10 @@
 
 [![Discord](https://img.shields.io/badge/Discord-Join%20Community-7289DA?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/SNSE8HNhmP)
 
-An all-in-one tool for The Battle Cats that allows Users to sort, read, and modify files that are imported into it.
+An all-in-one toolkit for The Battle Cats that allows Users to sort, read, and modify files that are imported into it.
 
 ## In Development
-Battle Cats Complete is still far from its fully functional state. This app is a hobby and passion project. Join the [Discord Server](https://discord.gg/SNSE8HNhmP) if you have any questions, suggestions, or if you found any bugs! This is also where you can find the Roadmap!
+Battle Cats Complete is still far from its fully functional state. This app is a hobby and passion project. Join the [Discord Server](https://discord.gg/SNSE8HNhmP) if you have any questions, suggestions, or if you found any bugs!
 
 ## Usage
 To use this app, you must provide game files for it to read. These files are not included in the app or repository; they must be obtained through your own personal and legal means.
@@ -28,6 +28,11 @@ Heres what the app is currently capable of:
   - Attack
   - Knockback
   - Spirit
+- Export Animations
+  - GIF/WebP/AVIF/PNG
+  - Single Animations
+  - Sequence of Animations
+  - User-Defined Camera Area
 
 
 ### Setup

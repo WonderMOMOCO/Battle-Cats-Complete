@@ -8,7 +8,7 @@ use crate::data::global::img015;
 use crate::core::settings::Settings;
 use crate::core::cat::talents as talent_logic; 
 use crate::data::global::mamodel::Model;
-use crate::ui::components::anim_viewer::AnimViewer;
+use crate::ui::components::anim::viewer::AnimViewer;
 
 mod header;
 mod stats;
@@ -16,7 +16,7 @@ mod abilities;
 mod talents;
 mod details;
 pub mod list;
-mod viewer;
+mod catviewer;
 
 pub fn show(
     ctx: &egui::Context, 
@@ -134,7 +134,7 @@ pub fn show(
              details::render_evolve(ui, ctx, &cat_entry.unit_buy, ev_text, *current_form, gatya_item_textures, cache_version);
         },
         DetailTab::Animation => {
-            viewer::show(ui, ctx, cat_entry, *current_form, anim_viewer, model_data, anim_sheet, settings);
+            catviewer::show(ui, ctx, cat_entry, *current_form, anim_viewer, model_data, anim_sheet, settings);
         }
     }
 }

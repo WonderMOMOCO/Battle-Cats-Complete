@@ -13,7 +13,7 @@ use crate::data::cat::skillacquisition::{self, TalentRaw};
 use crate::data::cat::unitevolve; 
 use crate::data::cat::unitexplanation; 
 use crate::core::utils; 
-use crate::paths::cat::{self, AssetType, AnimType};
+use crate::paths::cat::{self, AssetType};
 use crate::core::settings::handle::ScannerConfig;
 use crate::data::global::maanim::Animation;
 
@@ -130,9 +130,11 @@ pub fn process_cat_entry(
     let mut attack_anim_frames = [0; 4];
     for i in 0..4 {
         if forms_existence[i] {
-            let anim_path = cat::anim(cats_root_dir, cat_id, i, egg_ids, AnimType::Maanim);
+            let anim_path = cat::maanim(cats_root_dir, cat_id, i, egg_ids, 2);
+            
             if let Ok(file_content) = fs::read_to_string(&anim_path) {
-                attack_anim_frames[i] = Animation::scan_duration(&file_content);
+                let duration = Animation::scan_duration(&file_content);
+                attack_anim_frames[i] = if duration > 0 { duration + 1 } else { 0 };
             }
         }
     }
