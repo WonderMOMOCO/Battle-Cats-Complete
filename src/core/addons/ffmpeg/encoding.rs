@@ -17,6 +17,7 @@ pub fn encode(
 
     // BUILD ARGUMENTS BASED ON FORMAT
     let mut args = vec![
+        "-nostdin".to_string(),
         "-f".to_string(), "rawvideo".to_string(),
         "-pixel_format".to_string(), "rgba".to_string(),
         "-video_size".to_string(), format!("{}x{}", config.width, config.height),

@@ -36,6 +36,7 @@ fn encode_via_pipe(
 
     let out_path_str = temp_path.to_string_lossy();
     
+    // Start Avifenc
     let mut cmd = Command::new(avif_path);
     #[cfg(target_os = "windows")]
     {
@@ -43,10 +44,15 @@ fn encode_via_pipe(
         cmd.creation_flags(0x08000000);
     }
     let mut avif_cmd = cmd.args(&["--stdin", "--speed", "8", "-q", "60", "--qalpha", "60", "-o", &out_path_str])
-        .stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::null()).spawn().expect("Avifenc Fail");
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("Avifenc Fail");
 
-    let avif_stdin = avif_cmd.stdin.take().expect("Stdin Fail");
+    let mut avif_stdin = avif_cmd.stdin.take().expect("Stdin Fail");
 
+    // Start FFmpeg
     let mut cmd = Command::new(ffmpeg_path);
     #[cfg(target_os = "windows")]
     {
@@ -54,12 +60,25 @@ fn encode_via_pipe(
         cmd.creation_flags(0x08000000);
     }
     let mut ffmpeg_cmd = cmd.args(&["-f", "rawvideo", "-pixel_format", "rgba", "-video_size", &format!("{}x{}", config.width, config.height), "-framerate", &config.fps.to_string(), "-i", "-", "-f", "yuv4mpegpipe", "-strict", "-1", "-pix_fmt", "yuva444p", "-"])
-        .stdin(Stdio::piped()).stdout(Stdio::from(avif_stdin)).stderr(Stdio::null()).spawn().expect("FFmpeg Fail");
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped()) 
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("FFmpeg Fail");
 
     let mut ff_stdin = ffmpeg_cmd.stdin.take().expect("FF Stdin Fail");
+    let mut ff_stdout = ffmpeg_cmd.stdout.take().expect("FF Stdout Fail");
+
+    // Process Decoupling Bridge
+    // This thread ensures FFmpeg can flush its buffer even if Avifenc is busy
+    let bridge_handle = thread::spawn(move || {
+        let _ = std::io::copy(&mut ff_stdout, &mut avif_stdin);
+    });
+
     let mut frames = 0;
     let mut success = false;
 
+    // Pump frames to FFmpeg
     while let Ok(msg) = rx.recv() {
         if abort_signal.load(Ordering::Relaxed) { break; }
 
@@ -82,6 +101,9 @@ fn encode_via_pipe(
         return false;
     }
 
+    // Wait for the data to finish flowing through the bridge
+    let _ = bridge_handle.join();
+    
     let _ = ffmpeg_cmd.wait();
     let avif_status = avif_cmd.wait();
 
