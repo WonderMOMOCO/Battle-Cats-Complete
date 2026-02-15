@@ -3,13 +3,16 @@ use std::path::Path;
 use crate::core::utils;
 
 // Math Helpers
-fn gcd(a: i32, b: i32) -> i32 {
-    if b == 0 { a } else { gcd(b, a % b) }
+fn gcd(number1: i32, number2: i32) -> i32 {
+    if number2 == 0 { number1 } else { gcd(number2, number1 % number2) }
 }
 
-// CHANGED: Returns i64 to prevent overflow during calculation
-fn lcm(a: i32, b: i32) -> i64 {
-    if a == 0 || b == 0 { 0 } else { (a as i64 * b as i64).abs() / gcd(a, b) as i64 }
+fn lcm(number1: i32, number2: i32) -> i64 {
+    if number1 == 0 || number2 == 0 { 
+        0 
+    } else { 
+        (number1 as i64 * number2 as i64).abs() / gcd(number1, number2) as i64 
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -40,48 +43,65 @@ impl Animation {
     pub fn load(path: &Path) -> Option<Self> {
         let content = fs::read_to_string(path).ok()?;
         let delimiter = utils::detect_csv_separator(&content);
-        let lines: Vec<&str> = content.lines().filter(|l| !l.trim().is_empty()).collect();
+        let lines: Vec<&str> = content.lines().filter(|line| !line.trim().is_empty()).collect();
 
         if lines.is_empty() { return None; }
 
+        // Helper to replace repetitive parsing logic
+        fn parse_num<T: std::str::FromStr + Default>(input_string: &str) -> T {
+            input_string.trim().parse().unwrap_or_default()
+        }
+
         let mut curves = Vec::new();
-        let mut i = 0;
+        let mut current_line_idx = 0;
 
-        if i < lines.len() && lines[i].starts_with("[") { i += 1; }
-        if i < lines.len() { i += 1; } 
-        if i < lines.len() { i += 1; } 
+        // Skip standard headers
+        if current_line_idx < lines.len() && lines[current_line_idx].starts_with("[") { 
+            current_line_idx += 1; 
+        }
+        if current_line_idx < lines.len() { current_line_idx += 1; } 
+        if current_line_idx < lines.len() { current_line_idx += 1; } 
 
-        while i < lines.len() {
-            let line = lines[i];
-            let parts: Vec<&str> = line.split(delimiter).collect();
-            i += 1;
+        while current_line_idx < lines.len() {
+            let current_line = lines[current_line_idx];
+            let parts: Vec<&str> = current_line.split(delimiter).collect();
+            current_line_idx += 1;
 
             if parts.len() < 5 { continue; }
 
-            let part_id = parts[0].trim().parse().unwrap_or(0);
-            let mod_type = parts[1].trim().parse().unwrap_or(0);
-            let loop_behavior = parts[2].trim().parse().unwrap_or(0);
-            let min_f = parts[3].trim().parse().unwrap_or(0);
-            let max_f = parts[4].trim().parse().unwrap_or(0);
+            // Using the helper function
+            let part_id: usize = parse_num(parts[0]);
+            let mod_type: i32 = parse_num(parts[1]);
+            let loop_behavior: i32 = parse_num(parts[2]);
+            let min_frame: i32 = parse_num(parts[3]);
+            let max_frame: i32 = parse_num(parts[4]);
             
-            if i >= lines.len() { break; }
-            let count_line = lines[i];
-            i += 1;
-            let keyframe_count = count_line.trim().parse::<usize>().unwrap_or(0);
+            if current_line_idx >= lines.len() { break; }
+            let count_line = lines[current_line_idx];
+            current_line_idx += 1;
+            
+            let keyframe_count: usize = parse_num(count_line);
 
             let mut keyframes = Vec::new();
 
             for _ in 0..keyframe_count {
-                if i >= lines.len() { break; }
-                let k_line = lines[i];
-                i += 1;
-                let kp: Vec<&str> = k_line.split(delimiter).collect();
-                if kp.len() >= 2 {
-                    let frame = kp[0].trim().parse().unwrap_or(0);
-                    let value = kp[1].trim().parse().unwrap_or(0);
-                    let ease = kp.get(2).and_then(|s| s.trim().parse().ok()).unwrap_or(0);
-                    let power = kp.get(3).and_then(|s| s.trim().parse().ok()).unwrap_or(0);
-                    keyframes.push(Keyframe { frame, value, ease_mode: ease, ease_power: power });
+                if current_line_idx >= lines.len() { break; }
+                let keyframe_line = lines[current_line_idx];
+                current_line_idx += 1;
+                let keyframe_parts: Vec<&str> = keyframe_line.split(delimiter).collect();
+                
+                if keyframe_parts.len() >= 2 {
+                    let frame: i32 = parse_num(keyframe_parts[0]);
+                    let value: i32 = parse_num(keyframe_parts[1]);
+                    
+                    // Explicit variable names for closures
+                    let ease_mode = keyframe_parts.get(2)
+                        .map_or(0, |text_part| parse_num(text_part));
+                        
+                    let ease_power = keyframe_parts.get(3)
+                        .map_or(0, |text_part| parse_num(text_part));
+                    
+                    keyframes.push(Keyframe { frame, value, ease_mode, ease_power });
                 }
             }
 
@@ -91,35 +111,34 @@ impl Animation {
                     modification_type: mod_type,
                     loop_count: loop_behavior,
                     keyframes,
-                    min_frame: min_f,
-                    max_frame: max_f,
+                    min_frame,
+                    max_frame,
                 });
             }
         }
 
         let mut max_len = 0;
-        for c in &curves {
-            if let Some(last) = c.keyframes.last() {
-                if last.frame > max_len { max_len = last.frame; }
+        for curve in &curves {
+            if let Some(last_keyframe) = curve.keyframes.last() {
+                if last_keyframe.frame > max_len { max_len = last_keyframe.frame; }
             }
         }
 
         Some(Self { curves, max_frame: max_len })
     }
 
-    /// Calculates the LCM (Least Common Multiple) of all looping curves.
-    /// Returns:
-    /// - `Some(frame_count)` if the loop is finite and within the safety limit (999,999).
-    /// - `None` if the loop is effectively infinite, too large, or causes overflow.
     pub fn calculate_true_loop(&self) -> Option<i32> {
         let mut overall_lcm: i64 = 1;
         let mut found_looping_part = false;
         
         for curve in &self.curves {
-            // Check parts that loop infinitely (or standard loops)
+            if curve.loop_count == 1 {
+                return None;
+            }
+
             if curve.loop_count != 1 {
-                if let (Some(first), Some(last)) = (curve.keyframes.first(), curve.keyframes.last()) {
-                    let duration = (last.frame - first.frame) as i32; 
+                if let (Some(first_keyframe), Some(last_keyframe)) = (curve.keyframes.first(), curve.keyframes.last()) {
+                    let duration = (last_keyframe.frame - first_keyframe.frame) as i32; 
                     if duration > 0 {
                         overall_lcm = lcm(overall_lcm as i32, duration);
                         found_looping_part = true;
@@ -132,11 +151,8 @@ impl Animation {
             return Some(self.max_frame);
         }
         
-        // CHANGED: Fallback Logic
-        // 1. If calculation resulted in overflow (very unlikely with i64 but good hygiene)
-        // 2. If result exceeds 999,999 (User requested limit)
         if overall_lcm > 999_999 {
-            return None; // Treat as "???", Infinite / Continuous
+            return None; 
         }
 
         Some(std::cmp::max(overall_lcm as i32, self.max_frame))
@@ -145,19 +161,40 @@ impl Animation {
     pub fn scan_duration(file_content: &str) -> i32 {
         let mut max_frame_count = 0;
         let delimiter = utils::detect_csv_separator(file_content);
+        
         let maanim_lines: Vec<Vec<i32>> = file_content.lines().map(|line| {
-            line.split(delimiter).filter_map(|c| c.trim().parse::<i32>().ok()).collect()
+            line.split(delimiter)
+                .filter_map(|text_part| text_part.trim().parse::<i32>().ok())
+                .collect()
         }).collect();
 
-        for (i, val) in maanim_lines.iter().enumerate() {
-            if val.len() < 5 { continue; }
-            let follow = maanim_lines.get(i+1).and_then(|l| l.get(0)).cloned().unwrap_or(0) as usize;
-            if follow == 0 { continue; }
-            let first = maanim_lines.get(i+2).and_then(|l| l.get(0)).cloned().unwrap_or(0);
-            let last = maanim_lines.get(i+follow+1).and_then(|l| l.get(0)).cloned().unwrap_or(0);
-            let dur = last - first;
-            let reps = std::cmp::max(val[2], 1);
-            max_frame_count = std::cmp::max((dur * reps) + first, max_frame_count);
+        for (line_index, line_values) in maanim_lines.iter().enumerate() {
+            if line_values.len() < 5 { continue; }
+            
+            let following_lines_count = maanim_lines
+                .get(line_index + 1)
+                .and_then(|line| line.get(0))
+                .cloned()
+                .unwrap_or(0) as usize;
+                
+            if following_lines_count == 0 { continue; }
+            
+            let first_frame = maanim_lines
+                .get(line_index + 2)
+                .and_then(|line| line.get(0))
+                .cloned()
+                .unwrap_or(0);
+                
+            let last_frame = maanim_lines
+                .get(line_index + following_lines_count + 1)
+                .and_then(|line| line.get(0))
+                .cloned()
+                .unwrap_or(0);
+            
+            let duration = last_frame - first_frame;
+            let repeats = std::cmp::max(line_values[2], 1);
+            
+            max_frame_count = std::cmp::max((duration * repeats) + first_frame, max_frame_count);
         }
         max_frame_count
     }

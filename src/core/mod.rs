@@ -3,5 +3,5 @@ pub mod utils;
 pub mod settings;
 pub mod import; 
 pub mod cat;
-pub mod adb;
 pub mod anim;
+pub mod addons;

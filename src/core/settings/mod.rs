@@ -24,6 +24,7 @@ pub struct Settings {
     pub enable_ultra_compression: bool,
     pub last_compression_level: i32,
     pub app_folder_persistence: bool,
+    pub auto_set_camera_region: bool,
 
     #[serde(skip)] pub manual_check_requested: bool,
     #[serde(skip)] pub active_tab: String,
@@ -53,6 +54,7 @@ impl Default for Settings {
             enable_ultra_compression: false,
             last_compression_level: 9, 
             app_folder_persistence: false,
+            auto_set_camera_region: false,
             active_tab: "General".to_string(),
             manual_check_requested: false,
             available_languages: Vec::new(),
