@@ -346,6 +346,14 @@ fn render_internal_ui(
                         let btn = egui::Button::new(egui::RichText::new(label).color(egui::Color32::WHITE).size(13.0)).fill(fill);
                         
                         if ui.add_enabled_ui(effective_enabled, |ui| { ui.add_sized(btn_size, btn) }).inner.clicked() { 
+                            // ABORT LOOP FINDING IF SWITCHING ANIMATION
+                            if anim_viewer.export_state.is_loop_searching {
+                                if let Some(abort) = &anim_viewer.export_state.loop_abort {
+                                    abort.store(true, std::sync::atomic::Ordering::Relaxed);
+                                }
+                                anim_viewer.export_state.is_loop_searching = false;
+                                anim_viewer.export_state.loop_rx = None;
+                            }
                             clicked_index = Some(idx); 
                         }
                     };
@@ -386,14 +394,13 @@ fn render_internal_ui(
                     anim_viewer.current_frame = 0.0;
                     anim_viewer.single_frame_str = "0".to_string();
 
-                    // FIX: Cleared strings instead of setting them to "0"
                     anim_viewer.export_state.name_prefix = format!("{}.model", form_viewer_id);
                     anim_viewer.export_state.anim_name = "Model".to_string();
                     anim_viewer.export_state.max_frame = 0;
                     anim_viewer.export_state.frame_start = 0;
-                    anim_viewer.export_state.frame_start_str = String::new(); // FIXED
+                    anim_viewer.export_state.frame_start_str = String::new(); 
                     anim_viewer.export_state.frame_end = 0;
-                    anim_viewer.export_state.frame_end_str = String::new(); // FIXED
+                    anim_viewer.export_state.frame_end_str = String::new(); 
                 }
             }
         }

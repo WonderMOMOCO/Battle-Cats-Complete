@@ -24,6 +24,23 @@ pub fn show_popup(
     is_open: &mut bool,
     start_region_selection: &mut bool,
 ) {
+    // TOOL VALIDATION CHECK
+    let ffmpeg_missing = toolpaths::ffmpeg_status() != Presence::Installed;
+    let avif_missing = toolpaths::avifenc_status() != Presence::Installed;
+
+    if state.format == ExportFormat::Avif && avif_missing {
+        state.format = ExportFormat::Gif;
+    }
+    
+    match state.format {
+        ExportFormat::Mp4 | ExportFormat::Mkv | ExportFormat::Webm | ExportFormat::Png => {
+            if ffmpeg_missing {
+                state.format = ExportFormat::Gif;
+            }
+        },
+        _ => {}
+    }
+
     // SETUP
     let attention_latch_id = egui::Id::new("export_needs_critical_attention");
 
