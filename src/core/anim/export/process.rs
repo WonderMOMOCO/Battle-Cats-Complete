@@ -127,7 +127,17 @@ pub fn process_frame(
         let start = state.frame_start;
         let step = if state.frame_start < state.frame_end { 1 } else { -1 };
         let raw_f = (start + (state.current_progress * step)) as f32;
-        let frame_to_render = if state.max_frame > 0 { raw_f.rem_euclid(state.max_frame as f32 + 1.0) } else { raw_f };
+        
+        let frame_to_render = if state.loop_supported {
+            raw_f
+        } else {
+             if state.max_frame > 0 { 
+                raw_f.rem_euclid(state.max_frame as f32 + 1.0) 
+            } else { 
+                raw_f 
+            }
+        };
+
         if state.interpolation { smooth::animate(model, a, frame_to_render) } else { animator::animate(model, a, frame_to_render) }
     } else { model.parts.clone() };
     

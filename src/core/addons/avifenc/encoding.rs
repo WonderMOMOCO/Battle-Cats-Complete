@@ -36,6 +36,12 @@ fn encode_via_pipe(
 
     let out_path_str = temp_path.to_string_lossy();
     
+    // SPEED
+    let speed = 10 - (config.compression_percent / 10).clamp(0, 10);
+    
+    // QUALITY
+    let q_val = ((config.quality_percent as f32 / 100.0) * 63.0).round() as u8;
+
     // Start Avifenc
     let mut cmd = Command::new(avif_path);
     #[cfg(target_os = "windows")]
@@ -43,7 +49,18 @@ fn encode_via_pipe(
         use std::os::windows::process::CommandExt;
         cmd.creation_flags(0x08000000);
     }
-    let mut avif_cmd = cmd.args(&["--stdin", "--speed", "8", "-q", "60", "--qalpha", "60", "-o", &out_path_str])
+    
+    // Construct Args
+    let mut args = vec![
+        "--speed".to_string(), speed.to_string(),
+        "-o".to_string(), out_path_str.to_string(),
+        "-q".to_string(), q_val.to_string(),
+        "--qalpha".to_string(), q_val.to_string()
+    ];
+
+    args.push("--stdin".to_string());
+
+    let mut avif_cmd = cmd.args(&args)
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -70,7 +87,6 @@ fn encode_via_pipe(
     let mut ff_stdout = ffmpeg_cmd.stdout.take().expect("FF Stdout Fail");
 
     // Process Decoupling Bridge
-    // This thread ensures FFmpeg can flush its buffer even if Avifenc is busy
     let bridge_handle = thread::spawn(move || {
         let _ = std::io::copy(&mut ff_stdout, &mut avif_stdin);
     });
@@ -101,9 +117,7 @@ fn encode_via_pipe(
         return false;
     }
 
-    // Wait for the data to finish flowing through the bridge
     let _ = bridge_handle.join();
-    
     let _ = ffmpeg_cmd.wait();
     let avif_status = avif_cmd.wait();
 
@@ -112,7 +126,7 @@ fn encode_via_pipe(
 
 // Raw Frames -> Folder -> Avifenc
 fn encode_via_folder(
-    _config: ExportConfig, 
+    config: ExportConfig, 
     rx: mpsc::Receiver<EncoderMessage>, 
     status_tx: mpsc::Sender<EncoderStatus>, 
     temp_path: &PathBuf, 
@@ -154,12 +168,16 @@ fn encode_via_folder(
         return false; 
     }
 
-    // Run Avifenc on the folder
+    // MAPPING
+    let speed = 10 - (config.compression_percent / 10).clamp(0, 10);
+    let q_val = ((config.quality_percent as f32 / 100.0) * 63.0).round() as u8;
+
     let mut args = vec![
-        "--speed".to_string(), "8".to_string(),
-        "-q".to_string(), "60".to_string(),
+        "--speed".to_string(), speed.to_string(),
         "-o".to_string(), temp_path.to_string_lossy().to_string(),
+        "-q".to_string(), q_val.to_string()
     ];
+
     for p in &frame_paths { args.push(p.to_string_lossy().to_string()); }
 
     let mut cmd = Command::new(avifenc_path);
@@ -174,7 +192,6 @@ fn encode_via_folder(
         .spawn()
         .expect("Avifenc Fallback Fail");
 
-    // Monitor Process (Polling for Abort)
     let mut finished = false;
     let mut success = false;
     
@@ -182,7 +199,7 @@ fn encode_via_folder(
         if abort.load(Ordering::Relaxed) {
             let _ = child.kill();
             let _ = child.wait();
-            let _ = fs::remove_dir_all(&work_dir); // WIPE FOLDER
+            let _ = fs::remove_dir_all(&work_dir);
             return false;
         }
 
@@ -202,7 +219,6 @@ fn encode_via_folder(
         }
     }
 
-    // Cleanup
     let _ = fs::remove_dir_all(&work_dir);
     success
 }
