@@ -59,22 +59,6 @@ pub fn show(ui: &mut egui::Ui, settings: &mut Settings) -> bool {
                 toggle_ui(ui, &mut settings.expand_spirit_details);
                 ui.label("Expand Spirit Details by Default");
             });
-            
-            ui.add_space(10.0);
-
-            egui::Grid::new("ability_grid").num_columns(2).spacing([10.0, 10.0]).show(ui, |ui| {
-                ui.label("Ability Padding X");
-                ui.add(egui::DragValue::new(&mut settings.ability_padding_x).speed(0.5).range(0.0..=50.0));
-                ui.end_row();
-
-                ui.label("Ability Padding Y");
-                ui.add(egui::DragValue::new(&mut settings.ability_padding_y).speed(0.5).range(0.0..=50.0));
-                ui.end_row();
-
-                ui.label("Trait Padding Y");
-                ui.add(egui::DragValue::new(&mut settings.trait_padding_y).speed(0.5).range(0.0..=50.0));
-                ui.end_row();
-            });
         });
 
     refresh_needed

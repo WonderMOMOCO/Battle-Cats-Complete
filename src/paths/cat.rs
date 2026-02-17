@@ -118,7 +118,7 @@ pub fn image(root: &Path, asset_type: AssetType, id: u32, form: usize, egg_ids: 
     None
 }
 
-/// Retrieves paths for standard animation files (Png, Imgcut, Mamodel)
+// Retrieves paths for standard animation files (Png, Imgcut, Mamodel)
 pub fn anim(root: &Path, id: u32, form: usize, egg_ids: (i32, i32), file_type: AnimType) -> PathBuf {
     let folder = anim_folder(root, id, form, egg_ids);
     let filename = anim_base_filename(id, form, egg_ids);
@@ -126,7 +126,7 @@ pub fn anim(root: &Path, id: u32, form: usize, egg_ids: (i32, i32), file_type: A
     folder.join(format!("{}.{}", filename, ext))
 }
 
-/// Retrieves paths specifically for Maanim files, handling the 2-digit index suffix.
+// Retrieves paths specifically for Maanim files, handling the 2-digit index suffix
 pub fn maanim(root: &Path, id: u32, form: usize, egg_ids: (i32, i32), index: usize) -> PathBuf {
     let folder = anim_folder(root, id, form, egg_ids);
     let filename = anim_base_filename(id, form, egg_ids);

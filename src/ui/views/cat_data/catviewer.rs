@@ -19,7 +19,7 @@ pub fn show(
     anim_viewer: &mut AnimViewer,
     model_data: &mut Option<Model>,
     anim_sheet: &mut SpriteSheet,
-    settings: &Settings,
+    settings: &mut Settings,
 ) {
     let root = Path::new(cat::DIR_CATS);
     let egg_ids = cat_entry.egg_ids;
@@ -266,7 +266,8 @@ pub fn show(
                                 &form_viewer_id,
                                 &spirit_pack,
                                 settings.native_fps, 
-                                settings.auto_set_camera_region, // PASSED HERE
+                                settings.auto_set_camera_region,
+                                settings, 
                             );
                             ui.allocate_rect(rect, egui::Sense::hover())
                         });
@@ -297,7 +298,8 @@ pub fn show(
                     &form_viewer_id,
                     &spirit_pack,
                     settings.native_fps, 
-                    settings.auto_set_camera_region, // AND HERE
+                    settings.auto_set_camera_region,
+                    settings, 
                 );
                 ui.allocate_rect(rect, egui::Sense::hover())
             });

@@ -99,7 +99,7 @@ fn render_internal_ui(
     let btn_w = 70.0;
     let grid_gap = 5.0;
     let btn_size = egui::vec2(btn_w, 25.0);
-
+    let is_locked = anim_viewer.export_state.is_processing || anim_viewer.export_state.is_loop_searching;
     let display_multiplier = if interpolation { native_fps / 30.0 } else { 1.0 };
 
     let (lcm_result, max_frame_val) = if let Some(anim) = &anim_viewer.current_anim {
@@ -147,7 +147,7 @@ fn render_internal_ui(
         // Column 1
         ui.vertical(|ui| {
             let play_icon = if is_playing { "⏸" } else { "▶" };
-            let enabled = anim_viewer.loaded_anim_index != IDX_NONE && base_assets_available;
+            let enabled = anim_viewer.loaded_anim_index != IDX_NONE && base_assets_available && !is_locked;
             
             if ui.add_enabled_ui(enabled, |ui| {
                 ui.add_sized(egui::vec2(ICON_W, TILE_HEIGHT), egui::Button::new(egui::RichText::new(play_icon).size(16.0)))
@@ -168,99 +168,101 @@ fn render_internal_ui(
 
         // Column 2
         ui.vertical(|ui| {
-            ui.allocate_ui(egui::vec2(COL2_W, TILE_HEIGHT), |ui| {
-                ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x = GAP;
-                    
-                    let enabled = anim_viewer.loaded_anim_index != IDX_NONE && base_assets_available;
-
-                    if !is_playing {
-                        let left = ui.add_enabled_ui(enabled, |ui| {
-                            ui.add_sized(egui::vec2(NAV_W, TILE_HEIGHT), egui::Button::new("◀").sense(egui::Sense::click().union(egui::Sense::drag())))
-                        }).inner;
+            ui.add_enabled_ui(!is_locked, |ui| {
+                ui.allocate_ui(egui::vec2(COL2_W, TILE_HEIGHT), |ui| {
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing.x = GAP;
                         
-                        tile_frame.show(ui, |ui| {
-                            ui.set_width(INPUT_W); ui.set_height(TILE_HEIGHT);
-                            ui.with_layout(egui::Layout::centered_and_justified(egui::Direction::LeftToRight), |ui| {
-                                ui.style_mut().visuals.widgets.inactive.bg_fill = egui::Color32::TRANSPARENT;
-                                ui.style_mut().visuals.widgets.active.bg_fill = egui::Color32::TRANSPARENT;
-                                ui.style_mut().visuals.widgets.hovered.bg_fill = egui::Color32::TRANSPARENT;
-                                let re = ui.add_enabled(enabled, egui::TextEdit::singleline(&mut anim_viewer.single_frame_str)
-                                    .frame(false).desired_width(INPUT_W).vertical_align(egui::Align::Center).horizontal_align(egui::Align::Center));
-                                if re.changed() {
-                                    if let Ok(val) = anim_viewer.single_frame_str.parse::<i32>() {
-                                        anim_viewer.current_frame = val as f32 / display_multiplier;
+                        let enabled = anim_viewer.loaded_anim_index != IDX_NONE && base_assets_available;
+    
+                        if !is_playing {
+                            let left = ui.add_enabled_ui(enabled, |ui| {
+                                ui.add_sized(egui::vec2(NAV_W, TILE_HEIGHT), egui::Button::new("◀").sense(egui::Sense::click().union(egui::Sense::drag())))
+                            }).inner;
+                            
+                            tile_frame.show(ui, |ui| {
+                                ui.set_width(INPUT_W); ui.set_height(TILE_HEIGHT);
+                                ui.with_layout(egui::Layout::centered_and_justified(egui::Direction::LeftToRight), |ui| {
+                                    ui.style_mut().visuals.widgets.inactive.bg_fill = egui::Color32::TRANSPARENT;
+                                    ui.style_mut().visuals.widgets.active.bg_fill = egui::Color32::TRANSPARENT;
+                                    ui.style_mut().visuals.widgets.hovered.bg_fill = egui::Color32::TRANSPARENT;
+                                    let re = ui.add_enabled(enabled, egui::TextEdit::singleline(&mut anim_viewer.single_frame_str)
+                                        .frame(false).desired_width(INPUT_W).vertical_align(egui::Align::Center).horizontal_align(egui::Align::Center));
+                                    if re.changed() {
+                                        if let Ok(val) = anim_viewer.single_frame_str.parse::<i32>() {
+                                            anim_viewer.current_frame = val as f32 / display_multiplier;
+                                        }
                                     }
-                                }
-                                if !re.has_focus() {
-                                    anim_viewer.single_frame_str = format!("{}", cur_display_val);
-                                }
+                                    if !re.has_focus() {
+                                        anim_viewer.single_frame_str = format!("{}", cur_display_val);
+                                    }
+                                });
                             });
-                        });
-
-                        let right = ui.add_enabled_ui(enabled, |ui| {
-                            ui.add_sized(egui::vec2(NAV_W, TILE_HEIGHT), egui::Button::new("▶").sense(egui::Sense::click().union(egui::Sense::drag())))
-                        }).inner;
-
-                        if left.is_pointer_button_down_on() { anim_viewer.hold_dir = -1; } 
-                        else if right.is_pointer_button_down_on() { anim_viewer.hold_dir = 1; } 
-                        else { anim_viewer.hold_dir = 0; }
-                        
-                        if left.clicked() {
-                            let f = cur_frame_val - 1.0;
-                            let wrap = if lcm_result.is_some() { max_frame_val as f32 } else { 0.0 }; 
-                            anim_viewer.current_frame = if f < 0.0 { wrap } else { f };
-                        }
-                        if right.clicked() {
-                            let f = cur_frame_val + 1.0;
-                            if let Some(mx) = lcm_result {
-                                anim_viewer.current_frame = if f > mx as f32 { 0.0 } else { f };
-                            } else {
-                                anim_viewer.current_frame = f;
+    
+                            let right = ui.add_enabled_ui(enabled, |ui| {
+                                ui.add_sized(egui::vec2(NAV_W, TILE_HEIGHT), egui::Button::new("▶").sense(egui::Sense::click().union(egui::Sense::drag())))
+                            }).inner;
+    
+                            if left.is_pointer_button_down_on() { anim_viewer.hold_dir = -1; } 
+                            else if right.is_pointer_button_down_on() { anim_viewer.hold_dir = 1; } 
+                            else { anim_viewer.hold_dir = 0; }
+                            
+                            if left.clicked() {
+                                let f = cur_frame_val - 1.0;
+                                let wrap = if lcm_result.is_some() { max_frame_val as f32 } else { 0.0 }; 
+                                anim_viewer.current_frame = if f < 0.0 { wrap } else { f };
                             }
+                            if right.clicked() {
+                                let f = cur_frame_val + 1.0;
+                                if let Some(mx) = lcm_result {
+                                    anim_viewer.current_frame = if f > mx as f32 { 0.0 } else { f };
+                                } else {
+                                    anim_viewer.current_frame = f;
+                                }
+                            }
+                        } else {
+                            // Range Controls
+                            tile_frame.show(ui, |ui| {
+                                ui.set_width(60.0); ui.set_height(TILE_HEIGHT);
+                                ui.with_layout(egui::Layout::centered_and_justified(egui::Direction::LeftToRight), |ui| {
+                                    ui.style_mut().visuals.widgets.inactive.bg_fill = egui::Color32::TRANSPARENT;
+                                    if loop_range_0.is_some() && anim_viewer.range_str_cache.0.is_empty() {
+                                        let v = (loop_range_0.unwrap() as f32 * display_multiplier).round() as i32;
+                                        anim_viewer.range_str_cache.0 = v.to_string();
+                                    }
+                                    let re = ui.add_enabled(enabled, egui::TextEdit::singleline(&mut anim_viewer.range_str_cache.0)
+                                        .hint_text(egui::RichText::new("0").color(egui::Color32::GRAY)).frame(false).desired_width(60.0).vertical_align(egui::Align::Center).horizontal_align(egui::Align::Center));
+                                    if re.changed() {
+                                        if anim_viewer.range_str_cache.0.is_empty() { anim_viewer.loop_range.0 = None; } 
+                                        else if let Ok(val) = anim_viewer.range_str_cache.0.parse::<i32>() {
+                                            anim_viewer.loop_range.0 = Some((val as f32 / display_multiplier).round() as i32);
+                                        }
+                                    }
+                                    if re.secondary_clicked() { anim_viewer.loop_range.0 = None; anim_viewer.range_str_cache.0.clear(); }
+                                });
+                            });
+                            tile_frame.show(ui, |ui| { ui.set_width(20.0); ui.set_height(TILE_HEIGHT); ui.with_layout(egui::Layout::centered_and_justified(egui::Direction::LeftToRight), |ui| { ui.label("~"); }); });
+                            tile_frame.show(ui, |ui| {
+                                ui.set_width(60.0); ui.set_height(TILE_HEIGHT);
+                                ui.with_layout(egui::Layout::centered_and_justified(egui::Direction::LeftToRight), |ui| {
+                                    ui.style_mut().visuals.widgets.inactive.bg_fill = egui::Color32::TRANSPARENT;
+                                    if loop_range_1.is_some() && anim_viewer.range_str_cache.1.is_empty() {
+                                        let v = (loop_range_1.unwrap() as f32 * display_multiplier).round() as i32;
+                                        anim_viewer.range_str_cache.1 = v.to_string();
+                                    }
+                                    let re = ui.add_enabled(enabled, egui::TextEdit::singleline(&mut anim_viewer.range_str_cache.1)
+                                        .hint_text(egui::RichText::new(&display_max_str).color(egui::Color32::GRAY)).frame(false).desired_width(60.0).vertical_align(egui::Align::Center).horizontal_align(egui::Align::Center));
+                                    if re.changed() {
+                                        if anim_viewer.range_str_cache.1.is_empty() { anim_viewer.loop_range.1 = None; } 
+                                        else if let Ok(val) = anim_viewer.range_str_cache.1.parse::<i32>() {
+                                            anim_viewer.loop_range.1 = Some((val as f32 / display_multiplier).round() as i32);
+                                        }
+                                    }
+                                    if re.secondary_clicked() { anim_viewer.loop_range.1 = None; anim_viewer.range_str_cache.1.clear(); }
+                                });
+                            });
                         }
-                    } else {
-                        // Range Controls
-                        tile_frame.show(ui, |ui| {
-                            ui.set_width(60.0); ui.set_height(TILE_HEIGHT);
-                            ui.with_layout(egui::Layout::centered_and_justified(egui::Direction::LeftToRight), |ui| {
-                                ui.style_mut().visuals.widgets.inactive.bg_fill = egui::Color32::TRANSPARENT;
-                                if loop_range_0.is_some() && anim_viewer.range_str_cache.0.is_empty() {
-                                    let v = (loop_range_0.unwrap() as f32 * display_multiplier).round() as i32;
-                                    anim_viewer.range_str_cache.0 = v.to_string();
-                                }
-                                let re = ui.add_enabled(enabled, egui::TextEdit::singleline(&mut anim_viewer.range_str_cache.0)
-                                    .hint_text(egui::RichText::new("0").color(egui::Color32::GRAY)).frame(false).desired_width(60.0).vertical_align(egui::Align::Center).horizontal_align(egui::Align::Center));
-                                if re.changed() {
-                                    if anim_viewer.range_str_cache.0.is_empty() { anim_viewer.loop_range.0 = None; } 
-                                    else if let Ok(val) = anim_viewer.range_str_cache.0.parse::<i32>() {
-                                        anim_viewer.loop_range.0 = Some((val as f32 / display_multiplier).round() as i32);
-                                    }
-                                }
-                                if re.secondary_clicked() { anim_viewer.loop_range.0 = None; anim_viewer.range_str_cache.0.clear(); }
-                            });
-                        });
-                        tile_frame.show(ui, |ui| { ui.set_width(20.0); ui.set_height(TILE_HEIGHT); ui.with_layout(egui::Layout::centered_and_justified(egui::Direction::LeftToRight), |ui| { ui.label("~"); }); });
-                        tile_frame.show(ui, |ui| {
-                            ui.set_width(60.0); ui.set_height(TILE_HEIGHT);
-                            ui.with_layout(egui::Layout::centered_and_justified(egui::Direction::LeftToRight), |ui| {
-                                ui.style_mut().visuals.widgets.inactive.bg_fill = egui::Color32::TRANSPARENT;
-                                if loop_range_1.is_some() && anim_viewer.range_str_cache.1.is_empty() {
-                                    let v = (loop_range_1.unwrap() as f32 * display_multiplier).round() as i32;
-                                    anim_viewer.range_str_cache.1 = v.to_string();
-                                }
-                                let re = ui.add_enabled(enabled, egui::TextEdit::singleline(&mut anim_viewer.range_str_cache.1)
-                                    .hint_text(egui::RichText::new(&display_max_str).color(egui::Color32::GRAY)).frame(false).desired_width(60.0).vertical_align(egui::Align::Center).horizontal_align(egui::Align::Center));
-                                if re.changed() {
-                                    if anim_viewer.range_str_cache.1.is_empty() { anim_viewer.loop_range.1 = None; } 
-                                    else if let Ok(val) = anim_viewer.range_str_cache.1.parse::<i32>() {
-                                        anim_viewer.loop_range.1 = Some((val as f32 / display_multiplier).round() as i32);
-                                    }
-                                }
-                                if re.secondary_clicked() { anim_viewer.loop_range.1 = None; anim_viewer.range_str_cache.1.clear(); }
-                            });
-                        });
-                    }
+                    });
                 });
             });
 
@@ -338,22 +340,15 @@ fn render_internal_ui(
             ui.horizontal(|ui| {
                 ui.add_space(left_pad);
                 egui::Grid::new("anim_controls_grid").spacing(egui::vec2(grid_gap, grid_gap)).show(ui, |ui| {
+                    
                     let mut draw_anim_btn = |ui: &mut egui::Ui, label: &str, idx: usize, anim_exists: bool| {
-                        let effective_enabled = base_assets_available && anim_exists;
+                        let effective_enabled = base_assets_available && anim_exists && !is_locked;
                         let is_active = anim_viewer.loaded_anim_index == idx && anim_viewer.loaded_anim_index != IDX_NONE;
                         
                         let fill = if is_active { active_color } else { inactive_color };
                         let btn = egui::Button::new(egui::RichText::new(label).color(egui::Color32::WHITE).size(13.0)).fill(fill);
                         
                         if ui.add_enabled_ui(effective_enabled, |ui| { ui.add_sized(btn_size, btn) }).inner.clicked() { 
-                            // ABORT LOOP FINDING IF SWITCHING ANIMATION
-                            if anim_viewer.export_state.is_loop_searching {
-                                if let Some(abort) = &anim_viewer.export_state.loop_abort {
-                                    abort.store(true, std::sync::atomic::Ordering::Relaxed);
-                                }
-                                anim_viewer.export_state.is_loop_searching = false;
-                                anim_viewer.export_state.loop_rx = None;
-                            }
                             clicked_index = Some(idx); 
                         }
                     };

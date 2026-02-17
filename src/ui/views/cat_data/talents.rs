@@ -1,7 +1,7 @@
 use eframe::egui;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use crate::data::cat::skillacquisition::{self, TalentRaw, TalentGroupRaw};
+use crate::data::cat::skillacquisition::{TalentRaw, TalentGroupRaw};
 use crate::data::global::imgcut::SpriteSheet;
 use crate::core::utils::{self, autocrop};
 use crate::core::settings::Settings; 
@@ -126,7 +126,7 @@ fn render_header(
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 8.0;
             
-            if let Some(icon_id) = skillacquisition::map_ability_to_icon(group.ability_id) {
+            if let Some(icon_id) = crate::core::registries::cat::get_by_talent_id(group.ability_id).map(|def| def.icon_id) {
                 let size = egui::vec2(40.0, 40.0);
                 
                 let drawn = if let Some(cut) = sheet.cuts_map.get(&icon_id) {

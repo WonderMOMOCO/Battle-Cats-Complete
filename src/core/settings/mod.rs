@@ -15,9 +15,6 @@ pub struct Settings {
     pub animation_debug: bool,
     pub reset_view_on_selection: bool,
     pub centering_behavior: usize, 
-    pub ability_padding_x: f32,
-    pub ability_padding_y: f32,
-    pub trait_padding_y: f32,
     pub game_language: String, 
     pub preferred_banner_form: usize,
     pub update_mode: upd::UpdateMode,
@@ -25,12 +22,14 @@ pub struct Settings {
     pub last_compression_level: i32,
     pub app_folder_persistence: bool,
     pub auto_set_camera_region: bool,
-
+    pub default_showcase_walk: i32,
+    pub default_showcase_idle: i32,
+    pub default_showcase_kb: i32,
+    pub last_export_format: i32,
     #[serde(skip)] pub manual_check_requested: bool,
     #[serde(skip)] pub active_tab: String,
     #[serde(skip)] pub available_languages: Vec<String>,
     #[serde(skip)] pub rx_lang: Option<Receiver<Vec<String>>>,
-
     pub native_fps: f32,
 }
 
@@ -45,9 +44,6 @@ impl Default for Settings {
             animation_debug: false,
             reset_view_on_selection: true,
             centering_behavior: 2,  
-            ability_padding_x: 3.0,
-            ability_padding_y: 5.0,
-            trait_padding_y: 5.0,
             game_language: "".to_string(), 
             preferred_banner_form: 0,
             update_mode: upd::UpdateMode::default(),
@@ -55,11 +51,14 @@ impl Default for Settings {
             last_compression_level: 9, 
             app_folder_persistence: false,
             auto_set_camera_region: false,
+            default_showcase_walk: 90,
+            default_showcase_idle: 90,
+            default_showcase_kb: 60,
+            last_export_format: 0,
             active_tab: "General".to_string(),
             manual_check_requested: false,
             available_languages: Vec::new(),
             rx_lang: None,
-            
             native_fps: 30.0,
         };
         s.rx_lang = Some(lang::start_scan());

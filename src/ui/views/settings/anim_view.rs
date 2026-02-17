@@ -69,6 +69,22 @@ pub fn show(ui: &mut egui::Ui, settings: &mut Settings) -> bool {
                 toggle_ui(ui, &mut settings.auto_set_camera_region).on_hover_text(tooltip_cam);
                 ui.label("Auto-Set Camera Region").on_hover_text(tooltip_cam);
             });
+
+            ui.add_space(5.0);
+            ui.label(egui::RichText::new("Showcase").strong());
+            
+            ui.horizontal(|ui| {
+                ui.label("Default Walk Frames");
+                ui.add(egui::DragValue::new(&mut settings.default_showcase_walk).speed(1.0).range(0..=1000));
+            });
+            ui.horizontal(|ui| {
+                ui.label("Default Idle Frames");
+                ui.add(egui::DragValue::new(&mut settings.default_showcase_idle).speed(1.0).range(0..=1000));
+            });
+            ui.horizontal(|ui| {
+                ui.label("Default Kb Frames");
+                ui.add(egui::DragValue::new(&mut settings.default_showcase_kb).speed(1.0).range(0..=1000));
+            });
         });
 
     refresh_needed

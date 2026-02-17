@@ -178,7 +178,7 @@ impl eframe::App for BattleCatsApp {
                 crate::ui::views::import::show(ctx, &mut self.import_state, &mut self.settings); 
             },
             Page::CatData => {
-                crate::core::cat::show(ctx, &mut self.cat_list_state, &self.settings);
+                crate::core::cat::show(ctx, &mut self.cat_list_state, &mut self.settings);
             },
             Page::Settings => {
                 let refresh_needed = crate::ui::views::settings::show(ctx, &mut self.settings, &mut self.drag_guard);

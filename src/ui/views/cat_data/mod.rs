@@ -41,7 +41,7 @@ pub fn show(
     talent_name_cache: &mut HashMap<String, egui::TextureHandle>,
     gatya_item_textures: &mut HashMap<i32, Option<egui::TextureHandle>>,
     skill_descriptions: Option<&Vec<String>>, 
-    settings: &Settings, 
+    settings: &mut Settings,
     talent_levels: &mut HashMap<u8, u8>,
     cache_version: u64,
 ) {

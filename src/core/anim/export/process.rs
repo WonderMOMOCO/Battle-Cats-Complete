@@ -124,9 +124,13 @@ pub fn process_frame(
 
     let frame_delay = 1000.0 / state.fps as f32;
     let parts = if let Some(a) = anim {
-        let start = state.frame_start;
-        let step = if state.frame_start < state.frame_end { 1 } else { -1 };
-        let raw_f = (start + (state.current_progress * step)) as f32;
+        let raw_f = if state.export_mode == ExportMode::Showcase {
+            _current_time
+        } else {
+            let start = state.frame_start;
+            let step = if state.frame_start < state.frame_end { 1 } else { -1 };
+            (start + (state.current_progress * step)) as f32
+        };
         
         let frame_to_render = if state.loop_supported {
             raw_f

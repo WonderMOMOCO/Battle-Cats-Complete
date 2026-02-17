@@ -9,7 +9,6 @@ pub mod sort;
 pub mod keys;
 pub mod decrypt;
 
-// Updated import path
 use crate::core::addons::adb::bridge::AdbEvent; 
 use crate::core::settings::Settings;
 
@@ -133,7 +132,6 @@ impl ImportState {
         if self.is_adb_busy {
             let mut done = false;
             if let Some(rx) = self.adb_rx.as_ref() {
-                // FIXED: Explicit type annotation for the message
                 while let Ok(event) = rx.try_recv() {
                     match event {
                         AdbEvent::Status(msg) => {
