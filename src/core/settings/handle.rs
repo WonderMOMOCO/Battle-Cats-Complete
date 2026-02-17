@@ -11,6 +11,7 @@ pub struct ScannerConfig {
 #[derive(Clone, Debug)]
 pub struct EmulatorConfig {
     pub keep_app_folder: bool,
+    pub manual_ip: String, // Added this field
 }
 
 impl Settings {
@@ -25,6 +26,7 @@ impl Settings {
     pub fn emulator_config(&self) -> EmulatorConfig {
         EmulatorConfig {
             keep_app_folder: self.app_folder_persistence,
+            manual_ip: self.manual_ip.clone(), // Map the setting here
         }
     }
 }

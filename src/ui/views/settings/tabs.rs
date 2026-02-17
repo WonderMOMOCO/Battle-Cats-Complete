@@ -34,6 +34,7 @@ pub fn show(ctx: &egui::Context, settings: &mut Settings, drag_guard: &mut DragG
 
                 if ui.add(btn).clicked() {
                     settings.active_tab = tab_name.to_string();
+                    settings.show_ip_field = false;
                 }
             }
         });

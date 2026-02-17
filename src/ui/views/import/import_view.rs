@@ -11,7 +11,7 @@ pub fn show(ui: &mut egui::Ui, state: &mut ImportState, settings: &Settings) {
         let inactive_color = egui::Color32::from_gray(60);
 
         let is_adb = state.import_sub_tab == ImportSubTab::Emulator;
-        if ui.add(egui::Button::new(egui::RichText::new("Emulator").color(egui::Color32::WHITE).size(14.0))
+        if ui.add(egui::Button::new(egui::RichText::new("Android").color(egui::Color32::WHITE).size(14.0))
             .fill(if is_adb { active_color } else { inactive_color })
             .min_size(egui::vec2(80.0, 30.0)))
             .clicked() 

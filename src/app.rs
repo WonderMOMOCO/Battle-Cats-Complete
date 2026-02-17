@@ -220,7 +220,10 @@ impl eframe::App for BattleCatsApp {
 
                                     let btn = egui::Button::new(btn_text).fill(bg_color).min_size(egui::vec2(0.0, 45.0));
                                     if ui.add_sized([ui.available_width(), 45.0], btn).clicked() {
-                                        self.current_page = *page_enum;
+                                        if self.current_page != *page_enum {
+                                            self.current_page = *page_enum;
+                                            self.settings.show_ip_field = false;
+                                        }
                                     }
                                 }
                             });

@@ -11,7 +11,7 @@ pub fn show(ui: &mut egui::Ui, state: &mut ImportState, settings: &Settings) {
     let busy = state.is_adb_busy;
     
     if is_present {
-        ui.label("Import, decrypt, and sort game files from emulator into database")
+        ui.label("Import, decrypt, and sort game files from android/emulator into database")
             .on_hover_text("Supported emulators include: MuMu, Nox, and LDPlayer");
     } else {
         ui.label(

@@ -31,65 +31,71 @@ pub fn run_command(args: &[&str]) -> Result<String, String> {
     }
 }
 
-pub fn connect_to_emulator() -> Result<String, String> {
-    let ports = [7555, 5555, 62001, 21503, 16384]; 
-    
-    let devices_out = run_command(&["devices"])?;
-
-    // 1. Check if we are already connected wirelessly (look for IP format)
-    for line in devices_out.lines() {
-        if line.contains(":5555") && line.contains("\tdevice") {
-            return Ok("Wireless device already connected".to_string());
+// --- PRIORITY 1: USB ---
+// Returns Serial if found
+pub fn find_usb_device() -> Option<String> {
+    if let Ok(devices_out) = run_command(&["devices"]) {
+        for line in devices_out.lines().skip(1) {
+            if line.trim().is_empty() { continue; }
+            if let Some((serial, status)) = line.split_once('\t') {
+                // USB devices do not have IPs (colon) and are not 'emulator-xxxx'
+                if status == "device" && !serial.contains(":") && !serial.starts_with("emulator") {
+                    return Some(serial.to_string());
+                }
+            }
         }
     }
+    None
+}
 
-    // 2. Check for a USB device to bootstrap
-    let mut usb_serial = None;
-    for line in devices_out.lines().skip(1) {
-         if let Some((serial, status)) = line.split_once('\t') {
-             // If it doesn't have a colon (IP) and is authorized
-             if status == "device" && !serial.contains(":") { 
-                 usb_serial = Some(serial.to_string());
-                 break;
-             }
-         }
+// --- PRIORITY 2: MANUAL IP ---
+// Returns Connected IP if successful
+pub fn connect_manual_ip(ip: &str) -> Result<String, String> {
+    let target = if ip.contains(":") { ip.to_string() } else { format!("{}:5555", ip) };
+    
+    let out = run_command(&["connect", &target])?;
+    if out.contains("connected") {
+        Ok(target)
+    } else {
+        Err(out)
     }
+}
 
-    // 3. Bootstrap Wireless if USB found
-    if let Some(serial) = usb_serial {
-        // Try to get the IP address from the device
-        if let Some(ip) = get_wlan_ip(&serial) {
-            // Switch device to TCP/IP mode
-            let _ = run_command(&["-s", &serial, "tcpip", "5555"]);
-            
-            // Wait a moment for adbd to restart on the phone
-            thread::sleep(Duration::from_secs(2)); 
-            
-            // Connect to the IP we found
-            let connect_res = run_command(&["connect", &format!("{}:5555", ip)]);
-            if let Ok(res) = connect_res {
-                if res.contains("connected") {
-                     return Ok(format!("Switched to Wireless: {}", ip));
+// --- PRIORITY 3: EMULATOR ---
+// Returns Emulator Serial if found
+pub fn find_emulator() -> Option<String> {
+    let ports = [7555, 5555, 62001, 21503, 16384]; 
+    
+    // \Check if an emulator is ALREADY connected
+    if let Ok(devices_out) = run_command(&["devices"]) {
+        for line in devices_out.lines().skip(1) {
+            if line.trim().is_empty() { continue; }
+            if let Some((serial, status)) = line.split_once('\t') {
+                if status == "device" {
+                    // "emulator-5554" OR "127.0.0.1:5555" are emulators
+                    if serial.starts_with("emulator") || serial.contains("127.0.0.1") || serial.contains("localhost") {
+                        return Some(serial.to_string());
+                    }
                 }
             }
         }
     }
 
-    // 4. Fallback: Attempt to connect to local emulator ports
+    // Scan ports
     for port in ports {
         let addr = format!("127.0.0.1:{}", port);
         if let Ok(out) = run_command(&["connect", &addr]) {
             if out.contains("connected") {
-                return Ok(format!("Connected to {}", addr));
+                return Some(addr);
             }
         }
     }
-    Err("No devices or emulators found.".to_string())
+    None
 }
 
-// Helper to find the device's local IP via ADB
-fn get_wlan_ip(serial: &str) -> Option<String> {
-    // Run 'ip route' to find the src IP for the wlan0 interface
+// --- UTILS ---
+
+pub fn get_wlan_ip(serial: &str) -> Option<String> {
     if let Ok(output) = run_command(&["-s", serial, "shell", "ip", "route"]) {
         for line in output.lines() {
             if line.contains("wlan0") && line.contains("src") {
@@ -103,4 +109,19 @@ fn get_wlan_ip(serial: &str) -> Option<String> {
         }
     }
     None
+}
+
+pub fn enable_wireless_fallback(serial: &str) -> Option<String> {
+    // If it's already wireless/emulator, no fallback needed
+    if serial.contains(":") || serial.starts_with("emulator") { return None; }
+    
+    let ip = get_wlan_ip(serial)?;
+    let _ = run_command(&["-s", serial, "tcpip", "5555"]);
+    thread::sleep(Duration::from_secs(2)); 
+    Some(format!("{}:5555", ip))
+}
+
+pub fn connect_wireless(ip: &str) -> Result<(), String> {
+    let out = run_command(&["connect", ip])?;
+    if out.contains("connected") { Ok(()) } else { Err(out) }
 }
