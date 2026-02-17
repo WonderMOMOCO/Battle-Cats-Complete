@@ -1,3 +1,4 @@
+#[cfg(target_os = "windows")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OemDriver {
     Universal,
@@ -9,16 +10,19 @@ pub enum OemDriver {
     Other,
 }
 
+#[cfg(target_os = "windows")]
 impl Default for OemDriver {
     fn default() -> Self {
         Self::Universal
     }
 }
 
+#[cfg(target_os = "windows")]
 pub struct OemManager {
     pub selected: OemDriver,
 }
 
+#[cfg(target_os = "windows")]
 impl Default for OemManager {
     fn default() -> Self {
         Self {
@@ -27,6 +31,7 @@ impl Default for OemManager {
     }
 }
 
+#[cfg(target_os = "windows")]
 impl OemManager {
     pub fn all_drivers() -> Vec<OemDriver> {
         vec![
@@ -65,6 +70,7 @@ impl OemManager {
     }
 }
 
+#[cfg(target_os = "windows")]
 fn open_url(url: &str) {
     let _ = open::that(url);
 }
