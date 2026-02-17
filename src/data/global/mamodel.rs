@@ -92,7 +92,7 @@ impl Model {
 
         let unit_line_index = data_start_index + part_count;
         
-        // Initialize with defaults (Standard BC values)
+        // Initialize with defaults
         let mut scale_unit = 1000.0;
         let mut angle_unit = 3600.0; 
         let mut alpha_unit = 1000.0;
@@ -101,7 +101,6 @@ impl Model {
         if lines.len() > unit_line_index {
             for i in unit_line_index..lines.len() {
                 let p: Vec<&str> = lines[i].split(delimiter).collect();
-                // FIX: Changed '==' to '>=' to handle files with extra parameters (like Unit 564)
                 if p.len() >= 3 {
                      if let (Ok(s), Ok(a), Ok(o)) = (
                         p[0].trim().parse::<f32>(), 

@@ -186,7 +186,7 @@ impl CatListState {
     }
 }
 
-pub fn show(ctx: &egui::Context, state: &mut CatListState, settings: &crate::core::settings::Settings) {
+pub fn show(ctx: &egui::Context, state: &mut CatListState, settings: &mut crate::core::settings::Settings) {
     if !state.initialized {
         state.initialized = true;
         state.init_watcher(ctx); 
@@ -335,7 +335,6 @@ pub fn show(ctx: &egui::Context, state: &mut CatListState, settings: &crate::cor
             // Reset Animation Data
             state.sprite_sheet = SpriteSheet::default();
             state.model_data = None;
-            // Also reset scroll or view
         }
     });
 }
