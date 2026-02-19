@@ -13,9 +13,9 @@ pub fn show(ui: &mut egui::Ui, settings: &mut Settings) -> bool {
             ui.add_space(5.0);
 
             ui.horizontal(|ui| {
-                let tooltip = "Attempt to connect to this IP Address Wirelessly when using Android import method\nMake sure you have \"USB Debugging\" enabled in your devices developer settings\nRequires ABD OEM Drivers Add-On to function";
+                let tooltip = "Attempt to connect to this IP Address Wirelessly if not automatically found when using Android import method\nMake sure you have \"Wireless USB Debugging\" enabled in your devices developer settings\nRequires ABD OEM Drivers Add-On to function";
                 
-                ui.label("Host IP Address").on_hover_text(tooltip);
+                ui.label("Fallback IP Address").on_hover_text(tooltip);
                 
                 ui.spacing_mut().item_spacing.x = 4.0; 
 

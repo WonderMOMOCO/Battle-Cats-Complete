@@ -21,7 +21,8 @@ pub fn show(ctx: &egui::Context, drag_guard: &mut DragGuard) {
     });
 
     egui::Area::new("version_area".into())
-        .anchor(egui::Align2::LEFT_BOTTOM, [10.0, -10.0]) 
+        .anchor(egui::Align2::LEFT_BOTTOM, [10.0, -10.0])
+        .order(egui::Order::Background) 
         .show(ctx, |ui| {
             ui.style_mut().text_styles.insert(
                 egui::TextStyle::Body,
@@ -42,6 +43,7 @@ pub fn show(ctx: &egui::Context, drag_guard: &mut DragGuard) {
 
     egui::Area::new("social_links_area".into())
         .anchor(egui::Align2::RIGHT_BOTTOM, [-10.0, -10.0]) 
+        .order(egui::Order::Background)
         .show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.style_mut().text_styles.insert(

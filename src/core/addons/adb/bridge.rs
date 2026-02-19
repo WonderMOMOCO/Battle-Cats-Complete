@@ -21,8 +21,9 @@ pub fn spawn_full_import(tx: Sender<AdbEvent>, base_output_dir: PathBuf, mode: A
         thread::sleep(Duration::from_millis(500));
         let _ = driver::run_command(&["start-server"]);
         
-        let mut current_serial: String;
+        let mut current_serial: String = String::new();
         let mut fallback_ip: Option<String> = None;
+        let mut connection_established = false;
 
         let _ = tx.send(AdbEvent::Status("Detecting device...".to_string()));
 
@@ -30,51 +31,69 @@ pub fn spawn_full_import(tx: Sender<AdbEvent>, base_output_dir: PathBuf, mode: A
         if let Some(serial) = driver::find_usb_device() {
             let _ = tx.send(AdbEvent::Status(format!("USB Device Found: {}", serial)));
             current_serial = serial;
-            
-            // Setup Safety Net for USB
             fallback_ip = driver::enable_wireless_fallback(&current_serial);
-            if let Some(ref ip) = fallback_ip {
-                let _ = tx.send(AdbEvent::Status(format!("Wireless Fallback Prepared: {}", ip)));
-            }
+            connection_established = true;
         } 
-        // --- PRIORITY 2: MANUAL IP (If set) ---
-        else if !config.manual_ip.is_empty() {
-             let _ = tx.send(AdbEvent::Status(format!("Connecting to Manual IP: {}", config.manual_ip)));
-             
-             match driver::connect_manual_ip(&config.manual_ip) {
-                 Ok(ip) => {
-                     let _ = tx.send(AdbEvent::Status("Connected to Manual IP.".to_string()));
-                     current_serial = ip;
-                 },
-                 Err(e) => {
-                     let _ = tx.send(AdbEvent::Status(format!("Manual IP Connection Failed ({}). Switching to Auto-Detect...", e)));
-                     
-                     match driver::find_emulator() {
-                        Some(emu) => {
-                             let _ = tx.send(AdbEvent::Status(format!("Emulator Found: {}", emu)));
-                             current_serial = emu;
-                        },
-                        None => {
-                            let _ = tx.send(AdbEvent::Error("No USB, Manual IP failed, and No Emulator found.".to_string()));
-                            return;
-                        }
+        
+        // --- PRIORITY 2: MDNS AUTO-DISCOVERY ---
+        if !connection_established {
+             let _ = tx.send(AdbEvent::Status("Scanning network for Wireless Debugging...".to_string()));
+             if let Some(mdns_target) = driver::find_mdns_device() {
+                 let _ = tx.send(AdbEvent::Status(format!("Found via mDNS: {}", mdns_target)));
+                 if let Ok(_) = driver::connect_manual_ip(&mdns_target) {
+                     if let Some(stable) = driver::bootstrap_tcpip(&mdns_target) {
+                         let _ = driver::run_command(&["disconnect", &mdns_target]);
+                         if let Ok(stable_serial) = driver::connect_manual_ip(&stable) {
+                             current_serial = stable_serial;
+                             connection_established = true;
+                             let _ = tx.send(AdbEvent::Status("Auto-Connection Successful!".to_string()));
+                         }
                      }
                  }
              }
         }
-        // --- PRIORITY 3: EMULATOR AUTO-DETECT ---
-        else {
-             let _ = tx.send(AdbEvent::Status("Scanning for Emulators...".to_string()));
-             match driver::find_emulator() {
-                Some(emu) => {
-                     let _ = tx.send(AdbEvent::Status(format!("Emulator Found: {}", emu)));
-                     current_serial = emu;
-                },
-                None => {
-                    let _ = tx.send(AdbEvent::Error("No valid Android device found.".to_string()));
-                    return;
-                }
+
+        // --- PRIORITY 3: MANUAL IP ---
+        if !connection_established && !config.manual_ip.is_empty() {
+             let _ = tx.send(AdbEvent::Status(format!("Trying Manual IP: {}", config.manual_ip)));
+             if let Ok(initial) = driver::connect_manual_ip(&config.manual_ip) {
+                 if initial.contains(':') && !initial.ends_with(":5555") {
+                     if let Some(new_target) = driver::bootstrap_tcpip(&initial) {
+                         let _ = driver::run_command(&["disconnect", &initial]);
+                         if let Ok(stable) = driver::connect_manual_ip(&new_target) {
+                             current_serial = stable;
+                             connection_established = true;
+                         }
+                     }
+                 } else {
+                     current_serial = initial;
+                     connection_established = true;
+                 }
              }
+        }
+
+        // --- PRIORITY 4: EMULATOR ---
+        if !connection_established {
+             let _ = tx.send(AdbEvent::Status("Scanning for Emulators...".to_string()));
+             if let Some(emu) = driver::find_emulator() {
+                 current_serial = emu;
+                 connection_established = true;
+             }
+        }
+
+        // Final check before proceeding
+        if !connection_established {
+            let _ = tx.send(AdbEvent::Error("No device found. Ensure Wireless Debugging is ON.".to_string()));
+            return;
+        }
+
+        // --- FINAL VERIFICATION ---
+        match driver::verify_connection(&current_serial) {
+            Ok(_) => { let _ = tx.send(AdbEvent::Status("Device Verified.".to_string())); },
+            Err(e) => {
+                let _ = tx.send(AdbEvent::Error(format!("Connection Failed: {}", e)));
+                return;
+            }
         }
 
         if mode == AdbImportType::All {
@@ -82,7 +101,6 @@ pub fn spawn_full_import(tx: Sender<AdbEvent>, base_output_dir: PathBuf, mode: A
             let _ = driver::run_command(&["-s", &current_serial, "root"]);
             thread::sleep(Duration::from_secs(2));
             
-            // Re-acquire connection if root caused a drop
             if !current_serial.contains(":") {
                  if let Some(new_s) = driver::find_usb_device() { current_serial = new_s; }
             } else {
@@ -108,13 +126,11 @@ pub fn spawn_full_import(tx: Sender<AdbEvent>, base_output_dir: PathBuf, mode: A
 
             let target_dir = base_output_dir.join(&pkg);
 
-            // --- EXECUTE WITH RESCUE LOGIC ---
             let mut attempt_success = false;
             
             if let Err(e) = process_single_region_adb(&tx, &current_serial, &pkg, &target_dir, mode) {
-                
                 if let Some(ref rescue_ip) = fallback_ip {
-                    let _ = tx.send(AdbEvent::Status(format!("USB Error: {} Engaging Wireless Rescue...", e)));
+                    let _ = tx.send(AdbEvent::Status(format!("Error: {}. Engaging Wireless Rescue...", e)));
                     let _ = tx.send(AdbEvent::Status(format!("Connecting to {}...", rescue_ip)));
 
                     if driver::connect_wireless(rescue_ip).is_ok() {
@@ -126,8 +142,6 @@ pub fn spawn_full_import(tx: Sender<AdbEvent>, base_output_dir: PathBuf, mode: A
                             },
                             Err(e2) => { let _ = tx.send(AdbEvent::Status(format!("Rescue Failed: {}", e2))); },
                         }
-                    } else {
-                        let _ = tx.send(AdbEvent::Status("Could not connect to Wireless Fallback.".to_string()));
                     }
                 } else {
                      let _ = tx.send(AdbEvent::Status(format!("Skipping {} due to error: {}", pkg, e)));
@@ -138,7 +152,6 @@ pub fn spawn_full_import(tx: Sender<AdbEvent>, base_output_dir: PathBuf, mode: A
 
             if !attempt_success { continue; }
 
-            // --- DECRYPT & SORT ---
             let _ = tx.send(AdbEvent::Status("Starting Decryption...".to_string()));
             let region_code = match suffix { "" => "ja", "kr" => "ko", other => other };
             let (d_tx, d_rx) = std::sync::mpsc::channel();
@@ -197,11 +210,8 @@ fn process_single_region_adb(_tx: &Sender<AdbEvent>, serial: &str, pkg: &str, ou
         let _ = driver::run_command(&["-s", serial, "shell", "chmod", "-R", "777", remote_stage_target]);
         if !output_dir.exists() { std::fs::create_dir_all(&output_dir).unwrap(); }
 
-        // Windows cannot handle files with ":" in the name
-        // We delete them from the staging area on the device BEFORE pulling
         let _ = driver::run_command(&["-s", serial, "shell", "find", remote_stage_target, "-name", "*:*", "-delete"]);
 
-        // --- PULL & VERIFY ---
         let pull_res = driver::run_command(&["-s", serial, "pull", remote_stage_target, output_dir.to_str().unwrap()]);
         
         if pull_res.is_err() {
@@ -216,8 +226,8 @@ fn process_single_region_adb(_tx: &Sender<AdbEvent>, serial: &str, pkg: &str, ou
         let _ = driver::run_command(&["-s", serial, "shell", "rm", "-rf", remote_stage_target]);
     } 
 
-    if let Err(_) = pull_split_apk(serial, pkg, "split_InstallPack.apk", output_dir) {
-        return Err("APK Pull Failed.".to_string());
+    if let Err(e) = pull_split_apk(serial, pkg, "split_InstallPack.apk", output_dir) {
+        return Err(format!("APK Pull Failed: {}", e));
     }
     
     let apk_path = output_dir.join("split_InstallPack.apk");

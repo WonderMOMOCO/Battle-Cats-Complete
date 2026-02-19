@@ -32,13 +32,11 @@ pub fn run_command(args: &[&str]) -> Result<String, String> {
 }
 
 // --- PRIORITY 1: USB ---
-// Returns Serial if found
 pub fn find_usb_device() -> Option<String> {
     if let Ok(devices_out) = run_command(&["devices"]) {
         for line in devices_out.lines().skip(1) {
             if line.trim().is_empty() { continue; }
             if let Some((serial, status)) = line.split_once('\t') {
-                // USB devices do not have IPs (colon) and are not 'emulator-xxxx'
                 if status == "device" && !serial.contains(":") && !serial.starts_with("emulator") {
                     return Some(serial.to_string());
                 }
@@ -48,8 +46,29 @@ pub fn find_usb_device() -> Option<String> {
     None
 }
 
-// --- PRIORITY 2: MANUAL IP ---
-// Returns Connected IP if successful
+// --- PRIORITY 2: MDNS AUTO-DISCOVERY ---
+// Retries for 3 seconds (6 x 500ms) to allow the ADB daemon to catch the broadcast
+pub fn find_mdns_device() -> Option<String> {
+    let _ = run_command(&["mdns", "check"]);
+    
+    for _ in 0..6 {
+        if let Ok(output) = run_command(&["mdns", "services"]) {
+            for line in output.lines() {
+                if line.contains("_adb-tls-connect._tcp") {
+                    if let Some(ip_port) = line.split_whitespace().last() {
+                        if ip_port.contains(':') && ip_port.contains('.') {
+                            return Some(ip_port.to_string());
+                        }
+                    }
+                }
+            }
+        }
+        thread::sleep(Duration::from_millis(500));
+    }
+    None
+}
+
+// --- PRIORITY 3: MANUAL IP ---
 pub fn connect_manual_ip(ip: &str) -> Result<String, String> {
     let target = if ip.contains(":") { ip.to_string() } else { format!("{}:5555", ip) };
     
@@ -61,18 +80,14 @@ pub fn connect_manual_ip(ip: &str) -> Result<String, String> {
     }
 }
 
-// --- PRIORITY 3: EMULATOR ---
-// Returns Emulator Serial if found
+// --- PRIORITY 4: EMULATOR ---
 pub fn find_emulator() -> Option<String> {
     let ports = [7555, 5555, 62001, 21503, 16384]; 
-    
-    // \Check if an emulator is ALREADY connected
     if let Ok(devices_out) = run_command(&["devices"]) {
         for line in devices_out.lines().skip(1) {
             if line.trim().is_empty() { continue; }
             if let Some((serial, status)) = line.split_once('\t') {
                 if status == "device" {
-                    // "emulator-5554" OR "127.0.0.1:5555" are emulators
                     if serial.starts_with("emulator") || serial.contains("127.0.0.1") || serial.contains("localhost") {
                         return Some(serial.to_string());
                     }
@@ -80,8 +95,6 @@ pub fn find_emulator() -> Option<String> {
             }
         }
     }
-
-    // Scan ports
     for port in ports {
         let addr = format!("127.0.0.1:{}", port);
         if let Ok(out) = run_command(&["connect", &addr]) {
@@ -112,9 +125,7 @@ pub fn get_wlan_ip(serial: &str) -> Option<String> {
 }
 
 pub fn enable_wireless_fallback(serial: &str) -> Option<String> {
-    // If it's already wireless/emulator, no fallback needed
     if serial.contains(":") || serial.starts_with("emulator") { return None; }
-    
     let ip = get_wlan_ip(serial)?;
     let _ = run_command(&["-s", serial, "tcpip", "5555"]);
     thread::sleep(Duration::from_secs(2)); 
@@ -124,4 +135,26 @@ pub fn enable_wireless_fallback(serial: &str) -> Option<String> {
 pub fn connect_wireless(ip: &str) -> Result<(), String> {
     let out = run_command(&["connect", ip])?;
     if out.contains("connected") { Ok(()) } else { Err(out) }
+}
+
+pub fn bootstrap_tcpip(serial: &str) -> Option<String> {
+    let ip = serial.split(':').next()?;
+    let _ = run_command(&["-s", serial, "tcpip", "5555"]);
+    thread::sleep(Duration::from_secs(2));
+    Some(format!("{}:5555", ip))
+}
+
+pub fn verify_connection(serial: &str) -> Result<(), String> {
+    let state = run_command(&["-s", serial, "get-state"])
+        .map_err(|_| "Device is not responding. (Is Wireless Debugging ON?)".to_string())?;
+
+    if state.contains("device") {
+        Ok(())
+    } else if state.contains("unauthorized") {
+        Err("Device is UNAUTHORIZED. Check phone screen.".to_string())
+    } else if state.contains("offline") {
+        Err("Device is OFFLINE. Toggle Wireless Debugging OFF and ON again.".to_string())
+    } else {
+        Err(format!("Device state unknown: {}", state))
+    }
 }
