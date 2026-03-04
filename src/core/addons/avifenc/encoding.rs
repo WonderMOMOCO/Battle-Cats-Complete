@@ -4,7 +4,7 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::fs;
 use std::thread;
-use crate::core::anim::export::encoding::{ExportConfig, EncoderMessage, EncoderStatus, prepare_image};
+use crate::features::animation::export::encoding::{ExportConfig, EncoderMessage, EncoderStatus, prepare_image};
 use super::download; 
 use crate::core::addons::ffmpeg::download as ffmpeg_dl; 
 use crate::core::addons::toolpaths::{self, Presence};

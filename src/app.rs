@@ -1,7 +1,10 @@
 use eframe::egui;
-use crate::core::{cat, import, settings, utils}; 
+use crate::core::utils; 
 use crate::updater;
-use crate::ui::views::main_menu;
+use crate::ui::main_menu;
+use crate::features::import::logic::ImportState;
+use crate::features::cat::logic::CatListState;
+use crate::features::settings::logic::{Settings, upd::UpdateMode};
 use std::path::PathBuf;
 
 #[derive(PartialEq, Clone, Copy, serde::Deserialize, serde::Serialize)]
@@ -27,7 +30,7 @@ pub struct BattleCatsApp {
     #[serde(skip)]
     sidebar_open: bool,
     #[serde(skip)]
-    import_state: import::ImportState,
+    import_state: ImportState,
     
     #[serde(skip)]
     updater: updater::Updater,
@@ -35,8 +38,8 @@ pub struct BattleCatsApp {
     #[serde(skip)]
     drag_guard: utils::DragGuard,
     
-    cat_list_state: cat::CatListState,
-    pub settings: settings::Settings,
+    cat_list_state: CatListState,
+    pub settings: Settings,
 }
 
 impl Default for BattleCatsApp {
@@ -44,9 +47,9 @@ impl Default for BattleCatsApp {
         Self {
             current_page: Page::MainMenu,
             sidebar_open: false,
-            import_state: import::ImportState::default(),
-            cat_list_state: cat::CatListState::default(),
-            settings: settings::Settings::default(),
+            import_state: ImportState::default(),
+            cat_list_state: CatListState::default(),
+            settings: Settings::default(),
             updater: updater::Updater::default(),
             drag_guard: utils::DragGuard::default(),
         }
@@ -64,14 +67,14 @@ impl BattleCatsApp {
         setup_custom_fonts(&cc.egui_ctx);
         
         if app.settings.rx_lang.is_none() {
-            app.settings.rx_lang = Some(crate::core::settings::lang::start_scan());
+            app.settings.rx_lang = Some(crate::features::settings::logic::lang::start_scan());
         }
 
         app.cat_list_state.restart_scan(app.settings.scanner_config());
 
         updater::cleanup_temp_files();
 
-        if app.settings.update_mode != settings::upd::UpdateMode::Ignore {
+        if app.settings.update_mode != UpdateMode::Ignore {
             app.updater.check_for_updates();
         }
 
@@ -175,13 +178,15 @@ impl eframe::App for BattleCatsApp {
         match self.current_page {
             Page::MainMenu => main_menu::show(ctx, &mut self.drag_guard),
             Page::ImportData => {
-                crate::ui::views::import::show(ctx, &mut self.import_state, &mut self.settings); 
-            },
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    crate::features::import::ui::manager::show(ui, &mut self.import_state, &mut self.settings); 
+                });
+            }
             Page::CatData => {
-                crate::core::cat::show(ctx, &mut self.cat_list_state, &mut self.settings);
+                crate::features::cat::logic::show(ctx, &mut self.cat_list_state, &mut self.settings);
             },
             Page::Settings => {
-                let refresh_needed = crate::ui::views::settings::show(ctx, &mut self.settings, &mut self.drag_guard);
+                let refresh_needed = crate::features::settings::ui::show(ctx, &mut self.settings, &mut self.drag_guard);
                 
                 if refresh_needed {
                     self.cat_list_state.cat_list.clear_cache();

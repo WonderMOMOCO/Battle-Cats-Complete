@@ -1,0 +1,86 @@
+use eframe::egui;
+use crate::features::import::logic::{ImportState, DataTab};
+use crate::features::settings::logic::Settings;
+use crate::features::import::ui::{import_view, export_view};
+
+pub fn show(ui: &mut egui::Ui, state: &mut ImportState, settings: &mut Settings) {
+    ui.vertical(|ui| {
+        ui.heading("Game Data Management");
+        ui.add_space(10.0);
+
+        // --- Top-Level Tab Bar (Import vs Export) ---
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 5.0; 
+            
+            let tabs = [
+                (DataTab::Import, "Import"),
+                (DataTab::Export, "Export"),
+            ];
+
+            for (tab, label) in tabs {
+                let is_selected = state.active_tab == tab;
+                let (fill, stroke, text_color) = if is_selected {
+                    (egui::Color32::from_rgb(0, 100, 200), egui::Stroke::new(2.0, egui::Color32::WHITE), egui::Color32::WHITE)
+                } else {
+                    (egui::Color32::from_gray(40), egui::Stroke::new(1.0, egui::Color32::from_gray(100)), egui::Color32::from_gray(200))
+                };
+                
+                let btn = egui::Button::new(egui::RichText::new(label).color(text_color))
+                    .fill(fill)
+                    .stroke(stroke)
+                    .rounding(egui::Rounding::ZERO)
+                    .min_size(egui::vec2(80.0, 30.0));
+
+                if ui.add(btn).clicked() {
+                    state.active_tab = tab;
+                }
+            }
+        });
+
+        ui.add_space(15.0);
+
+        // --- View Router ---
+        match state.active_tab {
+            DataTab::Import => import_view::show(ui, state, settings),
+            DataTab::Export => export_view::show(ui, state, settings),
+        }
+
+        ui.add_space(15.0);
+        ui.separator(); 
+
+        // --- Status Message Section ---
+        if (state.rx.is_some() || state.is_adb_busy) 
+            && !state.status_message.contains("Success") 
+            && !state.status_message.contains("Error") 
+        {
+            ui.horizontal(|ui| { 
+                ui.spinner(); 
+                ui.label(&state.status_message); 
+            });
+        } else {
+            let color = if state.status_message.contains("Error") || state.status_message.contains("Failed") { 
+                egui::Color32::LIGHT_RED 
+            } else if state.status_message.contains("Success") || state.status_message.contains("Complete") { 
+                egui::Color32::LIGHT_GREEN 
+            } else { 
+                egui::Color32::LIGHT_BLUE 
+            };
+            ui.colored_label(color, &state.status_message);
+        }
+        
+        ui.separator();
+        
+        // --- Scrolling Log Footer ---
+        egui::ScrollArea::vertical()
+            .stick_to_bottom(true)
+            .auto_shrink([false, false]) 
+            .show(ui, |ui| {
+                ui.set_min_width(ui.available_width());
+                ui.label(
+                    egui::RichText::new(&state.log_content)
+                    .monospace()
+                    .size(12.0)
+                );
+            });
+    });
+}

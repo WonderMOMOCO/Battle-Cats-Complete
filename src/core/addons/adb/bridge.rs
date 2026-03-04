@@ -4,9 +4,9 @@ use std::time::Duration;
 use std::sync::mpsc::Sender;
 use std::fs;
 use super::driver; 
-use crate::core::import::{AdbImportType, AdbRegion};
-use crate::core::import::{decrypt, sort}; 
-use crate::core::settings::handle::EmulatorConfig;
+use crate::features::import::logic::{AdbImportType, AdbRegion};
+use crate::features::import::logic::{decrypt, sort}; 
+use crate::features::settings::logic::handle::EmulatorConfig;
 
 pub enum AdbEvent {
     Status(String),

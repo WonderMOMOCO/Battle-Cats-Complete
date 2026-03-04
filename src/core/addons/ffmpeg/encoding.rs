@@ -3,7 +3,7 @@ use std::sync::{mpsc, Arc, atomic::{AtomicBool, Ordering}};
 use std::path::PathBuf;
 use std::thread;
 use std::io::Write;
-use crate::core::anim::export::encoding::{ExportConfig, ExportFormat, EncoderMessage, EncoderStatus, prepare_image};
+use crate::features::animation::export::encoding::{ExportConfig, ExportFormat, EncoderMessage, EncoderStatus, prepare_image};
 use super::download;
 
 pub fn encode(

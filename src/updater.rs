@@ -6,7 +6,7 @@ use self_update::cargo_crate_version;
 use eframe::egui;
 use std::process::Command;
 
-use crate::core::settings::{Settings, upd::UpdateMode};
+use crate::features::settings::logic::{Settings, upd::UpdateMode};
 use crate::core::utils::DragGuard;
 
 const REPO_OWNER: &str = "WonderMOMOCO"; 
