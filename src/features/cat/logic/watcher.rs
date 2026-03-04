@@ -10,7 +10,7 @@ use super::loader;
 use crate::core::patterns;
 use crate::features::cat::data::unitbuy;
 use crate::features::cat::data::unitevolve;
-use crate::global_data::imgcut::SpriteSheet;
+use crate::global::imgcut::SpriteSheet;
 use crate::features::cat::paths;
 use crate::features::settings::logic::handle::ScannerConfig;
 

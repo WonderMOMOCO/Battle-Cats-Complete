@@ -1,5 +1,5 @@
-use crate::global_data::mamodel::{Model, ModelPart};
-use crate::global_data::maanim::{Animation, AnimModification};
+use crate::global::mamodel::{Model, ModelPart};
+use crate::global::maanim::{Animation, AnimModification};
 
 pub fn animate(model: &Model, animation: &Animation, global_frame: f32) -> Vec<ModelPart> {
     let mut parts = model.parts.clone();

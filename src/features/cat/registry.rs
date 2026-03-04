@@ -1,4 +1,4 @@
-use crate::global_data::img015;
+use crate::global::img015;
 use crate::features::cat::data::unitid::CatRaw;
 use crate::features::cat::data::unitlevel::CatLevelCurve;
 use crate::features::cat::data::skillacquisition::TalentGroupRaw;

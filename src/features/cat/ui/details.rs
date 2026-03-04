@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use image::GenericImageView; 
 use crate::features::cat::data::unitbuy::UnitBuyRow;
-use crate::global_data::paths;
+use crate::global::paths;
 
 pub fn render(ui: &mut egui::Ui, description: &[String]) {
     ui.add_space(10.0);

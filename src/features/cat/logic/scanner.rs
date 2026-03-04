@@ -15,7 +15,7 @@ use crate::features::cat::data::unitexplanation;
 use crate::core::utils; 
 use crate::features::cat::paths::{self, AssetType};
 use crate::features::settings::logic::handle::ScannerConfig;
-use crate::global_data::maanim::Animation;
+use crate::global::maanim::Animation;
 
 #[derive(Clone, Debug)]
 pub struct CatEntry {

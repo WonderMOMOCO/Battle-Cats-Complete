@@ -5,7 +5,7 @@ mod core;
 mod ui;
 mod updater;
 mod features;
-mod global_data;
+mod global;
 
 use eframe::egui;
 

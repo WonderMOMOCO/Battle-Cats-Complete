@@ -2,7 +2,7 @@ use eframe::egui;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use crate::features::cat::data::skillacquisition::{TalentRaw, TalentGroupRaw};
-use crate::global_data::imgcut::SpriteSheet;
+use crate::global::imgcut::SpriteSheet;
 use crate::core::utils::{self, autocrop};
 use crate::features::settings::logic::Settings; 
 use crate::features::cat::data::unitid::CatRaw; 
@@ -242,7 +242,7 @@ fn render_body(
                 
                 let mut drawn = false;
                 if settings.game_language != "--" {
-                    if let Some(cut) = img022_sheet.cuts_map.get(&crate::global_data::img022::ICON_NP_COST) {
+                    if let Some(cut) = img022_sheet.cuts_map.get(&crate::global::img022::ICON_NP_COST) {
                         if let Some(tex) = &img022_sheet.texture_handle {
                             let aspect = cut.original_size.x / cut.original_size.y;
                             let size = egui::vec2(TALENT_NP_ICON_SIZE * aspect, TALENT_NP_ICON_SIZE);

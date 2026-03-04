@@ -8,7 +8,7 @@ use crate::core::utils::autocrop;
 use crate::ui::components::name_box;
 use crate::features::cat::paths::{self, AssetType};
 use crate::features::cat::data::skilllevel::TalentCost;
-use crate::global_data::imgcut::SpriteSheet;
+use crate::global::imgcut::SpriteSheet;
 
 pub const HEADER_NP_ICON_SIZE: f32 = 24.0;
 pub const HEADER_NP_TEXT_SIZE: f32 = 20.0;
@@ -73,7 +73,7 @@ fn render_talent_controls(
             
             let mut drawn = false;
             if settings.game_language != "--" {
-                if let Some(cut) = img022_sheet.cuts_map.get(&crate::global_data::img022::ICON_NP_COST) {
+                if let Some(cut) = img022_sheet.cuts_map.get(&crate::global::img022::ICON_NP_COST) {
                     if let Some(tex) = &img022_sheet.texture_handle {
                         let aspect = cut.original_size.x / cut.original_size.y;
                         let size = egui::vec2(HEADER_NP_ICON_SIZE * aspect, HEADER_NP_ICON_SIZE);

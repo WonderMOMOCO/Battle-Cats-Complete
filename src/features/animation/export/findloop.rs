@@ -2,8 +2,8 @@ use std::sync::{mpsc, Arc, atomic::{AtomicBool, Ordering}};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use crate::global_data::mamodel::Model;
-use crate::global_data::maanim::Animation;
+use crate::global::mamodel::Model;
+use crate::global::maanim::Animation;
 use crate::features::animation::logic::{animator, transform};
 use crate::features::animation::export::state::LoopStatus;
 

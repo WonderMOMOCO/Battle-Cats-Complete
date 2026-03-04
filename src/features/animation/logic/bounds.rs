@@ -1,7 +1,7 @@
 use eframe::egui;
-use crate::global_data::mamodel::Model;
-use crate::global_data::maanim::Animation;
-use crate::global_data::imgcut::SpriteSheet;
+use crate::global::mamodel::Model;
+use crate::global::maanim::Animation;
+use crate::global::imgcut::SpriteSheet;
 use crate::features::animation::logic::{animator, transform};
 
 // Calculates a tight bounding box using the exact renderer logic for the ENTIRE animation

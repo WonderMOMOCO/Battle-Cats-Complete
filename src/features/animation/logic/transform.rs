@@ -1,5 +1,5 @@
 use eframe::egui;
-use crate::global_data::mamodel::{Model, ModelPart};
+use crate::global::mamodel::{Model, ModelPart};
 
 #[derive(Clone, Copy, Debug)]
 pub struct WorldTransform {

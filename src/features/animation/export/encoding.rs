@@ -11,7 +11,7 @@ use webp_animation::Encoder as WebpEncoder;
 use gif::{Encoder as GifEncoder, Frame as GifFrame, Repeat as GifRepeat, DisposalMethod};
 
 use crate::features::animation::logic::canvas::GlowRenderer;
-use crate::global_data::imgcut::SpriteSheet;
+use crate::global::imgcut::SpriteSheet;
 use crate::features::animation::logic::transform::WorldTransform;
 
 // SHARED DATA STRUCTURES

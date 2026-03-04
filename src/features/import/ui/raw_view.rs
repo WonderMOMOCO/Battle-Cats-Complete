@@ -1,7 +1,7 @@
 use eframe::egui;
 use std::sync::mpsc;
 use crate::features::import::logic::{ImportState, ImportMode, sort};
-use crate::features::import::work;use std::thread;
+use crate::features::import::archive;use std::thread;
 
 pub fn show(ui: &mut egui::Ui, state: &mut ImportState) {
     ui.label("Sort game archive or decrypted files into database");
@@ -60,8 +60,8 @@ fn start_manual_sort(state: &mut ImportState) {
 
     thread::spawn(move || {
         let import_result = match mode {
-            ImportMode::Folder => work::import_standard_folder(&path, tx.clone()),
-            ImportMode::Zip => work::import_standard_archive(&path, tx.clone()),
+            ImportMode::Folder => archive::import_standard_folder(&path, tx.clone()),
+            ImportMode::Zip => archive::import_standard_archive(&path, tx.clone()),
             _ => Err("Invalid mode".to_string()),
         };
 
