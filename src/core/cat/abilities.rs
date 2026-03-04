@@ -143,7 +143,7 @@ pub fn collect_ability_data(
 
     if !is_conjure_unit && cat_stats.kamikaze == 2 {
         if let Some(tex) = kamikaze_texture {
-             let item = AbilityItem { icon_id: 0, text: "Unit disappears after a single attack".into(), custom_tex: Some(tex.id()), border_id: None };
+             let item = AbilityItem { icon_id: img015::ICON_KAMIKAZE, text: "Unit disappears after a single attack".into(), custom_tex: Some(tex.id()), border_id: None };
              group_headline_2.push(item);
         }
     }

@@ -94,37 +94,43 @@ pub fn render(
     }
 }
 
-pub fn render_icon_row(ui: &mut egui::Ui, items: &Vec<AbilityItem>, sheet: &SpriteSheet, _settings: &Settings, border_color: egui::Color32) {
+pub fn render_icon_row(ui: &mut egui::Ui, items: &Vec<AbilityItem>, sheet: &SpriteSheet, settings: &Settings, border_color: egui::Color32) {
     ui.scope(|ui| {
         ui.spacing_mut().item_spacing = egui::vec2(ABILITY_X, ABILITY_Y);
         ui.horizontal_wrapped(|ui| {
             for item in items {
-                let r = render_single_icon(ui, item, sheet, border_color);
+                let r = render_single_icon(ui, item, sheet, settings, border_color);
                 r.on_hover_ui(|ui| text_with_superscript(ui, &item.text));
             }
         });
     });
 }
 
-fn render_single_icon(ui: &mut egui::Ui, item: &AbilityItem, sheet: &SpriteSheet, border: egui::Color32) -> egui::Response {
+fn render_single_icon(ui: &mut egui::Ui, item: &AbilityItem, sheet: &SpriteSheet, settings: &Settings, border: egui::Color32) -> egui::Response {
     let size = egui::vec2(stats::ICON_SIZE, stats::ICON_SIZE);
-    let response = if let Some(tex_id) = item.custom_tex {
-        ui.add(egui::Image::new(egui::load::SizedTexture::new(tex_id, size)))
-    } else if let Some(cut) = sheet.cuts_map.get(&item.icon_id) {
+    
+    let force_fallback = settings.game_language == "--";
+
+    let response = if !force_fallback && item.custom_tex.is_some() {
+        ui.add(egui::Image::new(egui::load::SizedTexture::new(item.custom_tex.unwrap(), size)))
+    } else if !force_fallback && sheet.cuts_map.contains_key(&item.icon_id) {
+        let cut = sheet.cuts_map.get(&item.icon_id).unwrap();
         if let Some(tex) = &sheet.texture_handle {
              ui.add(egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)).uv(cut.uv_coordinates))
         } else {
              ui.allocate_response(size, egui::Sense::hover())
         }
     } else {
-        let alt = img015::img015_alt(item.icon_id);
+        let alt = crate::core::registries::cat::get_fallback_by_icon(item.icon_id);
         render_fallback_icon(ui, alt, border)
     };
 
-    if let Some(border_id) = item.border_id {
-        if let Some(b_cut) = sheet.cuts_map.get(&border_id) {
-            if let Some(tex) = &sheet.texture_handle {
-                ui.put(response.rect, egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)).uv(b_cut.uv_coordinates));
+    if !force_fallback {
+        if let Some(border_id) = item.border_id {
+            if let Some(b_cut) = sheet.cuts_map.get(&border_id) {
+                if let Some(tex) = &sheet.texture_handle {
+                    ui.put(response.rect, egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)).uv(b_cut.uv_coordinates));
+                }
             }
         }
     }
@@ -152,7 +158,7 @@ pub fn render_list_view(
         
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 8.0; 
-            render_single_icon(ui, item, sheet, border_color); 
+            render_single_icon(ui, item, sheet, settings, border_color); 
 
             if !is_conjure {
                 text_with_superscript(ui, &item.text);
@@ -210,7 +216,6 @@ fn render_conjure_details(
         .rounding(egui::Rounding { nw: 0.0, ne: 0.0, sw: 8.0, se: 8.0 }) 
         .inner_margin(8.0)
         .show(ui, |ui| {
-            // Isolate spacing for spirit details
             ui.spacing_mut().item_spacing.y = 0.0;
             
             let spirit_border = egui::Color32::WHITE;
@@ -238,12 +243,15 @@ fn render_conjure_details(
                 let icon = img015::ICON_AREA_ATTACK;
                 let size = egui::vec2(stats::ICON_SIZE, stats::ICON_SIZE);
                 
-                if let Some(cut) = sheet.cuts_map.get(&icon) {
+                let force_fallback = settings.game_language == "--";
+                
+                if !force_fallback && sheet.cuts_map.contains_key(&icon) {
+                    let cut = sheet.cuts_map.get(&icon).unwrap();
                     if let Some(tex) = &sheet.texture_handle {
                          ui.add(egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)).uv(cut.uv_coordinates));
                     }
                 } else {
-                    let alt = img015::img015_alt(icon);
+                    let alt = crate::core::registries::cat::get_fallback_by_icon(icon);
                     render_fallback_icon(ui, alt, spirit_border);
                 }
                 

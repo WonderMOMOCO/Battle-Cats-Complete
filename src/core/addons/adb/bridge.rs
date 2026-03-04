@@ -29,10 +29,12 @@ pub fn spawn_full_import(tx: Sender<AdbEvent>, base_output_dir: PathBuf, mode: A
 
         // --- PRIORITY 1: USB DEVICE ---
         if let Some(serial) = driver::find_usb_device() {
-            let _ = tx.send(AdbEvent::Status(format!("USB Device Found: {}", serial)));
-            current_serial = serial;
-            fallback_ip = driver::enable_wireless_fallback(&current_serial);
-            connection_established = true;
+            if driver::verify_connection(&serial).is_ok() {
+                let _ = tx.send(AdbEvent::Status(format!("USB Device Found: {}", serial)));
+                current_serial = serial;
+                fallback_ip = driver::enable_wireless_fallback(&current_serial);
+                connection_established = true;
+            }
         } 
         
         // --- PRIORITY 2: MDNS AUTO-DISCOVERY ---
@@ -44,9 +46,11 @@ pub fn spawn_full_import(tx: Sender<AdbEvent>, base_output_dir: PathBuf, mode: A
                      if let Some(stable) = driver::bootstrap_tcpip(&mdns_target) {
                          let _ = driver::run_command(&["disconnect", &mdns_target]);
                          if let Ok(stable_serial) = driver::connect_manual_ip(&stable) {
-                             current_serial = stable_serial;
-                             connection_established = true;
-                             let _ = tx.send(AdbEvent::Status("Auto-Connection Successful!".to_string()));
+                             if driver::verify_connection(&stable_serial).is_ok() {
+                                 current_serial = stable_serial;
+                                 connection_established = true;
+                                 let _ = tx.send(AdbEvent::Status("Auto-Connection Successful!".to_string()));
+                             }
                          }
                      }
                  }
@@ -57,17 +61,22 @@ pub fn spawn_full_import(tx: Sender<AdbEvent>, base_output_dir: PathBuf, mode: A
         if !connection_established && !config.manual_ip.is_empty() {
              let _ = tx.send(AdbEvent::Status(format!("Trying Manual IP: {}", config.manual_ip)));
              if let Ok(initial) = driver::connect_manual_ip(&config.manual_ip) {
+                 let mut test_serial = initial.clone();
                  if initial.contains(':') && !initial.ends_with(":5555") {
                      if let Some(new_target) = driver::bootstrap_tcpip(&initial) {
                          let _ = driver::run_command(&["disconnect", &initial]);
                          if let Ok(stable) = driver::connect_manual_ip(&new_target) {
-                             current_serial = stable;
-                             connection_established = true;
+                             test_serial = stable;
                          }
                      }
-                 } else {
-                     current_serial = initial;
+                 }
+                 
+                 // Verify inline so it can fall back if it fails
+                 if driver::verify_connection(&test_serial).is_ok() {
+                     current_serial = test_serial;
                      connection_established = true;
+                 } else {
+                     let _ = tx.send(AdbEvent::Status("Manual IP failed verification. Scanning for Emulators...".to_string()));
                  }
              }
         }
@@ -76,25 +85,20 @@ pub fn spawn_full_import(tx: Sender<AdbEvent>, base_output_dir: PathBuf, mode: A
         if !connection_established {
              let _ = tx.send(AdbEvent::Status("Scanning for Emulators...".to_string()));
              if let Some(emu) = driver::find_emulator() {
-                 current_serial = emu;
-                 connection_established = true;
+                 if driver::verify_connection(&emu).is_ok() {
+                     current_serial = emu;
+                     connection_established = true;
+                 }
              }
         }
 
         // Final check before proceeding
         if !connection_established {
-            let _ = tx.send(AdbEvent::Error("No device found. Ensure Wireless Debugging is ON.".to_string()));
+            let _ = tx.send(AdbEvent::Error("No device found. Ensure Wireless Debugging is ON or Emulator is running.".to_string()));
             return;
         }
 
-        // --- FINAL VERIFICATION ---
-        match driver::verify_connection(&current_serial) {
-            Ok(_) => { let _ = tx.send(AdbEvent::Status("Device Verified.".to_string())); },
-            Err(e) => {
-                let _ = tx.send(AdbEvent::Error(format!("Connection Failed: {}", e)));
-                return;
-            }
-        }
+        let _ = tx.send(AdbEvent::Status("Device Verified.".to_string()));
 
         if mode == AdbImportType::All {
             let _ = tx.send(AdbEvent::Status("Requesting Root Access...".to_string()));
@@ -192,17 +196,32 @@ fn process_single_region_adb(_tx: &Sender<AdbEvent>, serial: &str, pkg: &str, ou
     if mode == AdbImportType::All {
         let whoami = driver::run_command(&["-s", serial, "shell", "whoami"]).unwrap_or_default();
         let remote_src = format!("/data/data/{}/files", pkg);
+        let remote_stage_dir = "/data/local/tmp";
         let remote_stage_target = "/data/local/tmp/files";
 
         let _ = driver::run_command(&["-s", serial, "shell", "rm", "-rf", remote_stage_target]); 
+        let _ = driver::run_command(&["-s", serial, "shell", "mkdir", "-p", remote_stage_dir]); 
         
         let mut success = false;
+        
+        // 1. Standard Root Copy
         if whoami.contains("root") {
-            success = driver::run_command(&["-s", serial, "shell", "cp", "-r", &remote_src, "/data/local/tmp"]).is_ok();
+            success = driver::run_command(&["-s", serial, "shell", "cp", "-r", &remote_src, remote_stage_dir]).is_ok();
         }
+        
+        // 2. SU Shell Copy
         if !success {
-            let cmd = format!("'cp -r {} /data/local/tmp'", remote_src);
-            success = driver::run_command(&["-s", serial, "shell", "su", "-c", &cmd]).is_ok();
+            let cmd = format!("'cp -r {} {}'", remote_src, remote_stage_dir);
+            if driver::run_command(&["-s", serial, "shell", "su", "-c", &cmd]).is_ok() {
+                success = true;
+            }
+        }
+        
+        // 3. MuMu / Nox specific SU Copy
+        if !success {
+            if driver::run_command(&["-s", serial, "shell", "su", "0", "cp", "-r", &remote_src, remote_stage_dir]).is_ok() {
+                success = true;
+            }
         }
         
         if !success { return Err("Root Copy Failed. Device might not be rooted.".to_string()); }

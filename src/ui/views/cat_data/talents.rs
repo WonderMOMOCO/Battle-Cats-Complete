@@ -8,12 +8,20 @@ use crate::core::settings::Settings;
 use crate::data::cat::unitid::CatRaw; 
 use crate::data::cat::unitlevel::CatLevelCurve;
 use crate::core::cat::talents;
-use crate::paths::cat; 
+use crate::paths::cat;
+use crate::data::cat::skilllevel::TalentCost;
+use crate::ui::components::shared::render_fallback_icon;
+
+pub const TALENT_NP_ICON_SIZE: f32 = 20.0;
+pub const TALENT_NP_TEXT_SIZE: f32 = 18.0;
+
+pub const TALENT_SECTION_SPACING: f32 = 2.0;
 
 pub fn render(
     ui: &mut egui::Ui,
     talent_data: &TalentRaw,
     sheet: &SpriteSheet,
+    img022_sheet: &SpriteSheet,
     name_cache: &mut HashMap<String, egui::TextureHandle>,
     descriptions: Option<&Vec<String>>,
     settings: &Settings, 
@@ -22,6 +30,7 @@ pub fn render(
     unit_level: i32,
     talent_levels: &mut HashMap<u8, u8>, 
     cat_id: u32,                         
+    talent_costs: &HashMap<u8, TalentCost>,
 ) {
     ui.add_space(5.0);
     
@@ -39,7 +48,8 @@ pub fn render(
                         cat_id, 
                         index, 
                         group, 
-                        sheet, 
+                        sheet,
+                        img022_sheet,
                         name_cache, 
                         descriptions, 
                         settings, 
@@ -47,7 +57,8 @@ pub fn render(
                         curve, 
                         unit_level, 
                         talent_levels, 
-                        sidebar_pad
+                        sidebar_pad,
+                        talent_costs
                     );
                 }
             });
@@ -60,6 +71,7 @@ fn render_talent_group(
     index: usize,
     group: &TalentGroupRaw,
     sheet: &SpriteSheet,
+    img022_sheet: &SpriteSheet,
     name_cache: &mut HashMap<String, egui::TextureHandle>,
     descriptions: Option<&Vec<String>>,
     settings: &Settings,
@@ -68,6 +80,7 @@ fn render_talent_group(
     unit_level: i32,
     talent_levels: &mut HashMap<u8, u8>,
     sidebar_pad: f32,
+    talent_costs: &HashMap<u8, TalentCost>,
 ) {
     let bg_color = if group.limit == 1 {
         egui::Color32::from_rgb(120, 20, 20) 
@@ -103,7 +116,10 @@ fn render_talent_group(
                         talent_levels, 
                         current_stats, 
                         curve, 
-                        unit_level
+                        unit_level,
+                        talent_costs,
+                        img022_sheet,
+                        settings
                     );
                 }
             });
@@ -126,25 +142,33 @@ fn render_header(
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 8.0;
             
-            if let Some(icon_id) = crate::core::registries::cat::get_by_talent_id(group.ability_id).map(|def| def.icon_id) {
+            if let Some(def) = crate::core::registries::cat::get_by_talent_id(group.ability_id) {
                 let size = egui::vec2(40.0, 40.0);
                 
-                let drawn = if let Some(cut) = sheet.cuts_map.get(&icon_id) {
-                    if let Some(tex) = &sheet.texture_handle {
-                        ui.add(egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)).uv(cut.uv_coordinates));
-                        true
-                    } else { false }
-                } else { false };
+                let force_fallback = settings.game_language == "--";
+                let mut drawn = false;
+                
+                if !force_fallback {
+                    if let Some(cut) = sheet.cuts_map.get(&def.icon_id) {
+                        if let Some(tex) = &sheet.texture_handle {
+                            ui.add(egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)).uv(cut.uv_coordinates));
+                            drawn = true;
+                        }
+                    }
+                }
 
                 if !drawn {
-                    ui.label(egui::RichText::new("?").strong());
+                    render_fallback_icon(ui, def.fallback, egui::Color32::BLACK);
                 }
             } else {
                 ui.label(egui::RichText::new("?").weak());
             }
 
-            if let Some(texture) = get_or_load_skill_name(ui, group, settings, name_cache) {
-                ui.image((texture.id(), texture.size_vec2()));
+            let force_fallback = settings.game_language == "--";
+            if !force_fallback {
+                if let Some(texture) = get_or_load_skill_name(ui, group, settings, name_cache) {
+                    ui.image((texture.id(), texture.size_vec2()));
+                }
             }
         });
 
@@ -175,6 +199,9 @@ fn render_body(
     current_stats: Option<&CatRaw>,
     curve: Option<&CatLevelCurve>,
     unit_level: i32,
+    talent_costs: &HashMap<u8, TalentCost>,
+    img022_sheet: &SpriteSheet,
+    settings: &Settings,
 ) {
     ui.add_space(6.0);
 
@@ -186,6 +213,7 @@ fn render_body(
     };
     if !text_to_display.contains('\n') { text_to_display.push('\n'); }
 
+    // Section 1: Description
     egui::Frame::none()
         .fill(egui::Color32::from_black_alpha(100)) 
         .rounding(4.0)
@@ -195,8 +223,46 @@ fn render_body(
             ui.label(egui::RichText::new(text_to_display).color(egui::Color32::WHITE).size(13.0));
         });
 
-    ui.add_space(0.0); 
+    ui.add_space(TALENT_SECTION_SPACING); 
 
+    // Capture values before entering nested scopes to avoid mutable borrow conflicts
+    let current_lvl_val = *talent_levels.get(&(index as u8)).unwrap_or(&0);
+    let np_cost = crate::core::cat::talents::get_talent_np_cost(group.cost_id, current_lvl_val, talent_costs);
+
+    // Section 2: NP Cost Isolated Section
+    egui::Frame::none()
+        .fill(egui::Color32::from_black_alpha(100))
+        .rounding(4.0)
+        .inner_margin(4.0)
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 4.0;
+                
+                let mut drawn = false;
+                if settings.game_language != "--" {
+                    if let Some(cut) = img022_sheet.cuts_map.get(&crate::data::global::img022::ICON_NP_COST) {
+                        if let Some(tex) = &img022_sheet.texture_handle {
+                            let aspect = cut.original_size.x / cut.original_size.y;
+                            let size = egui::vec2(TALENT_NP_ICON_SIZE * aspect, TALENT_NP_ICON_SIZE);
+                            ui.add(egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)).uv(cut.uv_coordinates));
+                            drawn = true;
+                        }
+                    }
+                }
+
+                if !drawn {
+                    ui.label(egui::RichText::new("NP Cost").size(TALENT_NP_TEXT_SIZE).strong().color(egui::Color32::WHITE));
+                }
+                
+                ui.label(egui::RichText::new(format!("{}", np_cost)).size(TALENT_NP_TEXT_SIZE).strong().color(egui::Color32::WHITE));
+            });
+        });
+
+    ui.add_space(TALENT_SECTION_SPACING);
+
+    // Section 3: Level Slider & Affected Stats
     egui::Frame::none()
         .fill(egui::Color32::from_black_alpha(100))
         .rounding(4.0)
@@ -206,7 +272,7 @@ fn render_body(
             
             ui.vertical(|ui| {
                 let effective_max = if group.max_level == 0 { 1 } else { group.max_level };
-                let current_level = talent_levels.entry(index as u8).or_insert(0);
+                let current_level_mut = talent_levels.entry(index as u8).or_insert(0);
 
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = 5.0;
@@ -221,20 +287,20 @@ fn render_body(
                         vis.widgets.active.fg_stroke = egui::Stroke::new(1.0, egui::Color32::from_gray(50));
                         vis.widgets.hovered.fg_stroke = egui::Stroke::new(1.0, egui::Color32::from_gray(50));
                         
-                        ui.add(egui::Slider::new(current_level, 0..=effective_max)
+                        ui.add(egui::Slider::new(current_level_mut, 0..=effective_max)
                             .step_by(1.0)
                             .show_value(false)
                         );
                     });
 
-                    ui.add(egui::DragValue::new(current_level)
+                    ui.add(egui::DragValue::new(current_level_mut)
                         .speed(0.1)
                         .range(0..=effective_max)
                     );
                 });
 
                 if let Some(stats) = current_stats {
-                    if let Some(display_text) = talents::calculate_talent_display(group, stats, *current_level, curve, unit_level) {
+                    if let Some(display_text) = talents::calculate_talent_display(group, stats, *current_level_mut, curve, unit_level) {
                         ui.add_space(4.0);
                         ui.label(
                             egui::RichText::new(display_text)

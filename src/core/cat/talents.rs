@@ -1,6 +1,7 @@
 use crate::data::cat::skillacquisition::{TalentRaw, TalentGroupRaw};
 use crate::data::cat::unitid::CatRaw;
 use crate::data::cat::unitlevel::CatLevelCurve;
+use crate::data::cat::skilllevel::TalentCost;
 use std::collections::HashMap;
 use crate::core::registries::cat;
 
@@ -26,16 +27,12 @@ pub fn calculate_talent_display(
     curve: Option<&CatLevelCurve>, 
     unit_level: i32
 ) -> Option<String> {
-    
-    // Look up in Registry
     let def = cat::get_by_talent_id(group.ability_id)?;
     let formatter = def.talent_desc_func?;
 
-    // Calculate Values
     let val1 = calculate_talent_value(group.min_1, group.max_1, talent_level, group.max_level);
     let val2 = calculate_talent_value(group.min_2, group.max_2, talent_level, group.max_level);
 
-    // Format with FULL context
     Some(formatter(val1, val2, stats, curve, unit_level, group, talent_level))
 }
 
@@ -87,7 +84,6 @@ pub fn apply_talent_stats(base_stats: &CatRaw, talent_data: &TalentRaw, levels: 
         let val1 = calculate_talent_value(group.min_1, group.max_1, current_level, group.max_level);
         let val2 = calculate_talent_value(group.min_2, group.max_2, current_level, group.max_level);
 
-        // Registry Lookup
         if let Some(def) = cat::get_by_talent_id(group.ability_id) {
             if let Some(apply) = def.apply_func {
                 apply(&mut stats, val1, val2, group);
@@ -95,4 +91,31 @@ pub fn apply_talent_stats(base_stats: &CatRaw, talent_data: &TalentRaw, levels: 
         }
     }
     stats
+}
+
+pub fn get_talent_np_cost(cost_id: u8, level: u8, costs_map: &HashMap<u8, TalentCost>) -> i32 {
+    if level == 0 { return 0; }
+    if let Some(cost_data) = costs_map.get(&cost_id) {
+        let limit = (level as usize).min(cost_data.costs.len());
+        let mut total = 0;
+        for i in 0..limit {
+            total += cost_data.costs[i] as i32;
+        }
+        total
+    } else {
+        0
+    }
+}
+
+pub fn get_total_np_cost(
+    talent_data: &TalentRaw,
+    talent_levels: &HashMap<u8, u8>,
+    costs_map: &HashMap<u8, TalentCost>
+) -> i32 {
+    let mut total = 0;
+    for (index, group) in talent_data.groups.iter().enumerate() {
+        let level = *talent_levels.get(&(index as u8)).unwrap_or(&0);
+        total += get_talent_np_cost(group.cost_id, level, costs_map);
+    }
+    total
 }

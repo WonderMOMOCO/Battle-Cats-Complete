@@ -90,6 +90,8 @@ pub fn sort_game_files(tx: Sender<String>) -> Result<(), String> {
     
     let img015 = Regex::new(patterns::ASSET_IMG015_PATTERN).unwrap();
     let img015_cut = Regex::new(patterns::ASSET_015CUT_PATTERN).unwrap();
+    let img022 = Regex::new(patterns::ASSET_IMG022_PATTERN).unwrap();
+    let img022_cut = Regex::new(patterns::ASSET_022CUT_PATTERN).unwrap();
 
     let mut count = 0;
     
@@ -164,6 +166,9 @@ pub fn sort_game_files(tx: Sender<String>) -> Result<(), String> {
         }
         else if img015.is_match(name) || img015_cut.is_match(name) {
             dest_folder = Some(assets_dir.join("img015"));
+        }
+        else if img022.is_match(name) || img022_cut.is_match(name) {
+            dest_folder = Some(assets_dir.join("img022"));
         }
 
         if let Some(folder) = dest_folder {

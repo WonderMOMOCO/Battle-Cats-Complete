@@ -15,6 +15,7 @@ pub enum DisplayGroup {
 
 pub struct AbilityDef {
     pub name: &'static str,
+    pub fallback: &'static str,
     pub icon_id: usize,
     pub talent_id: u8, 
     pub group: DisplayGroup,
@@ -67,6 +68,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     // --- TRAITS ---
     AbilityDef {
         name: "Target Red",
+        fallback: "Red",
         icon_id: img015::ICON_TRAIT_RED,
         talent_id: 33,
         group: DisplayGroup::Trait,
@@ -78,6 +80,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Target Float",
+        fallback: "Float",
         icon_id: img015::ICON_TRAIT_FLOATING,
         talent_id: 34,
         group: DisplayGroup::Trait,
@@ -89,6 +92,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Target Black",
+        fallback: "Black",
         icon_id: img015::ICON_TRAIT_BLACK,
         talent_id: 35,
         group: DisplayGroup::Trait,
@@ -100,6 +104,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Target Metal",
+        fallback: "Metal",
         icon_id: img015::ICON_TRAIT_METAL,
         talent_id: 36,
         group: DisplayGroup::Trait,
@@ -111,6 +116,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Target Angel",
+        fallback: "Angel",
         icon_id: img015::ICON_TRAIT_ANGEL,
         talent_id: 37,
         group: DisplayGroup::Trait,
@@ -122,6 +128,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Target Alien",
+        fallback: "Alien",
         icon_id: img015::ICON_TRAIT_ALIEN,
         talent_id: 38,
         group: DisplayGroup::Trait,
@@ -133,6 +140,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Target Zombie",
+        fallback: "Zomb",
         icon_id: img015::ICON_TRAIT_ZOMBIE,
         talent_id: 39,
         group: DisplayGroup::Trait,
@@ -144,6 +152,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Target Relic",
+        fallback: "Relic",
         icon_id: img015::ICON_TRAIT_RELIC,
         talent_id: 40,
         group: DisplayGroup::Trait,
@@ -155,6 +164,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Target Aku",
+        fallback: "Aku",
         icon_id: img015::ICON_TRAIT_AKU,
         talent_id: 57,
         group: DisplayGroup::Trait,
@@ -166,6 +176,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Target White",
+        fallback: "White",
         icon_id: img015::ICON_TRAIT_TRAITLESS,
         talent_id: 41,
         group: DisplayGroup::Trait,
@@ -179,6 +190,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     // --- HEADLINE 1 ---
     AbilityDef {
         name: "Attack Only",
+        fallback: "AtkOnly",
         icon_id: img015::ICON_ATTACK_ONLY,
         talent_id: 4,
         group: DisplayGroup::Headline1,
@@ -190,6 +202,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Strong Against",
+        fallback: "Strng",
         icon_id: img015::ICON_STRONG_AGAINST,
         talent_id: 5,
         group: DisplayGroup::Headline1,
@@ -201,6 +214,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Massive Damage",
+        fallback: "Massv",
         icon_id: img015::ICON_MASSIVE_DAMAGE,
         talent_id: 7,
         group: DisplayGroup::Headline1,
@@ -212,6 +226,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Insane Damage",
+        fallback: "InsDmg",
         icon_id: img015::ICON_INSANE_DAMAGE,
         talent_id: 7,
         group: DisplayGroup::Headline1,
@@ -223,6 +238,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Resist",
+        fallback: "Resist",
         icon_id: img015::ICON_RESIST,
         talent_id: 6,
         group: DisplayGroup::Headline1,
@@ -234,6 +250,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Insanely Tough",
+        fallback: "InsRes",
         icon_id: img015::ICON_INSANELY_TOUGH,
         talent_id: 6,
         group: DisplayGroup::Headline1,
@@ -247,6 +264,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     // --- HEADLINE 2 ---
     AbilityDef {
         name: "Metal",
+        fallback: "Metal",
         icon_id: img015::ICON_METAL,
         talent_id: 43,
         group: DisplayGroup::Headline2,
@@ -258,6 +276,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Base Destroyer",
+        fallback: "Base",
         icon_id: img015::ICON_BASE_DESTROYER,
         talent_id: 12,
         group: DisplayGroup::Headline2,
@@ -269,6 +288,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Double Bounty",
+        fallback: "2×$",
         icon_id: img015::ICON_DOUBLE_BOUNTY,
         talent_id: 16,
         group: DisplayGroup::Headline2,
@@ -280,6 +300,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Zombie Killer",
+        fallback: "Zkill",
         icon_id: img015::ICON_ZOMBIE_KILLER,
         talent_id: 14,
         group: DisplayGroup::Headline2,
@@ -291,6 +312,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Soulstrike",
+        fallback: "SolStk",
         icon_id: img015::ICON_SOULSTRIKE,
         talent_id: 59,
         group: DisplayGroup::Headline2,
@@ -313,6 +335,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Colossus Slayer",
+        fallback: "Colos",
         icon_id: img015::ICON_COLOSSUS_SLAYER,
         talent_id: 63,
         group: DisplayGroup::Headline2,
@@ -324,6 +347,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Sage Slayer",
+        fallback: "Sage",
         icon_id: img015::ICON_SAGE_SLAYER,
         talent_id: 66,
         group: DisplayGroup::Headline2,
@@ -335,6 +359,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Behemoth Slayer",
+        fallback: "Behem",
         icon_id: img015::ICON_BEHEMOTH_SLAYER,
         talent_id: 64,
         group: DisplayGroup::Headline2,
@@ -360,6 +385,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Eva Killer",
+        fallback: "Eva",
         icon_id: img015::ICON_EVA_KILLER,
         talent_id: 0,
         group: DisplayGroup::Headline2,
@@ -371,6 +397,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Witch Killer",
+        fallback: "Witch",
         icon_id: img015::ICON_WITCH_KILLER,
         talent_id: 0,
         group: DisplayGroup::Headline2,
@@ -382,6 +409,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Wave Block",
+        fallback: "W-Blk",
         icon_id: img015::ICON_WAVE_BLOCK,
         talent_id: 0,
         group: DisplayGroup::Headline2,
@@ -393,6 +421,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Counter Surge",
+        fallback: "C-Srg",
         icon_id: img015::ICON_COUNTER_SURGE,
         talent_id: 68,
         group: DisplayGroup::Headline2,
@@ -406,6 +435,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     // --- BODY 1 ---
     AbilityDef {
         name: "Metal Killer",
+        fallback: "MetKil",
         icon_id: img015::ICON_METAL_KILLER,
         talent_id: 0,
         group: DisplayGroup::Body1,
@@ -417,6 +447,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Wave Attack",
+        fallback: "Wave",
         icon_id: img015::ICON_WAVE,
         talent_id: 17,
         group: DisplayGroup::Body1,
@@ -440,6 +471,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Mini-Wave",
+        fallback: "MiniW",
         icon_id: img015::ICON_MINI_WAVE,
         talent_id: 62,
         group: DisplayGroup::Body1,
@@ -463,6 +495,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Surge Attack",
+        fallback: "Surge",
         icon_id: img015::ICON_SURGE,
         talent_id: 56,
         group: DisplayGroup::Body1,
@@ -494,6 +527,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Mini-Surge",
+        fallback: "MiniS",
         icon_id: img015::ICON_MINI_SURGE,
         talent_id: 65,
         group: DisplayGroup::Body1,
@@ -525,6 +559,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Explosion",
+        fallback: "Expl",
         icon_id: img015::ICON_EXPLOSION,
         talent_id: 67,
         group: DisplayGroup::Body1,
@@ -555,6 +590,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Savage Blow",
+        fallback: "Savge",
         icon_id: img015::ICON_SAVAGE_BLOW,
         talent_id: 50,
         group: DisplayGroup::Body1,
@@ -579,6 +615,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Critical Hit",
+        fallback: "Crit",
         icon_id: img015::ICON_CRITICAL_HIT,
         talent_id: 13,
         group: DisplayGroup::Body1,
@@ -596,6 +633,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Strengthen",
+        fallback: "Str+",
         icon_id: img015::ICON_STRENGTHEN,
         talent_id: 10,
         group: DisplayGroup::Body1,
@@ -610,9 +648,11 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
                  c.strengthen_boost += if v1 != 0 { v1 } else { v2 };
              }
         }),
-        talent_desc_func: Some(|v1, v2, c, _, _, _, _| {
+        talent_desc_func: Some(|v1, v2, c, _, _, g, _| {
              if c.strengthen_boost == 0 {
-                 format!("+{}% Atk\nTrigger at: {}% HP", v2, 100 - v1)
+                 let threshold_val = resolve_stat(v1, g.min_1, g.max_1);
+                 let boost_val = resolve_stat(v2, g.min_2, g.max_2);
+                 format!("Boost: {}\nThreshold: {}% HP", fmt_additive(0, boost_val, "%"), 100 - threshold_val)
              } else {
                  fmt_additive(c.strengthen_boost, if v1 != 0 { v1 } else { v2 }, "%")
              }
@@ -620,6 +660,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Survive",
+        fallback: "Surv",
         icon_id: img015::ICON_SURVIVE,
         talent_id: 11,
         group: DisplayGroup::Body1,
@@ -637,6 +678,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Barrier Breaker",
+        fallback: "Brkr",
         icon_id: img015::ICON_BARRIER_BREAKER,
         talent_id: 15,
         group: DisplayGroup::Body1,
@@ -654,6 +696,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Shield Piercer",
+        fallback: "Spierc",
         icon_id: img015::ICON_SHIELD_PIERCER,
         talent_id: 58,
         group: DisplayGroup::Body1,
@@ -673,6 +716,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     // --- BODY 2 ---
     AbilityDef {
         name: "Dodge",
+        fallback: "Dodge",
         icon_id: img015::ICON_DODGE,
         talent_id: 51,
         group: DisplayGroup::Body2,
@@ -709,6 +753,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Weaken",
+        fallback: "Weak",
         icon_id: img015::ICON_WEAKEN,
         talent_id: 1,
         group: DisplayGroup::Body2,
@@ -748,6 +793,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Freeze",
+        fallback: "Freez",
         icon_id: img015::ICON_FREEZE,
         talent_id: 2,
         group: DisplayGroup::Body2,
@@ -788,6 +834,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Slow",
+        fallback: "Slow",
         icon_id: img015::ICON_SLOW,
         talent_id: 3,
         group: DisplayGroup::Body2,
@@ -828,6 +875,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Knockback",
+        fallback: "KB",
         icon_id: img015::ICON_KNOCKBACK,
         talent_id: 8,
         group: DisplayGroup::Body2,
@@ -845,6 +893,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Curse",
+        fallback: "Curse",
         icon_id: img015::ICON_CURSE,
         talent_id: 60,
         group: DisplayGroup::Body2,
@@ -872,6 +921,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Warp",
+        fallback: "Warp",
         icon_id: img015::ICON_WARP,
         talent_id: 9,
         group: DisplayGroup::Body2,
@@ -885,8 +935,9 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     // --- FOOTER ---
     AbilityDef {
         name: "Immune Wave",
+        fallback: "NoWav",
         icon_id: img015::ICON_IMMUNE_WAVE,
-        talent_id: 23,
+        talent_id: 48,
         group: DisplayGroup::Footer,
         getter: |c| c.wave_immune,
         duration_getter: None,
@@ -896,6 +947,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Immune Surge",
+        fallback: "NoSrg",
         icon_id: img015::ICON_IMMUNE_SURGE,
         talent_id: 55,
         group: DisplayGroup::Footer,
@@ -907,6 +959,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Immune Explosion",
+        fallback: "NoExp",
         icon_id: img015::ICON_IMMUNE_EXPLOSION,
         talent_id: 116,
         group: DisplayGroup::Footer,
@@ -918,6 +971,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Immune Weaken",
+        fallback: "NoWk",
         icon_id: img015::ICON_IMMUNE_WEAKEN,
         talent_id: 44,
         group: DisplayGroup::Footer,
@@ -929,6 +983,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Immune Freeze",
+        fallback: "NoFrz",
         icon_id: img015::ICON_IMMUNE_FREEZE,
         talent_id: 45,
         group: DisplayGroup::Footer,
@@ -940,6 +995,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Immune Slow",
+        fallback: "NoSlw",
         icon_id: img015::ICON_IMMUNE_SLOW,
         talent_id: 46,
         group: DisplayGroup::Footer,
@@ -951,6 +1007,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Immune Knockback",
+        fallback: "NoKB",
         icon_id: img015::ICON_IMMUNE_KNOCKBACK,
         talent_id: 47,
         group: DisplayGroup::Footer,
@@ -962,6 +1019,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Immune Curse",
+        fallback: "NoCur",
         icon_id: img015::ICON_IMMUNE_CURSE,
         talent_id: 29,
         group: DisplayGroup::Footer,
@@ -973,6 +1031,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Immune Toxic",
+        fallback: "NoTox",
         icon_id: img015::ICON_IMMUNE_TOXIC,
         talent_id: 53,
         group: DisplayGroup::Footer,
@@ -984,6 +1043,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Immune Warp",
+        fallback: "NoWrp",
         icon_id: img015::ICON_IMMUNE_WARP,
         talent_id: 49,
         group: DisplayGroup::Footer,
@@ -995,6 +1055,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Immune Boss Wave",
+        fallback: "NoBos",
         icon_id: img015::ICON_IMMUNE_BOSS_WAVE,
         talent_id: 0,
         group: DisplayGroup::Footer,
@@ -1008,6 +1069,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     // RESISTANCES
     AbilityDef {
         name: "Resist Weaken",
+        fallback: "ReWkn",
         icon_id: img015::ICON_RESIST_WEAKEN,
         talent_id: 18,
         group: DisplayGroup::Footer,
@@ -1019,6 +1081,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Resist Freeze",
+        fallback: "ReFrz",
         icon_id: img015::ICON_RESIST_FREEZE,
         talent_id: 19,
         group: DisplayGroup::Footer,
@@ -1030,6 +1093,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Resist Slow",
+        fallback: "ReSlw",
         icon_id: img015::ICON_RESIST_SLOW,
         talent_id: 20,
         group: DisplayGroup::Footer,
@@ -1041,6 +1105,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Resist Knockback",
+        fallback: "ReKB",
         icon_id: img015::ICON_RESIST_KNOCKBACK,
         talent_id: 21,
         group: DisplayGroup::Footer,
@@ -1052,6 +1117,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Resist Wave",
+        fallback: "ReWav",
         icon_id: img015::ICON_RESIST_WAVE,
         talent_id: 22,
         group: DisplayGroup::Footer,
@@ -1063,6 +1129,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Resist Warp",
+        fallback: "ReWrp",
         icon_id: img015::ICON_RESIST_WARP,
         talent_id: 24,
         group: DisplayGroup::Footer,
@@ -1074,6 +1141,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Resist Curse",
+        fallback: "ReCur",
         icon_id: img015::ICON_RESIST_CURSE,
         talent_id: 30,
         group: DisplayGroup::Footer,
@@ -1085,6 +1153,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Resist Toxic",
+        fallback: "ReTox",
         icon_id: img015::ICON_RESIST_TOXIC,
         talent_id: 52,
         group: DisplayGroup::Footer,
@@ -1096,6 +1165,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Resist Surge",
+        fallback: "ReSrg",
         icon_id: img015::ICON_SURGE_RESIST,
         talent_id: 54,
         group: DisplayGroup::Footer,
@@ -1109,6 +1179,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     // STATS
     AbilityDef {
         name: "Cost Down",
+        fallback: "Cost-",
         icon_id: img015::ICON_COST_DOWN,
         talent_id: 25,
         group: DisplayGroup::Footer,
@@ -1125,6 +1196,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Recover Speed Up",
+        fallback: "Rec+",
         icon_id: img015::ICON_RECOVER_SPEED_UP,
         talent_id: 26,
         group: DisplayGroup::Footer,
@@ -1141,6 +1213,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Move Speed Up",
+        fallback: "Spd",
         icon_id: img015::ICON_MOVE_SPEED,
         talent_id: 27,
         group: DisplayGroup::Footer,
@@ -1154,6 +1227,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Attack Buff",
+        fallback: "Atk+",
         icon_id: img015::ICON_ATTACK_BUFF,
         talent_id: 31,
         group: DisplayGroup::Footer,
@@ -1174,6 +1248,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Health Buff",
+        fallback: "HP+",
         icon_id: img015::ICON_HEALTH_BUFF,
         talent_id: 32,
         group: DisplayGroup::Footer,
@@ -1191,6 +1266,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "TBA Down",
+        fallback: "TBA-",
         icon_id: img015::ICON_TBA_DOWN,
         talent_id: 61,
         group: DisplayGroup::Footer,
@@ -1209,6 +1285,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
     },
     AbilityDef {
         name: "Improve Knockbacks",
+        fallback: "KB+",
         icon_id: img015::ICON_IMPROVE_KNOCKBACK_COUNT,
         talent_id: 28,
         group: DisplayGroup::Footer,
@@ -1224,4 +1301,23 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
 
 pub fn get_by_talent_id(id: u8) -> Option<&'static AbilityDef> {
     ABILITY_REGISTRY.iter().find(|def| def.talent_id == id)
+}
+
+pub fn get_fallback_by_icon(icon_id: usize) -> &'static str {
+    match icon_id {
+        img015::ICON_SINGLE_ATTACK => "Sngl",
+        img015::ICON_AREA_ATTACK => "Area",
+        img015::ICON_OMNI_STRIKE => "Omni",
+        img015::ICON_LONG_DISTANCE => "LD",
+        img015::ICON_MULTIHIT => "Multi",
+        img015::ICON_CONJURE => "Spirit",
+        img015::ICON_KAMIKAZE => "Kamik",
+        _ => {
+            ABILITY_REGISTRY
+                .iter()
+                .find(|def| def.icon_id == icon_id)
+                .map(|def| def.fallback)
+                .unwrap_or("???")
+        }
+    }
 }

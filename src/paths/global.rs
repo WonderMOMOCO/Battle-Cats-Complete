@@ -4,11 +4,17 @@ use std::path::{Path, PathBuf};
 // Directory Constants
 pub const DIR_ASSETS: &str = "game/assets";
 pub const DIR_IMG015: &str = "img015";
+pub const DIR_IMG022: &str = "img022";
 pub const DIR_GATYA_ITEM: &str = "gatyaitemD";
 
-// im015 Path
+// img015 Path
 pub fn img015_folder(root: &Path) -> PathBuf {
     root.join(DIR_ASSETS).join(DIR_IMG015)
+}
+
+// img022 Path
+pub fn img022_folder(root: &Path) -> PathBuf {
+    root.join(DIR_ASSETS).join(DIR_IMG022)
 }
 
 // Gatya Items

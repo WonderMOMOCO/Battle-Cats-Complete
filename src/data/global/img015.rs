@@ -67,6 +67,7 @@ pub const ICON_CONJURE: usize = 317;
 pub const ICON_METAL_KILLER: usize = 321;
 pub const ICON_EXPLOSION: usize = 335;
 pub const ICON_KAMIKAZE: usize = 9998; // Mock ID
+
 // Immunities
 pub const ICON_IMMUNE_CURSE: usize = 116;
 pub const ICON_IMMUNE_WAVE: usize = 210;
@@ -109,114 +110,6 @@ pub const ICON_EMPTY: usize = 270;
 pub const BORDER_GOLD_SMALL: usize = 271;
 pub const BORDER_RED: usize = 272;
 pub const BORDER_GOLD: usize = 273;
-
-// Alt Text Fallbacks
-pub fn img015_alt(id: usize) -> &'static str {
-    match id {
-        // Traits
-        ICON_TRAIT_RED => "Red",
-        ICON_TRAIT_FLOATING => "Float",
-        ICON_TRAIT_BLACK => "Black",
-        ICON_TRAIT_METAL => "Metal",
-        ICON_TRAIT_ANGEL => "Angel",
-        ICON_TRAIT_ALIEN => "Alien",
-        ICON_TRAIT_ZOMBIE => "Zomb",
-        ICON_TRAIT_RELIC => "Relic",
-        ICON_TRAIT_AKU => "Aku",
-        ICON_TRAIT_TRAITLESS => "White",
-
-        // Range
-        ICON_SINGLE_ATTACK => "Singl",
-        ICON_AREA_ATTACK => "Area",
-        ICON_OMNI_STRIKE => "Omni",
-        ICON_LONG_DISTANCE => "LD",
-        ICON_MULTIHIT => "Multi",
-
-        // Target Abiltiies
-        ICON_ATTACK_ONLY => "AtkOnly",
-        ICON_STRONG_AGAINST => "Strng",
-        ICON_RESIST => "Resist",
-        ICON_INSANELY_TOUGH => "InsRes",
-        ICON_MASSIVE_DAMAGE => "Massv",
-        ICON_INSANE_DAMAGE => "InsDmg",
-        ICON_DODGE => "Dodge",
-
-        // Crowd Control
-        ICON_WARP => "Warp",
-        ICON_CURSE => "Curse",
-        ICON_WEAKEN => "Weak",
-        ICON_FREEZE => "Freez",
-        ICON_SLOW => "Slow",
-        ICON_KNOCKBACK => "KB",
-
-        // Slayer Abilities
-        ICON_EVA_KILLER => "Eva",
-        ICON_WITCH_KILLER => "Witch",
-        ICON_COLOSSUS_SLAYER => "Colos",
-        ICON_BEHEMOTH_SLAYER => "Behem",
-        ICON_SAGE_SLAYER => "Sage",
-
-        // Passive Abilities
-        ICON_STRENGTHEN => "Str+",
-        ICON_SURVIVE => "Surv",
-        ICON_BASE_DESTROYER => "Base",
-        ICON_CRITICAL_HIT => "Crit",
-        ICON_DOUBLE_BOUNTY => "2×$",
-        ICON_WAVE => "Wave",
-        ICON_METAL => "Metal",
-        ICON_SAVAGE_BLOW => "Savge",
-        ICON_SURGE => "Surge",
-        ICON_ZOMBIE_KILLER => "Zkill",
-        ICON_BARRIER_BREAKER => "Brkr",
-        ICON_MINI_WAVE => "MiniW",
-        ICON_SHIELD_PIERCER => "Spierc",
-        ICON_SOULSTRIKE => "SolStk",
-        ICON_MINI_SURGE => "MiniS",
-        ICON_CONJURE => "Spirit",
-        ICON_METAL_KILLER => "MetKil",
-        ICON_EXPLOSION => "Expl",
-        ICON_KAMIKAZE => "Kami",
-        
-        // Immunities
-        ICON_IMMUNE_CURSE => "NoCur",
-        ICON_IMMUNE_WAVE => "NoWav",
-        ICON_IMMUNE_WEAKEN => "NoWk",
-        ICON_IMMUNE_FREEZE => "NoFrz",
-        ICON_IMMUNE_SLOW => "NoSlw",
-        ICON_IMMUNE_KNOCKBACK => "NoKB",
-        ICON_IMMUNE_TOXIC => "NoTox",
-        ICON_IMMUNE_SURGE => "NoSrg",
-        ICON_IMMUNE_WARP => "NoWrp",
-        ICON_IMMUNE_EXPLOSION => "NoExp",
-        ICON_IMMUNE_BOSS_WAVE => "NoBos",
-        
-        // Counters
-        ICON_WAVE_BLOCK => "W-Blk",
-        ICON_COUNTER_SURGE => "C-Srg",
-
-        // Talent Only
-        ICON_MOVE_SPEED => "Spd",
-        ICON_IMPROVE_KNOCKBACK_COUNT => "KB+",
-        ICON_ATTACK_BUFF => "Atk+",
-        ICON_HEALTH_BUFF => "HP+",
-        ICON_TBA_DOWN => "TBA-",
-        ICON_COST_DOWN => "Cost-",
-        ICON_RECOVER_SPEED_UP => "Rec+",
-
-        // Resist
-        ICON_RESIST_WEAKEN => "ReWkn",
-        ICON_RESIST_FREEZE => "ReFrz",
-        ICON_RESIST_SLOW => "ReSlw",
-        ICON_RESIST_KNOCKBACK => "ReKB",
-        ICON_RESIST_WAVE => "ReWav",
-        ICON_RESIST_WARP => "ReWrp",
-        ICON_RESIST_CURSE => "ReCur",
-        ICON_RESIST_TOXIC => "ReTox",
-        ICON_SURGE_RESIST => "ReSrg",
-
-        _ => "???",
-    }
-}
 
 pub fn ensure_loaded(ctx: &egui::Context, sheet: &mut SpriteSheet, settings: &Settings) {
     sheet.update(ctx);
