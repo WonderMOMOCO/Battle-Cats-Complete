@@ -4,7 +4,7 @@ use std::sync::mpsc::TryRecvError;
 
 use super::CatListState;
 use super::scanner;
-use crate::global_data::imgcut::SpriteSheet; 
+use crate::global::imgcut::SpriteSheet; 
 use crate::features::cat::data::unitlevel;
 use crate::features::cat::data::unitbuy;
 use crate::features::cat::data::skillacquisition;

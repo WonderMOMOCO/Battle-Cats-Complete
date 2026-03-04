@@ -2,10 +2,10 @@ use eframe::egui;
 use crate::features::cat::logic::scanner::CatEntry;
 use crate::features::cat::logic::stats::{self, CatRaw};
 use crate::features::cat::logic::abilities::{self, AbilityItem};
-use crate::global_data::imgcut::SpriteSheet;
+use crate::global::imgcut::SpriteSheet;
 use crate::features::settings::logic::Settings;
 use crate::ui::components::shared::{render_fallback_icon, text_with_superscript};
-use crate::global_data::img015;
+use crate::global::img015;
 use crate::features::cat::data::skillacquisition::TalentRaw;
 use std::collections::HashMap;
 

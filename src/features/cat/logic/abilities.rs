@@ -1,4 +1,4 @@
-use crate::global_data::img015;
+use crate::global::img015;
 use crate::features::settings::logic::Settings;
 use super::stats::{self, CatRaw};
 use eframe::egui;

@@ -1,9 +1,9 @@
 use eframe::egui;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use crate::global_data::imgcut::SpriteSheet;
-use crate::global_data::mamodel::Model;
-use crate::global_data::maanim::Animation;
+use crate::global::imgcut::SpriteSheet;
+use crate::global::mamodel::Model;
+use crate::global::maanim::Animation;
 use crate::features::animation::logic::{animator, smooth, canvas, transform, controls, bounds}; 
 use crate::features::animation::ui::controls::{self as anim_controls, IDX_NONE, IDX_MODEL, IDX_SPIRIT, IDX_WALK, IDX_IDLE, IDX_ATTACK, IDX_KB, IDX_BURROW, IDX_SURFACE};
 use crate::features::animation::export::state::{ExporterState, ExportMode};

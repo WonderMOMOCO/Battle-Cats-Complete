@@ -2,8 +2,8 @@ use eframe::egui;
 use std::path::{Path};
 
 use crate::features::cat::logic::scanner::CatEntry;
-use crate::global_data::imgcut::SpriteSheet;
-use crate::global_data::mamodel::Model;
+use crate::global::imgcut::SpriteSheet;
+use crate::global::mamodel::Model;
 use crate::features::animation::ui::viewer::AnimViewer;
 use crate::features::settings::logic::Settings;
 use crate::features::cat::paths::{self, AnimType};

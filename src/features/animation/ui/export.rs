@@ -1,9 +1,9 @@
 use eframe::egui;
 use std::time::Duration;
 use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
-use crate::global_data::mamodel::Model;
-use crate::global_data::maanim::Animation;
-use crate::global_data::imgcut::SpriteSheet;
+use crate::global::mamodel::Model;
+use crate::global::maanim::Animation;
+use crate::global::imgcut::SpriteSheet;
 use crate::features::animation::export::encoding::{ExportFormat, EncoderStatus};
 use crate::features::animation::export::state::{ExporterState, ExportMode, LoopStatus};
 use crate::features::animation::export::process::{start_export, STATUS_RX};

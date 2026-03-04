@@ -2,7 +2,7 @@ use eframe::egui;
 use std::sync::mpsc;
 use std::thread;
 use crate::features::import::logic::ImportState;
-use crate::features::import::work;
+use crate::features::import::archive;
 use crate::features::settings::logic::Settings;
 
 pub fn show(ui: &mut egui::Ui, state: &mut ImportState, settings: &mut Settings) {
@@ -85,7 +85,7 @@ pub fn show(ui: &mut egui::Ui, state: &mut ImportState, settings: &mut Settings)
         let filename_arg = full_name.clone(); 
 
         thread::spawn(move || {
-            if let Err(e) = work::create_game_archive(tx.clone(), level, filename_arg) {
+            if let Err(e) = archive::create_game_archive(tx.clone(), level, filename_arg) {
                  let _ = tx.send(format!("Error Packing: {}", e));
             }
         });
