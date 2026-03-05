@@ -179,33 +179,25 @@ impl Updater {
     }
 
     pub fn show_ui(&mut self, ctx: &egui::Context, settings: &mut Settings, drag_guard: &mut DragGuard) {
-        let is_idle = matches!(self.status, UpdateStatus::Idle);
-        let allow_drag = if !is_idle {
-            drag_guard.update(ctx)
-        } else {
-            false
-        };
-
         let status = self.status.clone();
-
         match status {
             UpdateStatus::UpdateFound(tag, release) => {
-                self.show_update_found_window(ctx, settings, allow_drag, tag, release);
+                self.show_update_found_window(ctx, settings, drag_guard, tag, release);
             }
             UpdateStatus::Downloading(tag) => {
-                self.show_downloading_window(ctx, allow_drag, tag);
+                self.show_downloading_window(ctx, drag_guard, tag);
             }
             UpdateStatus::RestartPending(tag) => {
-                self.show_restart_pending_window(ctx, settings, allow_drag, tag);
+                self.show_restart_pending_window(ctx, settings, drag_guard, tag);
             }
             UpdateStatus::Error(msg) => {
-                self.show_error_window(ctx, allow_drag, msg);
+                self.show_error_window(ctx, drag_guard, msg);
             }
             _ => {}
         }
     }
 
-    fn show_update_found_window(&mut self, ctx: &egui::Context, settings: &mut Settings, allow_drag: bool, tag: String, release: self_update::update::Release) {
+    fn show_update_found_window(&mut self, ctx: &egui::Context, settings: &mut Settings, drag_guard: &mut DragGuard, tag: String, release: self_update::update::Release) {
         if matches!(settings.update_mode, UpdateMode::AutoReset | UpdateMode::AutoLoad) {
             self.download_and_install(release);
             return;
@@ -218,11 +210,18 @@ impl Updater {
         let display_ver = if tag.starts_with('v') { tag.clone() } else { format!("v{}", tag) };
         let screen_rect = ctx.screen_rect();
 
-        egui::Window::new("Update Available")
+        let window_id = egui::Id::new("Update Available");
+        let (allow_drag, fixed_pos) = drag_guard.assign_bounds(ctx, window_id);
+
+        let mut window = egui::Window::new("Update Available")
+            .id(window_id)
             .collapsible(false).resizable(false).order(egui::Order::Tooltip)
-            .constrain(true).movable(allow_drag).pivot(egui::Align2::CENTER_CENTER)
-            .default_pos(screen_rect.center()) 
-            .show(ctx, |ui| {
+            .constrain(false).movable(allow_drag)
+            .default_pos(screen_rect.center() - egui::vec2(130.0, 60.0));
+            
+        if let Some(pos) = fixed_pos { window = window.current_pos(pos); }
+            
+        window.show(ctx, |ui| {
                 ui.vertical_centered(|ui| {
                     ui.label(format!("New Battle Cats Complete update found: {}", display_ver));
                     ui.add_space(10.0);
@@ -271,15 +270,22 @@ impl Updater {
         }
     }
 
-    fn show_downloading_window(&self, ctx: &egui::Context, allow_drag: bool, tag: String) {
+    fn show_downloading_window(&self, ctx: &egui::Context, drag_guard: &mut DragGuard, tag: String) {
         ctx.request_repaint();
         let screen_rect = ctx.screen_rect();
         
-        egui::Window::new("Downloading Update")
+        let window_id = egui::Id::new("Downloading Update");
+        let (allow_drag, fixed_pos) = drag_guard.assign_bounds(ctx, window_id);
+
+        let mut window = egui::Window::new("Downloading Update")
+            .id(window_id)
             .collapsible(false).resizable(false).title_bar(false) 
-            .order(egui::Order::Tooltip).constrain(true).movable(allow_drag)
-            .pivot(egui::Align2::CENTER_CENTER).default_pos(screen_rect.center())
-            .show(ctx, |ui| {
+            .order(egui::Order::Tooltip).constrain(false).movable(allow_drag)
+            .default_pos(screen_rect.center() - egui::vec2(100.0, 40.0));
+            
+        if let Some(pos) = fixed_pos { window = window.current_pos(pos); }
+            
+        window.show(ctx, |ui| {
                 ui.add_space(10.0);
                 ui.vertical_centered(|ui| {
                     let display_tag = if tag.starts_with('v') { tag.clone() } else { format!("v{}", tag) };
@@ -291,7 +297,7 @@ impl Updater {
             });
     }
 
-    fn show_restart_pending_window(&mut self, ctx: &egui::Context, settings: &Settings, allow_drag: bool, tag: String) {
+    fn show_restart_pending_window(&mut self, ctx: &egui::Context, settings: &Settings, drag_guard: &mut DragGuard, tag: String) {
         if matches!(settings.update_mode, UpdateMode::AutoReset) {
             restart_app();
             return;
@@ -307,11 +313,18 @@ impl Updater {
         let display_tag = if tag.starts_with('v') { tag.clone() } else { format!("v{}", tag) };
         let screen_rect = ctx.screen_rect();
 
-        egui::Window::new("Update Complete")
+        let window_id = egui::Id::new("Update Complete");
+        let (allow_drag, fixed_pos) = drag_guard.assign_bounds(ctx, window_id);
+
+        let mut window = egui::Window::new("Update Complete")
+            .id(window_id)
             .collapsible(false).resizable(false).order(egui::Order::Tooltip)
-            .constrain(true).movable(allow_drag).pivot(egui::Align2::CENTER_CENTER)
-            .default_pos(screen_rect.center())
-            .show(ctx, |ui| {
+            .constrain(false).movable(allow_drag)
+            .default_pos(screen_rect.center() - egui::vec2(100.0, 50.0));
+            
+        if let Some(pos) = fixed_pos { window = window.current_pos(pos); }
+            
+        window.show(ctx, |ui| {
                 ui.vertical_centered(|ui| {
                     ui.label(format!("{} update complete!", display_tag));
                     ui.add_space(5.0);
@@ -350,15 +363,22 @@ impl Updater {
         if close { self.status = UpdateStatus::Idle; }
     }
 
-    fn show_error_window(&mut self, ctx: &egui::Context, allow_drag: bool, error_msg: String) {
+    fn show_error_window(&mut self, ctx: &egui::Context, drag_guard: &mut DragGuard, error_msg: String) {
         let mut close = false;
         let screen_rect = ctx.screen_rect();
 
-        egui::Window::new("Update Failed")
+        let window_id = egui::Id::new("Update Failed");
+        let (allow_drag, fixed_pos) = drag_guard.assign_bounds(ctx, window_id);
+
+        let mut window = egui::Window::new("Update Failed")
+            .id(window_id)
             .collapsible(false).resizable(false).order(egui::Order::Tooltip)
-            .constrain(true).movable(allow_drag).pivot(egui::Align2::CENTER_CENTER)
-            .default_pos(screen_rect.center())
-            .show(ctx, |ui| {
+            .constrain(false).movable(allow_drag)
+            .default_pos(screen_rect.center() - egui::vec2(100.0, 50.0));
+            
+        if let Some(pos) = fixed_pos { window = window.current_pos(pos); }
+            
+        window.show(ctx, |ui| {
                 ui.vertical_centered(|ui| {
                     ui.label("An error occurred during update:");
                     ui.add_space(5.0);

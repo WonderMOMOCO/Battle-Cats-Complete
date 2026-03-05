@@ -158,17 +158,21 @@ fn handle_delete_modal(ctx: &egui::Context, drag_guard: &mut DragGuard, id: &str
     let mut state = ctx.data(|d| d.get_temp::<AddonDeleteState>(state_id)).unwrap_or_default();
 
     if state.is_open {
-        let allow_drag = drag_guard.update(ctx);
+        let window_id = egui::Id::new(format!("{}_window", id));
+        let (allow_drag, fixed_pos) = drag_guard.assign_bounds(ctx, window_id);
         let mut should_close = false;
 
-        egui::Window::new("Confirm Deletion")
-            .id(egui::Id::new(format!("{}_window", id)))
+        let mut window = egui::Window::new("Confirm Deletion")
+            .id(window_id)
             .collapsible(false)
             .resizable(false)
+            .constrain(false)
             .movable(allow_drag) 
-            .default_pos(ctx.screen_rect().center())
-            .pivot(egui::Align2::CENTER_CENTER)
-            .show(ctx, |ui| {
+            .default_pos(ctx.screen_rect().center() - egui::vec2(110.0, 50.0));
+            
+        if let Some(pos) = fixed_pos { window = window.current_pos(pos); }
+            
+        window.show(ctx, |ui| {
                 ui.set_min_width(220.0);
                 ui.vertical_centered(|ui| {
                     ui.add_space(5.0);

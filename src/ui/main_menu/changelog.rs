@@ -101,17 +101,23 @@ pub fn window(ctx: &egui::Context, drag_guard: &mut DragGuard) {
 
             if should_show_window {
                 let show_error = locked.error || (!locked.fetched && time_expired);
-                let allow_drag = drag_guard.update(ctx);
+                
+                let window_id = egui::Id::new("Changelog");
+                let (allow_drag, fixed_pos) = drag_guard.assign_bounds(ctx, window_id);
 
                 let mut is_open = true;
-                egui::Window::new("Changelog")
+                let mut window = egui::Window::new("Changelog")
+                    .id(window_id)
                     .open(&mut is_open)
                     .collapsible(false)
                     .resizable(false) 
+                    .constrain(false)
                     .movable(allow_drag)
-                    .pivot(egui::Align2::CENTER_CENTER)
-                    .default_pos(ctx.screen_rect().center())
-                    .show(ctx, |ui| {
+                    .default_pos(ctx.screen_rect().center() - egui::vec2(300.0, 200.0));
+                    
+                if let Some(pos) = fixed_pos { window = window.current_pos(pos); }
+                    
+                window.show(ctx, |ui| {
                         ui.set_max_size([600.0, 400.0].into());
 
                         if show_error {
@@ -127,7 +133,6 @@ pub fn window(ctx: &egui::Context, drag_guard: &mut DragGuard) {
                                     ui.spacing_mut().item_spacing.y = 0.0;
 
                                     for line in locked.content.lines() {
-                                        // Count leading spaces to determine indent level
                                         let leading_spaces = line.chars().take_while(|c| c.is_whitespace()).count();
                                         let trimmed = line.trim();
 
@@ -137,7 +142,6 @@ pub fn window(ctx: &egui::Context, drag_guard: &mut DragGuard) {
                                         }
 
                                         ui.horizontal_top(|ui| {
-                                            // Apply indentation based on space count
                                             if leading_spaces > 0 {
                                                 ui.add_space(leading_spaces as f32 * 6.0); 
                                             }
@@ -173,7 +177,6 @@ fn strip_markdown(text: &str) -> String {
         text = re_link.replace_all(&text, "$1").to_string();
     }
 
-    // Capture leading whitespace (group 1) and preserve it in replacement
     if let Ok(re_list) = Regex::new(r"(?m)^(\s*)[\*\-]\s+") {
         text = re_list.replace_all(&text, "${1}• ").to_string();
     }

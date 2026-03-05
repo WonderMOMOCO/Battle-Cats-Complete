@@ -13,7 +13,7 @@ pub fn show(ui: &mut egui::Ui, settings: &mut Settings) -> bool {
             ui.add_space(5.0);
 
             ui.horizontal(|ui| {
-                ui.label("Preferred Banner Form:");
+                ui.label("Preferred Banner Form");
                 
                 egui::ComboBox::from_id_salt("pref_banner")
                     .width(80.0)
@@ -58,6 +58,27 @@ pub fn show(ui: &mut egui::Ui, settings: &mut Settings) -> bool {
             ui.horizontal(|ui| {
                 toggle_ui(ui, &mut settings.expand_spirit_details);
                 ui.label("Expand Spirit Details by Default");
+            });
+
+            ui.add_space(20.0);
+            ui.heading("Level Display");
+            ui.add_space(10.0);
+
+            ui.horizontal(|ui| {
+                ui.add_enabled_ui(!settings.auto_level_calculations, |ui| {
+                    ui.label("Default Level");
+                    ui.add(egui::DragValue::new(&mut settings.default_level).speed(1.0).range(1..=150));
+                });
+            });
+
+            ui.horizontal(|ui| {
+                toggle_ui(ui, &mut settings.auto_level_calculations);
+                ui.label("Auto Level Calculations").on_hover_text("Automatically calculates the max reasonable level for a unit based on their level caps");
+            });
+
+            ui.horizontal(|ui| {
+                toggle_ui(ui, &mut settings.bump_ultra_60);
+                ui.label("Lv60 For Ultra").on_hover_text("Automatically bumps the level to 60 (if not higher already) when an Ultra Form or Ultra Talent is selected");
             });
         });
 

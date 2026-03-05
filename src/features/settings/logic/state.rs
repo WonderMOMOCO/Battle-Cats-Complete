@@ -27,12 +27,15 @@ pub struct Settings {
     pub default_showcase_kb: i32,
     pub last_export_format: i32,
     pub manual_ip: String,
+    pub default_level: i32,
+    pub auto_level_calculations: bool,
+    pub bump_ultra_60: bool,
+    pub native_fps: f32,
     #[serde(skip)] pub manual_check_requested: bool,
     #[serde(skip)] pub active_tab: String,
     #[serde(skip)] pub available_languages: Vec<String>,
     #[serde(skip)] pub rx_lang: Option<Receiver<Vec<String>>>,
     #[serde(skip)] pub show_ip_field: bool,
-    pub native_fps: f32,
 }
 
 impl Default for Settings {
@@ -58,12 +61,15 @@ impl Default for Settings {
             default_showcase_kb: 60,
             last_export_format: 0,
             manual_ip: String::new(),
+            default_level: 50,
+            auto_level_calculations: true,
+            bump_ultra_60: true,
+            native_fps: 30.0,
             active_tab: "General".to_string(),
             manual_check_requested: false,
             available_languages: Vec::new(),
             rx_lang: None,
             show_ip_field: false,
-            native_fps: 30.0,
         };
         s.rx_lang = Some(lang::start_scan());
         s

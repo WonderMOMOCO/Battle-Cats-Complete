@@ -135,7 +135,6 @@ pub fn show_popup(
 
     let ctx = ui.ctx().clone();
     let mut open_local = *is_open;
-    let allow_drag = state.drag_guard.update(&ctx);
 
     let saved_style = ctx.style();
     let mut style = (*saved_style).clone();
@@ -143,18 +142,7 @@ pub fn show_popup(
     ctx.set_style(style);
 
     let window_id = egui::Id::new("Export Animation");
-    let mut fixed_pos = None;
-
-    if let Some(rect) = ctx.memory(|mem| mem.area_rect(window_id)) {
-        let screen_rect = ctx.screen_rect();
-        let mut new_pos = rect.min;
-        let mut changed = false;
-        if new_pos.y < screen_rect.top() { new_pos.y = screen_rect.top(); changed = true; }
-        if new_pos.y > screen_rect.bottom() - 30.0 { new_pos.y = screen_rect.bottom() - 30.0; changed = true; }
-        if new_pos.x + rect.width() - 50.0 < screen_rect.left() { new_pos.x = screen_rect.left() - rect.width() + 50.0; changed = true; }
-        if new_pos.x + 50.0 > screen_rect.right() { new_pos.x = screen_rect.right() - 50.0; changed = true; }
-        if changed { fixed_pos = Some(new_pos); }
-    }
+    let (allow_drag, fixed_pos) = state.drag_guard.assign_bounds(&ctx, window_id);
 
     let mut window = egui::Window::new("Export Animation")
         .id(window_id).open(&mut open_local).order(egui::Order::Foreground)
@@ -711,8 +699,6 @@ fn render_content(
                 ui.label("Background").on_hover_text("Adds a gray background to the image"); 
             });
             
-            // It doesnt do anything rn, honestly interpolation looks buggy, why would you want to export it?
-            // ui.horizontal(|ui| { toggle_ui(ui, &mut state.interpolation); ui.label("Interpolation"); });
         });
 
         ui.add_space(20.0);

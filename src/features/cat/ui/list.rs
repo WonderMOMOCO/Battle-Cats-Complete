@@ -7,6 +7,7 @@ use std::time::Duration;
 use image::imageops;
 
 use crate::features::cat::logic::scanner::CatEntry; 
+use crate::features::cat::logic::filter::{entity_passes_filter, CatFilterState};
 
 struct LoadedImage {
     id: u32,
@@ -35,6 +36,7 @@ pub struct CatList {
     last_search_query: String,
     last_unit_count: usize,
     cached_indices: Vec<usize>,
+    last_filter_state: CatFilterState,
 }
 
 impl Default for CatList {
@@ -79,6 +81,7 @@ impl Default for CatList {
             last_search_query: String::new(),
             last_unit_count: 0,
             cached_indices: Vec::new(),
+            last_filter_state: CatFilterState::default(),
         }
     }
 }
@@ -104,7 +107,16 @@ impl CatList {
         self.scroll_to_top_needed = true;
     }
 
-    pub fn show(&mut self, ctx: &egui::Context, ui: &mut egui::Ui, units: &[CatEntry], selected_id: &mut Option<u32>, search_query: &str, high_banner_quality: bool) {
+    pub fn show(
+        &mut self, 
+        ctx: &egui::Context, 
+        ui: &mut egui::Ui, 
+        units: &[CatEntry], 
+        selected_id: &mut Option<u32>, 
+        search_query: &str, 
+        filter_state: &CatFilterState, 
+        high_banner_quality: bool
+    ) {
         if self.placeholder_texture.is_none() {
             const BG_BYTES: &[u8] = include_bytes!("../../../assets/udi_f.png");
             if let Ok(img) = image::load_from_memory(BG_BYTES) {
@@ -138,8 +150,9 @@ impl CatList {
             
         }
 
-        if search_query != self.last_search_query || units.len() != self.last_unit_count {
-            self.update_search_cache(units, search_query);
+        if search_query != self.last_search_query || units.len() != self.last_unit_count || filter_state != &self.last_filter_state {
+            self.update_search_cache(units, search_query, filter_state);
+            self.last_filter_state = filter_state.clone();
         }
 
         self.render_scroll_area(ctx, ui, units, selected_id, high_banner_quality);
@@ -147,7 +160,7 @@ impl CatList {
 
     fn render_scroll_area(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui, units: &[CatEntry], selected_id: &mut Option<u32>, hq: bool) {
         let row_height = 55.0; 
-        let total_rows = self.cached_indices.len() + 1; 
+        let total_rows = self.cached_indices.len(); 
         let now = ui.input(|i| i.time);
 
         let mut scroll_area = egui::ScrollArea::vertical().auto_shrink([false, false]);
@@ -245,7 +258,7 @@ impl CatList {
         Some(response_id)
     }
 
-    fn update_search_cache(&mut self, units: &[CatEntry], query: &str) {
+    fn update_search_cache(&mut self, units: &[CatEntry], query: &str, filter_state: &CatFilterState) {
         self.last_search_query = query.to_string();
         self.last_unit_count = units.len();
         self.cached_indices.clear();
@@ -254,6 +267,10 @@ impl CatList {
         let is_empty = query.is_empty();
 
         for (i, unit) in units.iter().enumerate() {
+            if !entity_passes_filter(unit, filter_state) {
+                continue;
+            }
+
             if is_empty {
                 self.cached_indices.push(i);
                 continue;

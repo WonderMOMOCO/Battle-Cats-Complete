@@ -353,7 +353,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
         group: DisplayGroup::Headline2,
         getter: |c| c.sage_slayer,
         duration_getter: None,
-        formatter: |_, _, _, _| "Deals 1.2× Damage to and takes 0.5× Damage from Sage Enemies".into(),
+        formatter: |_, _, _, _| "Deals 1.2× Damage to and takes 0.5× Damage from Sage Enemies\nCrowd Control effects originating from Sage Enemies reduced by 70%".into(),
         apply_func: Some(|c, _, _, _| c.sage_slayer = 1),
         talent_desc_func: Some(|_, _, _, _, _, _, l| fmt_state(l))
     },
