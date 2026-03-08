@@ -1,7 +1,7 @@
 use eframe::egui;
 use crate::features::cat::logic::scanner::CatEntry;
 use crate::features::cat::logic::stats::{self, CatRaw};
-use crate::features::cat::logic::abilities::{self, AbilityItem};
+use crate::features::cat::logic::abilities::{self, AbilityItem, CustomIcon};
 use crate::global::imgcut::SpriteSheet;
 use crate::features::settings::logic::Settings;
 use crate::ui::components::shared::{render_fallback_icon, text_with_superscript};
@@ -9,9 +9,9 @@ use crate::global::img015;
 use crate::features::cat::data::skillacquisition::TalentRaw;
 use std::collections::HashMap;
 
-const ABILITY_X: f32 = 3.0;
-const ABILITY_Y: f32 = 5.0;
-const TRAIT_Y: f32 = 7.0;
+pub const ABILITY_X: f32 = 3.0;
+pub const ABILITY_Y: f32 = 5.0;
+pub const TRAIT_Y: f32 = 7.0;
 
 pub fn render(
     ui: &mut egui::Ui, 
@@ -31,88 +31,92 @@ pub fn render(
     let curve = cat.curve.as_ref();
     
     let (grp_trait, grp_hl1, grp_hl2, grp_b1, grp_b2, grp_footer) = abilities::collect_ability_data(
-        s, level, curve, multihit_tex, kamikaze_tex, boss_wave_tex, settings, false,
-        talent_data,
-        talent_levels
+        s, level, curve, settings, false, talent_data, talent_levels
     );
     
     let mut previous_content = false;
     let mut last_was_trait = false;
     let main_border = egui::Color32::BLACK;
 
-    // Render Traits
     if !grp_trait.is_empty() {
-        render_icon_row(ui, &grp_trait, sheet, settings, main_border);
+        render_icon_row(ui, &grp_trait, sheet, settings, main_border, multihit_tex, kamikaze_tex, boss_wave_tex);
         previous_content = true;
         last_was_trait = true;
     }
 
-    // Render Headline 1
     if !grp_hl1.is_empty() { 
-        if previous_content { 
-            ui.add_space(if last_was_trait { TRAIT_Y } else { ABILITY_Y }); 
-            last_was_trait = false;
-        }
-        render_icon_row(ui, &grp_hl1, sheet, settings, main_border); 
+        if previous_content { ui.add_space(if last_was_trait { TRAIT_Y } else { ABILITY_Y }); last_was_trait = false; }
+        render_icon_row(ui, &grp_hl1, sheet, settings, main_border, multihit_tex, kamikaze_tex, boss_wave_tex); 
         previous_content = true;
     }
     
-    // Render Headline 2
     if !grp_hl2.is_empty() { 
-        if previous_content { 
-            ui.add_space(if last_was_trait { TRAIT_Y } else { ABILITY_Y }); 
-            last_was_trait = false;
-        }
-        render_icon_row(ui, &grp_hl2, sheet, settings, main_border); 
+        if previous_content { ui.add_space(if last_was_trait { TRAIT_Y } else { ABILITY_Y }); last_was_trait = false; }
+        render_icon_row(ui, &grp_hl2, sheet, settings, main_border, multihit_tex, kamikaze_tex, boss_wave_tex); 
         previous_content = true;
     }
 
-    // Render Body
     let has_body = !grp_b1.is_empty() || !grp_b2.is_empty();
     if has_body {
-       if previous_content { 
-           ui.add_space(if last_was_trait { TRAIT_Y } else { ABILITY_Y }); 
-           last_was_trait = false;
-       }
+       if previous_content { ui.add_space(if last_was_trait { TRAIT_Y } else { ABILITY_Y }); last_was_trait = false; }
        
        render_list_view(ui, &grp_b1, sheet, multihit_tex, kamikaze_tex, boss_wave_tex, cat.id, level, curve, s, settings, main_border);
        
-       if !grp_b1.is_empty() && !grp_b2.is_empty() {
-           ui.add_space(ABILITY_Y);
-       }
+       if !grp_b1.is_empty() && !grp_b2.is_empty() { ui.add_space(ABILITY_Y); }
 
        render_list_view(ui, &grp_b2, sheet, multihit_tex, kamikaze_tex, boss_wave_tex, cat.id, level, curve, s, settings, main_border);
        previous_content = true;
     }
 
-    // Render Footer
     if !grp_footer.is_empty() {
-        if previous_content { 
-            ui.add_space(if last_was_trait { TRAIT_Y } else { ABILITY_Y });
-        }
-        render_icon_row(ui, &grp_footer, sheet, settings, main_border); 
+        if previous_content { ui.add_space(if last_was_trait { TRAIT_Y } else { ABILITY_Y }); }
+        render_icon_row(ui, &grp_footer, sheet, settings, main_border, multihit_tex, kamikaze_tex, boss_wave_tex); 
     }
 }
 
-pub fn render_icon_row(ui: &mut egui::Ui, items: &Vec<AbilityItem>, sheet: &SpriteSheet, settings: &Settings, border_color: egui::Color32) {
+pub fn render_icon_row(
+    ui: &mut egui::Ui, 
+    items: &Vec<AbilityItem>, 
+    sheet: &SpriteSheet, 
+    settings: &Settings, 
+    border_color: egui::Color32,
+    multihit_tex: &Option<egui::TextureHandle>,
+    kamikaze_tex: &Option<egui::TextureHandle>,
+    boss_wave_tex: &Option<egui::TextureHandle>,
+) {
     ui.scope(|ui| {
         ui.spacing_mut().item_spacing = egui::vec2(ABILITY_X, ABILITY_Y);
         ui.horizontal_wrapped(|ui| {
             for item in items {
-                let r = render_single_icon(ui, item, sheet, settings, border_color);
+                let r = render_single_icon(ui, item, sheet, settings, border_color, multihit_tex, kamikaze_tex, boss_wave_tex);
                 r.on_hover_ui(|ui| text_with_superscript(ui, &item.text));
             }
         });
     });
 }
 
-fn render_single_icon(ui: &mut egui::Ui, item: &AbilityItem, sheet: &SpriteSheet, settings: &Settings, border: egui::Color32) -> egui::Response {
+fn render_single_icon(
+    ui: &mut egui::Ui, 
+    item: &AbilityItem, 
+    sheet: &SpriteSheet, 
+    settings: &Settings, 
+    border: egui::Color32,
+    multihit_tex: &Option<egui::TextureHandle>,
+    kamikaze_tex: &Option<egui::TextureHandle>,
+    boss_wave_tex: &Option<egui::TextureHandle>,
+) -> egui::Response {
     let size = egui::vec2(stats::ICON_SIZE, stats::ICON_SIZE);
-    
     let force_fallback = settings.game_language == "--";
 
-    let response = if !force_fallback && item.custom_tex.is_some() {
-        ui.add(egui::Image::new(egui::load::SizedTexture::new(item.custom_tex.unwrap(), size)))
+    let custom_texture = match item.custom_icon {
+        CustomIcon::Multihit => multihit_tex.as_ref(),
+        CustomIcon::Kamikaze => kamikaze_tex.as_ref(),
+        CustomIcon::BossWave => boss_wave_tex.as_ref(),
+        _ => None,
+    };
+
+    let response = if !force_fallback && custom_texture.is_some() {
+        ui.add(egui::Image::new(egui::load::SizedTexture::new(custom_texture.unwrap().id(), size)))
     } else if !force_fallback && sheet.cuts_map.contains_key(&item.icon_id) {
         let cut = sheet.cuts_map.get(&item.icon_id).unwrap();
         if let Some(tex) = &sheet.texture_handle {
@@ -154,11 +158,11 @@ pub fn render_list_view(
 ) {
     for (i, item) in items.iter().enumerate() {
         let is_conjure = item.icon_id == img015::ICON_CONJURE;
-        let id = ui.make_persistent_id(format!("conjure_expand_{}", cat_id));
+        let id = egui::Id::new(format!("conjure_expand_{}", cat_id));
         
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 8.0; 
-            render_single_icon(ui, item, sheet, settings, border_color); 
+            render_single_icon(ui, item, sheet, settings, border_color, multihit_tex, kamikaze_tex, boss_wave_tex); 
 
             if !is_conjure {
                 text_with_superscript(ui, &item.text);
@@ -261,59 +265,44 @@ fn render_conjure_details(
             ui.add_space(ABILITY_Y);
 
             let (spirit_traits, spirit_head_1, spirit_head_2, spirit_body_1, spirit_body_2, spirit_footer) = abilities::collect_ability_data(
-                conjure_stats, level, curve, multihit_tex, kamikaze_tex, boss_wave_tex, settings, true,
-                None, 
-                None  
+                conjure_stats, level, curve, settings, true, None, None  
             );
             
             let mut previous_content = false;
             let mut last_was_trait = false;
 
             if !spirit_traits.is_empty() { 
-                render_icon_row(ui, &spirit_traits, sheet, settings, spirit_border); 
+                render_icon_row(ui, &spirit_traits, sheet, settings, spirit_border, multihit_tex, kamikaze_tex, boss_wave_tex); 
                 previous_content = true;
                 last_was_trait = true;
             }
 
             if !spirit_head_1.is_empty() { 
-                if previous_content {
-                    ui.add_space(if last_was_trait { TRAIT_Y } else { ABILITY_Y });
-                    last_was_trait = false;
-                }
-                render_icon_row(ui, &spirit_head_1, sheet, settings, spirit_border); 
+                if previous_content { ui.add_space(if last_was_trait { TRAIT_Y } else { ABILITY_Y }); last_was_trait = false; }
+                render_icon_row(ui, &spirit_head_1, sheet, settings, spirit_border, multihit_tex, kamikaze_tex, boss_wave_tex); 
                 previous_content = true;
             }
 
             if !spirit_head_2.is_empty() { 
-                if previous_content {
-                    ui.add_space(if last_was_trait { TRAIT_Y } else { ABILITY_Y });
-                    last_was_trait = false;
-                }
-                render_icon_row(ui, &spirit_head_2, sheet, settings, spirit_border); 
+                if previous_content { ui.add_space(if last_was_trait { TRAIT_Y } else { ABILITY_Y }); last_was_trait = false; }
+                render_icon_row(ui, &spirit_head_2, sheet, settings, spirit_border, multihit_tex, kamikaze_tex, boss_wave_tex); 
                 previous_content = true;
             }
             
             let has_body = !spirit_body_1.is_empty() || !spirit_body_2.is_empty();
             if has_body {
-                if previous_content {
-                    ui.add_space(if last_was_trait { TRAIT_Y } else { ABILITY_Y });
-                    last_was_trait = false;
-                }
+                if previous_content { ui.add_space(if last_was_trait { TRAIT_Y } else { ABILITY_Y }); last_was_trait = false; }
                 render_list_view(ui, &spirit_body_1, sheet, multihit_tex, kamikaze_tex, boss_wave_tex, 0, level, curve, conjure_stats, settings, spirit_border);
                 
-                if !spirit_body_1.is_empty() && !spirit_body_2.is_empty() {
-                    ui.add_space(ABILITY_Y);
-                }
+                if !spirit_body_1.is_empty() && !spirit_body_2.is_empty() { ui.add_space(ABILITY_Y); }
                 
                 render_list_view(ui, &spirit_body_2, sheet, multihit_tex, kamikaze_tex, boss_wave_tex, 0, level, curve, conjure_stats, settings, spirit_border);
                 previous_content = true;
             }
             
             if !spirit_footer.is_empty() {
-                if previous_content {
-                    ui.add_space(if last_was_trait { TRAIT_Y } else { ABILITY_Y });
-                }
-                render_icon_row(ui, &spirit_footer, sheet, settings, spirit_border);
+                if previous_content { ui.add_space(if last_was_trait { TRAIT_Y } else { ABILITY_Y }); }
+                render_icon_row(ui, &spirit_footer, sheet, settings, spirit_border, multihit_tex, kamikaze_tex, boss_wave_tex);
             }
         });
 }

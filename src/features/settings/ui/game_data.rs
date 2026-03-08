@@ -46,7 +46,6 @@ pub fn show(ui: &mut egui::Ui, settings: &mut Settings) -> bool {
                 }
             });
             ui.add_space(5.0);
-            // --------------------------
 
             ui.horizontal(|ui| {
                 let label_response = ui.label("App Folder Persistence");
