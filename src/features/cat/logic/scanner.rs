@@ -90,10 +90,9 @@ pub fn process_cat_entry(
     let ub_row = unit_buys.get(&cat_id)?;
 
     let is_egg_unit = ub_row.egg_id_normal != -1;
-    let is_hidden = ub_row.guide_order == -1;
     let is_summon = ub_row.level_cap_standard == 1 && ub_row.level_cap_plus == 0 && ub_row.purchase_cost == 0;
 
-    if !config.show_invalid && !is_egg_unit && (is_hidden || is_summon) {
+    if !config.show_invalid && !is_egg_unit && is_summon {
         return None; 
     }
 
