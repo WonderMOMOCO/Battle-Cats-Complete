@@ -3,17 +3,16 @@ use crate::features::cat::logic::scanner::CatEntry;
 use crate::features::cat::logic::stats::CatRaw;
 use crate::ui::components::stat_grid::{grid_cell, grid_cell_custom, render_frames};
 
-pub fn render(ui: &mut egui::Ui, cat: &CatEntry, s: &CatRaw, form: usize, level: i32) {
-    let curve = cat.curve.as_ref();
-    let hp = curve.map_or(s.hitpoints, |c| c.calculate_stat(s.hitpoints, level));
-    let atk_1 = curve.map_or(s.attack_1, |c| c.calculate_stat(s.attack_1, level));
-    let atk_2 = curve.map_or(s.attack_2, |c| c.calculate_stat(s.attack_2, level));
-    let atk_3 = curve.map_or(s.attack_3, |c| c.calculate_stat(s.attack_3, level));
-    
-    let total_atk = atk_1 + atk_2 + atk_3;
-    let cycle = s.attack_cycle(cat.atk_anim_frames[form]);
+pub fn render(
+    ui: &mut egui::Ui, 
+    cat: &CatEntry, 
+    final_stats: &CatRaw, 
+    form: usize
+) {
+    let total_atk = final_stats.attack_1 + final_stats.attack_2 + final_stats.attack_3;
+    let cycle = final_stats.attack_cycle(cat.atk_anim_frames[form]);
     let dps = if cycle > 0 { (total_atk as f32 * 30.0 / cycle as f32) as i32 } else { 0 };
-    let atk_type = if s.area_attack == 0 { "Single" } else { "Area" };
+    let atk_type = if final_stats.area_attack == 0 { "Single" } else { "Area" };
 
     let cell_w = 60.0;
 
@@ -34,7 +33,7 @@ pub fn render(ui: &mut egui::Ui, cat: &CatEntry, s: &CatRaw, form: usize, level:
                 // Row 1 Data
                 grid_cell(ui, &total_atk.to_string(), false); 
                 grid_cell(ui, &dps.to_string(), false); 
-                grid_cell(ui, &s.standing_range.to_string(), false);
+                grid_cell(ui, &final_stats.standing_range.to_string(), false);
                 grid_cell_custom(ui, false, 
                     Some(Box::new(move |ui| { ui.vertical_centered(|ui| render_frames(ui, cycle, f32::INFINITY)); })), 
                     |ui| render_frames(ui, cycle, cell_w)
@@ -51,15 +50,15 @@ pub fn render(ui: &mut egui::Ui, cat: &CatEntry, s: &CatRaw, form: usize, level:
                 ui.end_row();
                 
                 // Row 2 Data
-                let cd_val = s.effective_cooldown();
-                grid_cell(ui, &hp.to_string(), false); 
-                grid_cell(ui, &s.knockbacks.to_string(), false); 
-                grid_cell(ui, &s.speed.to_string(), false);
+                let cd_val = final_stats.effective_cooldown();
+                grid_cell(ui, &final_stats.hitpoints.to_string(), false); 
+                grid_cell(ui, &final_stats.knockbacks.to_string(), false); 
+                grid_cell(ui, &final_stats.speed.to_string(), false);
                 grid_cell_custom(ui, false, 
                     Some(Box::new(move |ui| { ui.vertical_centered(|ui| render_frames(ui, cd_val, f32::INFINITY)); })), 
                     |ui| render_frames(ui, cd_val, cell_w)
                 ); 
-                grid_cell(ui, &format!("{}¢", s.eoc1_cost * 3 / 2), false); 
+                grid_cell(ui, &format!("{}¢", final_stats.eoc1_cost * 3 / 2), false); 
                 ui.end_row();
             });
     });

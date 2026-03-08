@@ -4,7 +4,6 @@ use crate::features::cat::registry::ABILITY_REGISTRY;
 use crate::features::cat::logic::stats::CatRaw;
 use crate::features::cat::logic::scanner::CatEntry;
 use crate::features::cat::data::skillacquisition::TalentGroupRaw;
-use crate::features::cat::data::unitlevel::CatLevelCurve;
 use crate::features::cat::logic::talents::apply_talent_stats;
 use crate::global::img015;
 
@@ -89,27 +88,12 @@ impl CatFilterState {
     }
 }
 
-pub fn get_stat_value(
-    s: &CatRaw, 
-    stat: &str, 
-    level: i32, 
-    curve: Option<&CatLevelCurve>, 
-    anim_frames: i32
-) -> i32 {
+pub fn get_stat_value(s: &CatRaw, stat: &str, anim_frames: i32) -> i32 {
     match stat {
-        "Hitpoints" => curve.map_or(s.hitpoints, |c| c.calculate_stat(s.hitpoints, level)),
-        "Attack" => {
-            let a1 = curve.map_or(s.attack_1, |c| c.calculate_stat(s.attack_1, level));
-            let a2 = curve.map_or(s.attack_2, |c| c.calculate_stat(s.attack_2, level));
-            let a3 = curve.map_or(s.attack_3, |c| c.calculate_stat(s.attack_3, level));
-            a1 + a2 + a3
-        },
+        "Hitpoints" => s.hitpoints,
+        "Attack" => s.attack_1 + s.attack_2 + s.attack_3,
         "Dps" => {
-            let a1 = curve.map_or(s.attack_1, |c| c.calculate_stat(s.attack_1, level));
-            let a2 = curve.map_or(s.attack_2, |c| c.calculate_stat(s.attack_2, level));
-            let a3 = curve.map_or(s.attack_3, |c| c.calculate_stat(s.attack_3, level));
-            let total_atk = a1 + a2 + a3;
-            
+            let total_atk = s.attack_1 + s.attack_2 + s.attack_3;
             let cycle_frames = s.attack_cycle(anim_frames).max(1) as f32;
             ((total_atk as f32 * 30.0) / cycle_frames).round() as i32
         },
@@ -311,12 +295,10 @@ pub fn entity_passes_filter(cat: &CatEntry, filter: &CatFilterState) -> bool {
     let has_stat_filters = filter.stat_ranges.values().any(|r| !r.min.is_empty() || !r.max.is_empty());
     let has_icon_filters = !filter.active_icons.is_empty();
 
-    // Fast reject if absolutely no complex filters are set
     if !has_stat_filters && !has_icon_filters && !req_normal && !req_ultra {
         return true;
     }
 
-    // If there are no specific stats or icons, ONLY process the Talent Bypass requirement
     if !has_stat_filters && !has_icon_filters {
         for &form_idx in &forms_to_check {
             let mut has_any_normal = false;
@@ -349,7 +331,6 @@ pub fn entity_passes_filter(cat: &CatEntry, filter: &CatFilterState) -> bool {
     for &form_idx in &forms_to_check {
         if let Some(Some(stats)) = cat.stats.get(form_idx) {
             
-            // EVALUATE TALENT "ONLY" BYPASS
             let mut passes_talent_only = true;
             if req_normal || req_ultra {
                 let mut has_any_normal = false;
@@ -372,13 +353,12 @@ pub fn entity_passes_filter(cat: &CatEntry, filter: &CatFilterState) -> bool {
                     has_any_ultra
                 };
             }
-            if !passes_talent_only { continue; } // Failed talent-only check, skip to next form
+            if !passes_talent_only { continue; }
 
             let mut active_conditions = 0;
             let mut passed_conditions = 0;
             let mut failed_conditions = 0;
 
-            // Generate precise boundaries mapping to the selected Talent Options
             let (stats_min, stats_max) = if form_idx >= 2 && cat.talent_data.is_some() {
                 let t_data = cat.talent_data.as_ref().unwrap();
                 let mut min_levels = HashMap::new();
@@ -396,21 +376,22 @@ pub fn entity_passes_filter(cat: &CatEntry, filter: &CatFilterState) -> bool {
                     }
                 }
                 
-                let s_min = apply_talent_stats(stats, t_data, &min_levels);
-                let s_max = apply_talent_stats(stats, t_data, &max_levels);
+                let base_leveled = crate::features::cat::logic::stats::apply_level(stats, cat.curve.as_ref(), filter_level);
+                let s_min = apply_talent_stats(&base_leveled, t_data, &min_levels);
+                let s_max = apply_talent_stats(&base_leveled, t_data, &max_levels);
                 (s_min, s_max)
             } else {
-                (stats.clone(), stats.clone())
+                let base_leveled = crate::features::cat::logic::stats::apply_level(stats, cat.curve.as_ref(), filter_level);
+                (base_leveled.clone(), base_leveled)
             };
 
-            // EVALUATE EXACT STATS
             if has_stat_filters {
                 for (stat_name, range) in &filter.stat_ranges {
                     if range.min.is_empty() && range.max.is_empty() { continue; }
                     active_conditions += 1;
                     
-                    let val_a = get_stat_value(&stats_min, stat_name, filter_level, cat.curve.as_ref(), cat.atk_anim_frames[form_idx]);
-                    let val_b = get_stat_value(&stats_max, stat_name, filter_level, cat.curve.as_ref(), cat.atk_anim_frames[form_idx]);
+                    let val_a = get_stat_value(&stats_min, stat_name, cat.atk_anim_frames[form_idx]);
+                    let val_b = get_stat_value(&stats_max, stat_name, cat.atk_anim_frames[form_idx]);
                     
                     let s_min = val_a.min(val_b);
                     let s_max = val_a.max(val_b);
@@ -418,7 +399,6 @@ pub fn entity_passes_filter(cat: &CatEntry, filter: &CatFilterState) -> bool {
                     let r_min = range.min.parse::<i32>().unwrap_or(i32::MIN);
                     let r_max = range.max.parse::<i32>().unwrap_or(i32::MAX);
 
-                    // True Interval Overlap checks every hypothetical valid stat point
                     if s_min <= r_max && s_max >= r_min {
                         passed_conditions += 1;
                     } else {
@@ -427,7 +407,6 @@ pub fn entity_passes_filter(cat: &CatEntry, filter: &CatFilterState) -> bool {
                 }
             }
 
-            // EVALUATE ICONS
             if has_icon_filters {
                 for &icon_id in &filter.active_icons {
                     active_conditions += 1;
@@ -524,12 +503,10 @@ pub fn entity_passes_filter(cat: &CatEntry, filter: &CatFilterState) -> bool {
                 }
             }
 
-            // Fallback safety to prevent empty loops blocking execution
             if active_conditions == 0 {
                 return true; 
             }
 
-            // Dynamic pooling of both Stat filters and Icon filters
             if filter.match_mode == MatchMode::And {
                 if failed_conditions == 0 {
                     return true;

@@ -21,7 +21,8 @@ pub struct AbilityItem {
 }
 
 pub fn collect_ability_data(
-    cat_stats: &CatRaw,
+    final_stats: &CatRaw,
+    base_stats: &CatRaw,
     current_level: i32,
     level_curve: Option<&stats::CatLevelCurve>,
     settings: &Settings, 
@@ -75,16 +76,17 @@ pub fn collect_ability_data(
 
     let target_label = if is_conjure_unit { "Enemies" } else { "Target Traits" };
 
-    if cat_stats.attack_2 > 0 {
-        let damage_hit_1 = level_curve.map_or(cat_stats.attack_1, |curve| curve.calculate_stat(cat_stats.attack_1, current_level));
-        let damage_hit_2 = level_curve.map_or(cat_stats.attack_2, |curve| curve.calculate_stat(cat_stats.attack_2, current_level));
-        let damage_hit_3 = level_curve.map_or(cat_stats.attack_3, |curve| curve.calculate_stat(cat_stats.attack_3, current_level));
+    if final_stats.attack_2 > 0 {
+        // Reads directly from the fully leveled and buffed final_stats
+        let damage_hit_1 = final_stats.attack_1;
+        let damage_hit_2 = final_stats.attack_2;
+        let damage_hit_3 = final_stats.attack_3;
         
-        let ability_flag_1 = if cat_stats.attack_1_abilities > 0 { "True" } else { "False" };
-        let ability_flag_2 = if cat_stats.attack_2_abilities > 0 { "True" } else { "False" };
-        let ability_flag_3 = if cat_stats.attack_3 > 0 { if cat_stats.attack_3_abilities > 0 { " / True" } else { " / False" } } else { "" };
+        let ability_flag_1 = if final_stats.attack_1_abilities > 0 { "True" } else { "False" };
+        let ability_flag_2 = if final_stats.attack_2_abilities > 0 { "True" } else { "False" };
+        let ability_flag_3 = if final_stats.attack_3 > 0 { if final_stats.attack_3_abilities > 0 { " / True" } else { " / False" } } else { "" };
         
-        let damage_string = if cat_stats.attack_3 > 0 { 
+        let damage_string = if final_stats.attack_3 > 0 { 
             format!("{} / {} / {}", damage_hit_1, damage_hit_2, damage_hit_3) 
         } else { 
             format!("{} / {}", damage_hit_1, damage_hit_2) 
@@ -95,9 +97,9 @@ pub fn collect_ability_data(
         group_body_1.push(AbilityItem { icon_id: img015::ICON_MULTIHIT, text: multihit_description, custom_icon, border_id: None });
     }
 
-    range_logic(cat_stats, &mut group_body_1);
+    range_logic(final_stats, &mut group_body_1);
 
-    if !is_conjure_unit && cat_stats.conjure_unit_id > 0 {
+    if !is_conjure_unit && final_stats.conjure_unit_id > 0 {
         push_custom(&mut group_body_1, CustomIcon::None, "Conjures a Spirit to the battlefield when tapped\nThis Cat may only be deployed one at a time".to_string());
     }
 
@@ -107,17 +109,17 @@ pub fn collect_ability_data(
             if def.name == "Dodge" || def.name == "Immune Boss Wave" || def.name == "Conjure" { continue; }
         }
 
-        let val = (def.getter)(cat_stats);
+        let val = (def.getter)(final_stats);
         if val > 0 {
-            let dur = if let Some(d_get) = def.duration_getter { d_get(cat_stats) } else { 0 };
-            let text = (def.formatter)(val, cat_stats, target_label, dur);
+            let dur = if let Some(d_get) = def.duration_getter { d_get(final_stats) } else { 0 };
+            let text = (def.formatter)(val, final_stats, target_label, dur);
             let border = get_talent_border(def.talent_id);
 
             let custom_icon = if def.name == "Immune Boss Wave" { CustomIcon::BossWave } else { CustomIcon::None };
 
             let mut final_icon = def.icon_id;
-            if def.name == "Wave Attack" && cat_stats.mini_wave_flag > 0 { final_icon = img015::ICON_MINI_WAVE; }
-            else if def.name == "Surge Attack" && cat_stats.mini_surge_flag > 0 { final_icon = img015::ICON_MINI_SURGE; }
+            if def.name == "Wave Attack" && final_stats.mini_wave_flag > 0 { final_icon = img015::ICON_MINI_WAVE; }
+            else if def.name == "Surge Attack" && final_stats.mini_surge_flag > 0 { final_icon = img015::ICON_MINI_SURGE; }
 
             let item = AbilityItem { icon_id: final_icon, text, custom_icon, border_id: border };
 
@@ -132,7 +134,7 @@ pub fn collect_ability_data(
         }
     }
 
-    if !is_conjure_unit && cat_stats.kamikaze == 2 {
+    if !is_conjure_unit && final_stats.kamikaze == 2 {
          let item = AbilityItem { icon_id: img015::ICON_KAMIKAZE, text: "Unit disappears after a single attack".into(), custom_icon: CustomIcon::Kamikaze, border_id: None };
          group_headline_2.push(item);
     }
@@ -149,7 +151,8 @@ pub fn collect_ability_data(
                     let v1 = crate::features::cat::logic::talents::calculate_talent_value(group.min_1, group.max_1, lv, group.max_level);
                     let v2 = crate::features::cat::logic::talents::calculate_talent_value(group.min_2, group.max_2, lv, group.max_level);
                     
-                    let text = desc_gen(v1, v2, cat_stats, level_curve, current_level, group, lv);
+                    // We explicitly pass the UNLEVELED base_stats to the tooltip generator so it can calculate the pure Base -> Buff
+                    let text = desc_gen(v1, v2, base_stats, level_curve, current_level, group, lv);
                     
                     match group.ability_id {
                         25 | 26 | 27 | 31 | 32 | 61 | 82 => { 

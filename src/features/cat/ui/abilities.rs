@@ -15,7 +15,8 @@ pub const TRAIT_Y: f32 = 7.0;
 
 pub fn render(
     ui: &mut egui::Ui, 
-    s: &CatRaw, 
+    final_stats: &CatRaw, 
+    base_stats: &CatRaw,
     cat: &CatEntry, 
     level: i32,
     sheet: &SpriteSheet, 
@@ -31,7 +32,7 @@ pub fn render(
     let curve = cat.curve.as_ref();
     
     let (grp_trait, grp_hl1, grp_hl2, grp_b1, grp_b2, grp_footer) = abilities::collect_ability_data(
-        s, level, curve, settings, false, talent_data, talent_levels
+        final_stats, base_stats, level, curve, settings, false, talent_data, talent_levels
     );
     
     let mut previous_content = false;
@@ -60,11 +61,11 @@ pub fn render(
     if has_body {
        if previous_content { ui.add_space(if last_was_trait { TRAIT_Y } else { ABILITY_Y }); last_was_trait = false; }
        
-       render_list_view(ui, &grp_b1, sheet, multihit_tex, kamikaze_tex, boss_wave_tex, cat.id, level, curve, s, settings, main_border);
+       render_list_view(ui, &grp_b1, sheet, multihit_tex, kamikaze_tex, boss_wave_tex, cat.id, level, curve, final_stats, settings, main_border);
        
        if !grp_b1.is_empty() && !grp_b2.is_empty() { ui.add_space(ABILITY_Y); }
 
-       render_list_view(ui, &grp_b2, sheet, multihit_tex, kamikaze_tex, boss_wave_tex, cat.id, level, curve, s, settings, main_border);
+       render_list_view(ui, &grp_b2, sheet, multihit_tex, kamikaze_tex, boss_wave_tex, cat.id, level, curve, final_stats, settings, main_border);
        previous_content = true;
     }
 
@@ -237,10 +238,12 @@ fn render_conjure_details(
                 None => return,
             };
 
-            let dmg = curve.as_ref().map_or(
-                conjure_stats.attack_1, 
-                |curve| curve.calculate_stat(conjure_stats.attack_1, level)
+            // Calculate the fully leveled stats of the Spirit first
+            let conjure_final = crate::features::cat::logic::stats::get_final_stats(
+                conjure_stats, curve, level, None, None
             );
+
+            let dmg = conjure_final.attack_1;
             
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 8.0;
@@ -259,13 +262,14 @@ fn render_conjure_details(
                     render_fallback_icon(ui, alt, spirit_border);
                 }
                 
-                ui.label(format!("Damage: {}\nRange: {}", dmg, conjure_stats.standing_range));
+                ui.label(format!("Damage: {}\nRange: {}", dmg, conjure_final.standing_range));
             });
             
             ui.add_space(ABILITY_Y);
 
+            // Give the collector the Final and Base stats of the Spirit 
             let (spirit_traits, spirit_head_1, spirit_head_2, spirit_body_1, spirit_body_2, spirit_footer) = abilities::collect_ability_data(
-                conjure_stats, level, curve, settings, true, None, None  
+                &conjure_final, conjure_stats, level, curve, settings, true, None, None  
             );
             
             let mut previous_content = false;
@@ -292,11 +296,11 @@ fn render_conjure_details(
             let has_body = !spirit_body_1.is_empty() || !spirit_body_2.is_empty();
             if has_body {
                 if previous_content { ui.add_space(if last_was_trait { TRAIT_Y } else { ABILITY_Y }); last_was_trait = false; }
-                render_list_view(ui, &spirit_body_1, sheet, multihit_tex, kamikaze_tex, boss_wave_tex, 0, level, curve, conjure_stats, settings, spirit_border);
+                render_list_view(ui, &spirit_body_1, sheet, multihit_tex, kamikaze_tex, boss_wave_tex, 0, level, curve, &conjure_final, settings, spirit_border);
                 
                 if !spirit_body_1.is_empty() && !spirit_body_2.is_empty() { ui.add_space(ABILITY_Y); }
                 
-                render_list_view(ui, &spirit_body_2, sheet, multihit_tex, kamikaze_tex, boss_wave_tex, 0, level, curve, conjure_stats, settings, spirit_border);
+                render_list_view(ui, &spirit_body_2, sheet, multihit_tex, kamikaze_tex, boss_wave_tex, 0, level, curve, &conjure_final, settings, spirit_border);
                 previous_content = true;
             }
             

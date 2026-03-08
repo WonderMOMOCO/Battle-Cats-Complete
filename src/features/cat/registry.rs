@@ -1237,9 +1237,9 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
         formatter: |_,_,_,_| "".into(),
         apply_func: Some(|c, v1, _, _| {
             let factor = (100 + v1) as f32 / 100.0;
-            c.attack_1 = (c.attack_1 as f32 * factor) as i32;
-            c.attack_2 = (c.attack_2 as f32 * factor) as i32;
-            c.attack_3 = (c.attack_3 as f32 * factor) as i32;
+            c.attack_1 = (c.attack_1 as f32 * factor).round() as i32;
+            c.attack_2 = (c.attack_2 as f32 * factor).round() as i32;
+            c.attack_3 = (c.attack_3 as f32 * factor).round() as i32;
         }),
         talent_desc_func: Some(|v1, _, c, curve, unit_level, _, _| {
             let total_base = c.attack_1 + c.attack_2 + c.attack_3;
@@ -1258,7 +1258,7 @@ pub const ABILITY_REGISTRY: &[AbilityDef] = &[
         formatter: |_,_,_,_| "".into(),
         apply_func: Some(|c, v1, _, _| {
             let factor = (100 + v1) as f32 / 100.0;
-            c.hitpoints = (c.hitpoints as f32 * factor) as i32;
+            c.hitpoints = (c.hitpoints as f32 * factor).round() as i32;
         }),
         talent_desc_func: Some(|v1, _, c, curve, unit_level, _, _| {
             let leveled_base = curve.map_or(c.hitpoints, |cv| cv.calculate_stat(c.hitpoints, unit_level));

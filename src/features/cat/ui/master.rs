@@ -7,7 +7,6 @@ use crate::global::imgcut::SpriteSheet;
 use crate::global::img015;
 use crate::global::img022; 
 use crate::features::settings::logic::Settings;
-use crate::features::cat::logic::talents as talent_logic; 
 use crate::global::mamodel::Model;
 use crate::features::animation::ui::viewer::AnimViewer;
 use crate::features::cat::data::skilllevel::TalentCost;
@@ -54,33 +53,36 @@ pub fn show(
     let base_stats = cat_entry.stats.get(*current_form).and_then(|opt| opt.as_ref());
     let form_allows_talents = *current_form >= 2;
 
-    let patched_stats_owned = if form_allows_talents {
-        if let (Some(base), Some(t_data)) = (base_stats, &cat_entry.talent_data) {
-            Some(talent_logic::apply_talent_stats(base, t_data, talent_levels))
-        } else { None }
+    // Use our new centralized Logic function
+    let final_stats_owned = if let Some(base) = base_stats {
+        Some(crate::features::cat::logic::stats::get_final_stats(
+            base,
+            cat_entry.curve.as_ref(),
+            *current_level,
+            if form_allows_talents { cat_entry.talent_data.as_ref() } else { None },
+            if form_allows_talents { Some(&*talent_levels) } else { None }
+        ))
     } else { None };
-    let current_stats = patched_stats_owned.as_ref().or(base_stats);
 
+    // TRIGGER EXPORT
     match export_action {
         ExportAction::Copy | ExportAction::Save => {
-            if let Some(stats) = current_stats {
+            if base_stats.is_some() {
                 let cat_clone = cat_entry.clone();
-                let stats_clone = stats.clone();
                 let lang_clone = settings.game_language.clone();
                 let cuts_clone = icon_sheet.cuts_map.clone(); 
                 let levels_clone = Some(talent_levels.clone()); 
                 
-                // Fetch the persistent state from the UI exactly as the app renders it
                 let id = egui::Id::new(format!("conjure_expand_{}", cat_entry.id));
                 let is_conjure_expanded = ctx.data(|d| d.get_temp::<bool>(id).unwrap_or(settings.expand_spirit_details));
                 
                 if export_action == ExportAction::Copy {
                     crate::features::cat::exporter::generate_and_copy_statblock(
-                        ctx.clone(), lang_clone, cat_clone, stats_clone, *current_form, *current_level, level_input.clone(), cuts_clone, levels_clone, is_conjure_expanded
+                        ctx.clone(), lang_clone, cat_clone, *current_form, *current_level, level_input.clone(), cuts_clone, levels_clone, is_conjure_expanded
                     );
                 } else {
                     crate::features::cat::exporter::generate_and_save_statblock(
-                        ctx.clone(), lang_clone, cat_clone, stats_clone, *current_form, *current_level, level_input.clone(), cuts_clone, levels_clone, is_conjure_expanded
+                        ctx.clone(), lang_clone, cat_clone, *current_form, *current_level, level_input.clone(), cuts_clone, levels_clone, is_conjure_expanded
                     );
                 }
             }
@@ -128,24 +130,23 @@ pub fn show(
 
     match current_tab {
         DetailTab::Abilities => {
-            if let Some(s) = current_stats {
-                stats::render(ui, cat_entry, s, *current_form, *current_level);
+            if let (Some(final_s), Some(base_s)) = (final_stats_owned.as_ref(), base_stats) {
+                stats::render(ui, cat_entry, final_s, *current_form);
                 ui.spacing_mut().item_spacing.y = 7.0;
                 ui.separator(); 
-            }
-             egui::ScrollArea::vertical()
-                .auto_shrink([false, false]) 
-                .show(ui, |ui| {
-                     if let Some(s) = current_stats {
+            
+                egui::ScrollArea::vertical()
+                    .auto_shrink([false, false]) 
+                    .show(ui, |ui| {
                         abilities::render(
-                            ui, s, cat_entry, *current_level, icon_sheet, 
+                            ui, final_s, base_s, cat_entry, *current_level, icon_sheet, 
                             multihit_texture, kamikaze_texture, boss_wave_immune_texture, 
                             settings, 
                             if form_allows_talents { cat_entry.talent_data.as_ref() } else { None },
                             if form_allows_talents { Some(&*talent_levels) } else { None }
                         );
-                     }
-                });
+                    });
+            }
         },
         DetailTab::Talents => {
              if let Some(raw) = &cat_entry.talent_data {

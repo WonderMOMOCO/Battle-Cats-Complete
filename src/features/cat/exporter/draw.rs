@@ -98,6 +98,11 @@ pub fn get_icon_image(
         }
     };
 
+    // Resize the base icon FIRST so it defines the proper bounding box
+    if icon.width() != export_icon_size || icon.height() != export_icon_size {
+        icon = image::imageops::resize(&icon, export_icon_size, export_icon_size, image::imageops::FilterType::Lanczos3);
+    }
+
     if let Some(border_id) = item.border_id {
         if let Some(cut) = cuts_map.get(&border_id) {
             let w = img015_base.width() as f32;
@@ -108,15 +113,19 @@ pub fn get_icon_image(
             let ph = cut.original_size.y.round() as u32;
             
             if px + pw <= img015_base.width() && py + ph <= img015_base.height() {
-                let border = image::imageops::crop_imm(img015_base, px, py, pw, ph).to_image();
+                let mut border = image::imageops::crop_imm(img015_base, px, py, pw, ph).to_image();
+                
+                // Resize the border to perfectly match the icon's new size
+                if border.width() != export_icon_size || border.height() != export_icon_size {
+                    border = image::imageops::resize(&border, export_icon_size, export_icon_size, image::imageops::FilterType::Lanczos3);
+                }
+                
+                // Overlay the now-matching border on top of the icon
                 image::imageops::overlay(&mut icon, &border, 0, 0);
             }
         }
     }
     
-    if icon.width() != export_icon_size || icon.height() != export_icon_size {
-        icon = image::imageops::resize(&icon, export_icon_size, export_icon_size, image::imageops::FilterType::Lanczos3);
-    }
     icon
 }
 

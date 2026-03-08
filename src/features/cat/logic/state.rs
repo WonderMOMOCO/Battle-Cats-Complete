@@ -265,11 +265,12 @@ pub fn show(ctx: &egui::Context, state: &mut CatListState, settings: &mut Settin
                             let base_max = new_cat.unit_buy.level_cap_standard;
                             let plus_max = new_cat.unit_buy.level_cap_plus;
                             let is_legend_rare = new_cat.unit_buy.rarity == 5;
+                            let is_normal_rare = new_cat.unit_buy.rarity == 0;
                             
                             if is_legend_rare {
                                 state.current_level = 50;
                                 state.level_input = "50".to_string();
-                            } else if base_max == 1 || (plus_max >= 5 && plus_max <= 65) {
+                            } else if base_max == 1 || (plus_max >= 5 && plus_max <= 65) || is_normal_rare {
                                 state.current_level = base_max + plus_max;
                                 if plus_max > 0 {
                                     state.level_input = format!("{}+{}", base_max, plus_max);
@@ -358,12 +359,11 @@ pub fn show(ctx: &egui::Context, state: &mut CatListState, settings: &mut Settin
 
         let mut current_ultra_state = state.selected_form == 3;
         
-        // Only evaluate Ultra Talents if the current form actually allows talents (True Form or higher)
         if state.selected_form >= 2 {
             if let Some(levels) = state.talent_levels.get(&selected_id) {
                 if let Some(t_data) = &cat_entry.talent_data {
                     for (idx, group) in t_data.groups.iter().enumerate() {
-                        if group.limit == 1 { // Limit 1 indicates this is an Ultra Talent
+                        if group.limit == 1 { 
                             if let Some(&lvl) = levels.get(&(idx as u8)) {
                                 if lvl > 0 {
                                     current_ultra_state = true;

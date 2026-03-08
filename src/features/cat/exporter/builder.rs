@@ -10,7 +10,6 @@ use arboard::{Clipboard, ImageData};
 use eframe::egui;
 
 use crate::features::cat::logic::scanner::CatEntry;
-use crate::features::cat::logic::stats::CatRaw;
 use crate::features::cat::paths::{self, AssetType};
 use crate::core::utils::autocrop;
 use crate::global::imgcut::SpriteCut;
@@ -20,7 +19,8 @@ use crate::features::cat::ui::abilities::{ABILITY_X, ABILITY_Y, TRAIT_Y};
 
 use super::draw::*;
 
-const NAME_BOX_WIDTH: f32 = 120.0;
+// --- EXPORT LAYOUT CONSTANTS ---
+const NAME_BOX_WIDTH: f32 = 150.0;
 const NAME_BOX_HEIGHT: f32 = 50.0;
 const HEADER_PADDING_Y: i32 = 10;
 const STAT_GRID_PADDING_Y: i32 = 14;
@@ -38,6 +38,7 @@ const ABILITY_FONT_SIZE: f32 = 18.0;
 const ABILITY_LINE_SPACING: i32 = -2; 
 const ABILITY_TEXT_Y_OFFSET: i32 = -1; 
 
+// --- CANVAS BORDER CONSTANTS ---
 const CANVAS_BORDER_THICKNESS: i32 = 5; 
 const CANVAS_BORDER_RADIUS: i32 = 8; 
 const CANVAS_BORDER_INNER_RADIUS: i32 = 8; 
@@ -49,7 +50,6 @@ const SPIRIT_PADDING_X: f32 = 8.0;
 fn build_statblock_image(
     language: &str,
     cat: &CatEntry,
-    stats: &CatRaw,
     form: usize,
     level: i32,
     level_str: &str,
@@ -57,7 +57,6 @@ fn build_statblock_image(
     talent_levels: Option<HashMap<u8, u8>>,
     is_conjure_expanded: bool
 ) -> RgbaImage {
-    // SUPERSAMPLING CONSTANTS
     let scale: i32 = 2;
     let scale_f: f32 = 2.0;
 
@@ -71,7 +70,7 @@ fn build_statblock_image(
     let list_text_y_offset = ABILITY_TEXT_Y_OFFSET * scale;
     let list_text_gap_x = 8 * scale;
     
-    let base_grid_width: f32 = (8.0 * 2.0) + (66.0 * 5.0) + (4.0 * 4.0);
+    let base_grid_width: f32 = (8.0 * 2.0) + (66.0 * 5.0) + (4.0 * 4.0); 
 
     let font_data: &[u8] = match language {
         "kr" => include_bytes!("../../../assets/NotoSansKR-Regular.ttf"),
@@ -84,12 +83,16 @@ fn build_statblock_image(
     let mut dummy_settings = Settings::default();
     dummy_settings.game_language = language.to_string();
 
+    let base_stats = cat.stats.get(form).and_then(|opt| opt.as_ref()).unwrap();
+    let final_stats = crate::features::cat::logic::stats::get_final_stats(
+        base_stats, cat.curve.as_ref(), level, cat.talent_data.as_ref(), talent_levels.as_ref()
+    );
+
     let (traits, h1, h2, b1, b2, footer) = collect_ability_data(
-        stats, level, cat.curve.as_ref(), &dummy_settings, false, 
+        &final_stats, base_stats, level, cat.curve.as_ref(), &dummy_settings, false, 
         cat.talent_data.as_ref(), talent_levels.as_ref()
     );
 
-    // DYNAMIC WIDTH CALCULATION (Pre-pass)
     let mut max_needed_width: f32 = base_grid_width;
 
     let check_icon_row_width = |items: &Vec<AbilityItem>| -> f32 {
@@ -107,12 +110,14 @@ fn build_statblock_image(
         let mut w = 8.0 + 40.0 + 8.0 + max_line_w + 8.0; 
         
         if item.icon_id == crate::global::img015::ICON_CONJURE && is_conjure_expanded {
-            if let Some(c_vec) = crate::features::cat::logic::stats::load_from_id(stats.conjure_unit_id) {
+            if let Some(c_vec) = crate::features::cat::logic::stats::load_from_id(base_stats.conjure_unit_id) {
                 if let Some(c_stats) = c_vec.first() {
-                    let (s_traits, s_h1, s_h2, s_b1, s_b2, s_footer) = collect_ability_data(c_stats, level, cat.curve.as_ref(), &dummy_settings, true, None, None);
+                    let conjure_final = crate::features::cat::logic::stats::get_final_stats(c_stats, cat.curve.as_ref(), level, None, None);
+                    
+                    let (s_traits, s_h1, s_h2, s_b1, s_b2, s_footer) = collect_ability_data(&conjure_final, c_stats, level, cat.curve.as_ref(), &dummy_settings, true, None, None);
                     let mut spirit_max = 0.0_f32;
                     
-                    let dmg_text = format!("Damage: {}\nRange: {}", 999999, c_stats.standing_range); 
+                    let dmg_text = format!("Damage: {}\nRange: {}", conjure_final.attack_1, conjure_final.standing_range); 
                     for l in dmg_text.split('\n') {
                         let tw = measure_text_with_superscript(PxScale::from(ABILITY_FONT_SIZE), &font, l);
                         let sw = 8.0 + 40.0 + 8.0 + tw as f32;
@@ -151,7 +156,6 @@ fn build_statblock_image(
 
     let canvas_width = (max_needed_width.ceil() as i32) * scale;
     
-    // We leave the base image transparent so we can do clean rounded corners later
     let mut img = RgbaImage::new(canvas_width as u32, 4000 * scale as u32); 
     
     let bg_color = Rgba([33, 33, 33, 255]);
@@ -187,7 +191,7 @@ fn build_statblock_image(
     let kamikaze_base = image::load_from_memory(include_bytes!("../../../assets/kamikaze.png")).unwrap().to_rgba8();
     let bosswave_base = image::load_from_memory(include_bytes!("../../../assets/boss_wave_immune.png")).unwrap().to_rgba8();
 
-    // HEADER
+    // === HEADER ===
     let icon_path = paths::image(Path::new(paths::DIR_CATS), AssetType::Icon, cat.id, form, cat.egg_ids);
     if let Some(path) = icon_path {
         if let Ok(icon_img) = image::open(path) {
@@ -237,7 +241,7 @@ fn build_statblock_image(
 
     draw_text_mut(&mut img, text_weak, text_x, final_id_y, PxScale::from(14.0 * HEADER_CONTENT_SCALE * scale_f), &font, &format!("ID: {:03}-{}", cat.id, form_num));
     
-    // STYLIZED EGUI-LIKE LEVEL FIELD
+    // --- STYLIZED EGUI-LIKE LEVEL FIELD ---
     let lvl_prefix = "Level:";
     let lvl_prefix_scale = PxScale::from(16.0 * HEADER_CONTENT_SCALE * scale_f);
     let (prefix_w, _) = text_size(lvl_prefix_scale, &font, lvl_prefix);
@@ -271,33 +275,28 @@ fn build_statblock_image(
     draw_filled_rect_mut(&mut img, Rect::at(padding, cursor_y).of_size(canvas_width as u32 - (padding * 2) as u32, 1 * scale as u32), separator_color);
     cursor_y += STAT_GRID_PADDING_Y * scale;
 
-    // STAT GRID
-    let curve = cat.curve.as_ref();
-    let hp = curve.map_or(stats.hitpoints, |c| c.calculate_stat(stats.hitpoints, level));
-    let atk_1 = curve.map_or(stats.attack_1, |c| c.calculate_stat(stats.attack_1, level));
-    let atk_2 = curve.map_or(stats.attack_2, |c| c.calculate_stat(stats.attack_2, level));
-    let atk_3 = curve.map_or(stats.attack_3, |c| c.calculate_stat(stats.attack_3, level));
-    let total_atk = atk_1 + atk_2 + atk_3;
-    let cycle = stats.attack_cycle(cat.atk_anim_frames[form]);
+    // === STAT GRID ===
+    let total_atk = final_stats.attack_1 + final_stats.attack_2 + final_stats.attack_3;
+    let cycle = final_stats.attack_cycle(cat.atk_anim_frames[form]);
     let dps = if cycle > 0 { (total_atk as f32 * 30.0 / cycle as f32) as i32 } else { 0 };
-    let atk_type = if stats.area_attack == 0 { "Single" } else { "Area" };
-    let cd_val = stats.effective_cooldown();
+    let atk_type = if final_stats.area_attack == 0 { "Single" } else { "Area" };
+    let cd_val = final_stats.effective_cooldown();
     
     let stat_headers_1 = ["Atk", "Dps", "Range", "Atk Cycle", "Atk Type"];
     let stat_data_1 = [
         total_atk.to_string(), 
         dps.to_string(), 
-        stats.standing_range.to_string(), 
+        final_stats.standing_range.to_string(), 
         "".to_string(), 
         atk_type.to_string()
     ];
     let stat_headers_2 = ["Hp", "Kb", "Speed", "Cooldown", "Cost"];
     let stat_data_2 = [
-        hp.to_string(), 
-        stats.knockbacks.to_string(), 
-        stats.speed.to_string(), 
+        final_stats.hitpoints.to_string(), 
+        final_stats.knockbacks.to_string(), 
+        final_stats.speed.to_string(), 
         "".to_string(), 
-        format!("{}¢", stats.eoc1_cost * 3 / 2)
+        format!("{}¢", final_stats.eoc1_cost * 3 / 2)
     ];
 
     let row_h = 24 * scale;
@@ -340,7 +339,7 @@ fn build_statblock_image(
     draw_filled_rect_mut(&mut img, Rect::at(padding, cursor_y).of_size(canvas_width as u32 - (padding * 2) as u32, 1 * scale as u32), separator_color);
     cursor_y += 10 * scale;
 
-    // ABILITIES
+    // === ABILITIES ===
     let ability_line_height = (ABILITY_FONT_SIZE * scale_f).round() as i32 + (ABILITY_LINE_SPACING * scale);
 
     let draw_icon_row = |img: &mut RgbaImage, items: &Vec<AbilityItem>, y: i32, x_start: i32| -> i32 {
@@ -383,19 +382,20 @@ fn build_statblock_image(
             
             y += (export_icon_size as i32).max(total_text_h);
 
-            // SPIRIT CARD RENDER BLOCK
+            // --- SPIRIT CARD RENDER BLOCK ---
             if item.icon_id == crate::global::img015::ICON_CONJURE && is_conjure_expanded {
-                if let Some(c_vec) = crate::features::cat::logic::stats::load_from_id(stats.conjure_unit_id) {
+                if let Some(c_vec) = crate::features::cat::logic::stats::load_from_id(base_stats.conjure_unit_id) {
                     if let Some(c_stats) = c_vec.first() {
                         y += icon_gap_y; 
 
-                        let (s_traits, s_h1, s_h2, s_b1, s_b2, s_footer) = collect_ability_data(c_stats, level, cat.curve.as_ref(), &dummy_settings, true, None, None);
+                        let conjure_final = crate::features::cat::logic::stats::get_final_stats(c_stats, cat.curve.as_ref(), level, None, None);
+
+                        let (s_traits, s_h1, s_h2, s_b1, s_b2, s_footer) = collect_ability_data(&conjure_final, c_stats, level, cat.curve.as_ref(), &dummy_settings, true, None, None);
                         
                         let sx = 8 * scale;
                         let mut spirit_content_w = 0;
                         
-                        let dmg = cat.curve.as_ref().map_or(c_stats.attack_1, |c| c.calculate_stat(c_stats.attack_1, level));
-                        let dmg_text = format!("Damage: {}\nRange: {}", dmg, c_stats.standing_range);
+                        let dmg_text = format!("Damage: {}\nRange: {}", conjure_final.attack_1, conjure_final.standing_range);
                         let dmg_lines: Vec<&str> = dmg_text.split('\n').collect();
 
                         for l in &dmg_lines {
@@ -575,7 +575,6 @@ fn build_statblock_image(
         cursor_y = draw_icon_row(&mut img, &footer, cursor_y, padding); 
     }
 
-    // FINAL RENDER & CANVAS BORDER
     let final_height = cursor_y + padding;
     let final_cropped = image::imageops::crop_imm(&img, 0, 0, canvas_width as u32, final_height as u32).to_image();
     
@@ -614,7 +613,6 @@ pub fn generate_and_copy_statblock(
     ctx: egui::Context, 
     language: String,
     cat: CatEntry,
-    stats: CatRaw,
     form: usize,
     level: i32,
     level_str: String,
@@ -626,7 +624,7 @@ pub fn generate_and_copy_statblock(
 
     std::thread::spawn(move || {
         let img_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            build_statblock_image(&language, &cat, &stats, form, level, &level_str, cuts_map, talent_levels, is_conjure_expanded)
+            build_statblock_image(&language, &cat, form, level, &level_str, cuts_map, talent_levels, is_conjure_expanded)
         }));
 
         let mut success = false;
@@ -666,7 +664,6 @@ pub fn generate_and_save_statblock(
     ctx: egui::Context, 
     language: String,
     cat: CatEntry,
-    stats: CatRaw,
     form: usize,
     level: i32,
     level_str: String,
@@ -678,7 +675,7 @@ pub fn generate_and_save_statblock(
 
     std::thread::spawn(move || {
         let img_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            build_statblock_image(&language, &cat, &stats, form, level, &level_str, cuts_map, talent_levels, is_conjure_expanded)
+            build_statblock_image(&language, &cat, form, level, &level_str, cuts_map, talent_levels, is_conjure_expanded)
         }));
 
         let mut success = false;
