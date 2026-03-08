@@ -12,8 +12,8 @@ use crate::global::mamodel::Model;
 use crate::features::animation::ui::viewer::AnimViewer;
 use crate::features::cat::data::skilllevel::TalentCost;
 
-// Bring sibling modules into scope
 use super::{header, stats, abilities, talents, details, viewer};
+use super::header::ExportAction;
 
 pub fn show(
     ctx: &egui::Context, 
@@ -47,9 +47,46 @@ pub fn show(
     img015::ensure_loaded(ctx, icon_sheet, settings);
     img022::ensure_loaded(ctx, img022_sheet, settings); 
 
-    header::render(
+    let export_action = header::render(
         ctx, ui, cat_entry, current_form, current_tab, current_level, level_input, texture_cache, current_key, settings, talent_levels, talent_costs, img022_sheet
     );
+
+    let base_stats = cat_entry.stats.get(*current_form).and_then(|opt| opt.as_ref());
+    let form_allows_talents = *current_form >= 2;
+
+    let patched_stats_owned = if form_allows_talents {
+        if let (Some(base), Some(t_data)) = (base_stats, &cat_entry.talent_data) {
+            Some(talent_logic::apply_talent_stats(base, t_data, talent_levels))
+        } else { None }
+    } else { None };
+    let current_stats = patched_stats_owned.as_ref().or(base_stats);
+
+    match export_action {
+        ExportAction::Copy | ExportAction::Save => {
+            if let Some(stats) = current_stats {
+                let cat_clone = cat_entry.clone();
+                let stats_clone = stats.clone();
+                let lang_clone = settings.game_language.clone();
+                let cuts_clone = icon_sheet.cuts_map.clone(); 
+                let levels_clone = Some(talent_levels.clone()); 
+                
+                // Fetch the persistent state from the UI exactly as the app renders it
+                let id = egui::Id::new(format!("conjure_expand_{}", cat_entry.id));
+                let is_conjure_expanded = ctx.data(|d| d.get_temp::<bool>(id).unwrap_or(settings.expand_spirit_details));
+                
+                if export_action == ExportAction::Copy {
+                    crate::features::cat::exporter::generate_and_copy_statblock(
+                        ctx.clone(), lang_clone, cat_clone, stats_clone, *current_form, *current_level, level_input.clone(), cuts_clone, levels_clone, is_conjure_expanded
+                    );
+                } else {
+                    crate::features::cat::exporter::generate_and_save_statblock(
+                        ctx.clone(), lang_clone, cat_clone, stats_clone, *current_form, *current_level, level_input.clone(), cuts_clone, levels_clone, is_conjure_expanded
+                    );
+                }
+            }
+        },
+        ExportAction::None => {}
+    }
 
     ui.separator(); 
     ui.add_space(0.0);
@@ -78,15 +115,6 @@ pub fn show(
         }
     }
 
-    let base_stats = cat_entry.stats.get(*current_form).and_then(|opt| opt.as_ref());
-    let form_allows_talents = *current_form >= 2;
-
-    let patched_stats_owned = if form_allows_talents {
-        if let (Some(base), Some(t_data)) = (base_stats, &cat_entry.talent_data) {
-            Some(talent_logic::apply_talent_stats(base, t_data, talent_levels))
-        } else { None }
-    } else { None };
-    let current_stats = patched_stats_owned.as_ref().or(base_stats);
     if *current_tab != DetailTab::Animation {
         if !anim_viewer.loaded_id.is_empty() {
              anim_viewer.held_model = None;

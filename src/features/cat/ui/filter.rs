@@ -6,6 +6,7 @@ use crate::core::utils::{DragGuard, UI_TRAIT_ORDER};
 use crate::features::cat::registry::{ABILITY_REGISTRY, DisplayGroup};
 use crate::global::img015;
 use crate::features::settings::logic::Settings;
+
 pub use crate::features::cat::logic::filter::{CatFilterState, MatchMode, TalentFilterMode};
 use crate::features::cat::logic::filter::{get_adv_attributes, get_icon_name, ATTACK_TYPE_ICONS};
 
@@ -145,6 +146,56 @@ pub fn show_popup(
                     });
                 });
             });
+            ui.add_space(15.0);
+
+            // STATS SECTION
+            ui.heading("Stats");
+            ui.add_space(5.0);
+            
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 6.0;
+                ui.label(egui::RichText::new("Target Level:").strong());
+                ui.add_sized(
+                    egui::vec2(45.0, 20.0), 
+                    egui::TextEdit::singleline(&mut state.level_input)
+                        .hint_text(egui::RichText::new("50").color(egui::Color32::from_gray(100)))
+                );
+            });
+            ui.add_space(8.0);
+
+            let stat_keys = ["Attack", "Dps", "Range", "Atk Cycle (f)", "Hitpoints", "Knockbacks", "Speed", "Cooldown (f)", "Cost"];
+            
+            egui::Grid::new("stat_filter_grid")
+                .spacing([16.0, 6.0])
+                .show(ui, |ui| {
+                    for (i, &stat) in stat_keys.iter().enumerate() {
+                        ui.label(format!("{}:", stat));
+                        
+                        let range = state.stat_ranges.entry(stat).or_default();
+                        
+                        ui.horizontal(|ui| {
+                            ui.spacing_mut().item_spacing.x = TILDE_SPACING;
+
+                            let hint = egui::RichText::new("Any").color(egui::Color32::from_gray(100));
+                            
+                            ui.add_sized(
+                                egui::vec2(45.0, 20.0), 
+                                egui::TextEdit::singleline(&mut range.min).hint_text(hint.clone())
+                            );
+                            
+                            ui.label("~");
+                            
+                            ui.add_sized(
+                                egui::vec2(45.0, 20.0), 
+                                egui::TextEdit::singleline(&mut range.max).hint_text(hint)
+                            );
+                        });
+                        
+                        if (i + 1) % 2 == 0 {
+                            ui.end_row();
+                        }
+                    }
+                });
             ui.add_space(15.0);
 
             ui.heading("Target Traits");

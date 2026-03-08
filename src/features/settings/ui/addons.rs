@@ -180,7 +180,7 @@ fn handle_delete_modal(ctx: &egui::Context, drag_guard: &mut DragGuard, id: &str
                     ui.add_space(15.0);
                     
                     ui.horizontal(|ui| {
-                        let total_width = 130.0; // [60.0] + [60.0] + 10.0 spacing
+                        let total_width = 130.0;
                         let x_offset = (ui.available_width() - total_width) / 2.0;
                         ui.add_space(x_offset);
 

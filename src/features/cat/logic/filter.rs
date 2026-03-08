@@ -4,6 +4,8 @@ use crate::features::cat::registry::ABILITY_REGISTRY;
 use crate::features::cat::logic::stats::CatRaw;
 use crate::features::cat::logic::scanner::CatEntry;
 use crate::features::cat::data::skillacquisition::TalentGroupRaw;
+use crate::features::cat::data::unitlevel::CatLevelCurve;
+use crate::features::cat::logic::talents::apply_talent_stats;
 use crate::global::img015;
 
 pub const ATTACK_TYPE_ICONS: &[usize] = &[
@@ -55,6 +57,8 @@ pub struct CatFilterState {
     pub talent_mode: TalentFilterMode,
     pub ultra_talent_mode: TalentFilterMode,
     pub adv_ranges: HashMap<usize, HashMap<&'static str, RangeInput>>,
+    pub level_input: String,
+    pub stat_ranges: HashMap<&'static str, RangeInput>,
 }
 
 impl Default for CatFilterState {
@@ -68,6 +72,8 @@ impl Default for CatFilterState {
             talent_mode: TalentFilterMode::Ignore,
             ultra_talent_mode: TalentFilterMode::Ignore,
             adv_ranges: HashMap::new(),
+            level_input: String::new(),
+            stat_ranges: HashMap::new(),
         }
     }
 }
@@ -79,6 +85,41 @@ impl CatFilterState {
             || self.forms.iter().any(|&f| f)
             || self.talent_mode == TalentFilterMode::Only
             || self.ultra_talent_mode == TalentFilterMode::Only
+            || self.stat_ranges.values().any(|r| !r.min.is_empty() || !r.max.is_empty())
+    }
+}
+
+pub fn get_stat_value(
+    s: &CatRaw, 
+    stat: &str, 
+    level: i32, 
+    curve: Option<&CatLevelCurve>, 
+    anim_frames: i32
+) -> i32 {
+    match stat {
+        "Hitpoints" => curve.map_or(s.hitpoints, |c| c.calculate_stat(s.hitpoints, level)),
+        "Attack" => {
+            let a1 = curve.map_or(s.attack_1, |c| c.calculate_stat(s.attack_1, level));
+            let a2 = curve.map_or(s.attack_2, |c| c.calculate_stat(s.attack_2, level));
+            let a3 = curve.map_or(s.attack_3, |c| c.calculate_stat(s.attack_3, level));
+            a1 + a2 + a3
+        },
+        "Dps" => {
+            let a1 = curve.map_or(s.attack_1, |c| c.calculate_stat(s.attack_1, level));
+            let a2 = curve.map_or(s.attack_2, |c| c.calculate_stat(s.attack_2, level));
+            let a3 = curve.map_or(s.attack_3, |c| c.calculate_stat(s.attack_3, level));
+            let total_atk = a1 + a2 + a3;
+            
+            let cycle_frames = s.attack_cycle(anim_frames).max(1) as f32;
+            ((total_atk as f32 * 30.0) / cycle_frames).round() as i32
+        },
+        "Range" => s.standing_range,
+        "Atk Cycle (f)" => s.attack_cycle(anim_frames), 
+        "Knockbacks" => s.knockbacks,
+        "Speed" => s.speed,
+        "Cooldown (f)" => s.effective_cooldown(),
+        "Cost" => (s.eoc1_cost as f32 * 1.5).round() as i32, 
+        _ => 0,
     }
 }
 
@@ -266,12 +307,17 @@ pub fn entity_passes_filter(cat: &CatEntry, filter: &CatFilterState) -> bool {
 
     let req_normal = filter.talent_mode == TalentFilterMode::Only;
     let req_ultra = filter.ultra_talent_mode == TalentFilterMode::Only;
+    let filter_level = filter.level_input.parse::<i32>().unwrap_or(50);
+    let has_stat_filters = filter.stat_ranges.values().any(|r| !r.min.is_empty() || !r.max.is_empty());
+    let has_icon_filters = !filter.active_icons.is_empty();
 
-    if filter.active_icons.is_empty() {
-        if !req_normal && !req_ultra {
-            return true;
-        }
+    // Fast reject if absolutely no complex filters are set
+    if !has_stat_filters && !has_icon_filters && !req_normal && !req_ultra {
+        return true;
+    }
 
+    // If there are no specific stats or icons, ONLY process the Talent Bypass requirement
+    if !has_stat_filters && !has_icon_filters {
         for &form_idx in &forms_to_check {
             let mut has_any_normal = false;
             let mut has_any_ultra = false;
@@ -279,11 +325,8 @@ pub fn entity_passes_filter(cat: &CatEntry, filter: &CatFilterState) -> bool {
             if form_idx >= 2 {
                 if let Some(t_data) = cat.talent_data.as_ref() {
                     for g in &t_data.groups {
-                        if g.limit == 1 {
-                            has_any_ultra = true;
-                        } else {
-                            has_any_normal = true;
-                        }
+                        if g.limit == 1 { has_any_ultra = true; } 
+                        else { has_any_normal = true; }
                     }
                 }
             }
@@ -298,118 +341,205 @@ pub fn entity_passes_filter(cat: &CatEntry, filter: &CatFilterState) -> bool {
                 true
             };
 
-            if passed {
-                return true;
-            }
+            if passed { return true; }
         }
         return false;
     }
 
-    for form_idx in forms_to_check {
+    for &form_idx in &forms_to_check {
         if let Some(Some(stats)) = cat.stats.get(form_idx) {
             
-            let mut form_passes = filter.match_mode == MatchMode::And;
-            
-            for &icon_id in &filter.active_icons {
-                let name = get_icon_name(icon_id);
-                let has_inherent = has_trait_or_ability(stats, icon_id);
-                
-                let mut normal_talents = Vec::new();
-                let mut ultra_talents = Vec::new();
+            // EVALUATE TALENT "ONLY" BYPASS
+            let mut passes_talent_only = true;
+            if req_normal || req_ultra {
+                let mut has_any_normal = false;
+                let mut has_any_ultra = false;
 
                 if form_idx >= 2 {
                     if let Some(t_data) = cat.talent_data.as_ref() {
                         for g in &t_data.groups {
-                            let matches_icon = ABILITY_REGISTRY.iter()
-                                .any(|d| d.icon_id == icon_id && (g.ability_id == d.talent_id || g.name_id as u8 == d.talent_id));
-
-                            if matches_icon {
-                                if g.limit == 1 {
-                                    ultra_talents.push(g);
-                                } else {
-                                    normal_talents.push(g);
-                                }
-                            }
+                            if g.limit == 1 { has_any_ultra = true; } 
+                            else { has_any_normal = true; }
                         }
                     }
                 }
 
-                let has_normal = !normal_talents.is_empty();
-                let has_ultra = !ultra_talents.is_empty();
+                passes_talent_only = if req_normal && req_ultra {
+                    has_any_normal || has_any_ultra
+                } else if req_normal {
+                    has_any_normal
+                } else {
+                    has_any_ultra
+                };
+            }
+            if !passes_talent_only { continue; } // Failed talent-only check, skip to next form
 
-                let valid_inherent = filter.talent_mode != TalentFilterMode::Only && filter.ultra_talent_mode != TalentFilterMode::Only && has_inherent;
-                let valid_normal = filter.talent_mode != TalentFilterMode::Ignore && has_normal;
-                let valid_ultra = filter.ultra_talent_mode != TalentFilterMode::Ignore && has_ultra;
+            let mut active_conditions = 0;
+            let mut passed_conditions = 0;
+            let mut failed_conditions = 0;
 
-                let mut icon_passed = false;
+            // Generate precise boundaries mapping to the selected Talent Options
+            let (stats_min, stats_max) = if form_idx >= 2 && cat.talent_data.is_some() {
+                let t_data = cat.talent_data.as_ref().unwrap();
+                let mut min_levels = HashMap::new();
+                let mut max_levels = HashMap::new();
 
-                if valid_inherent || valid_normal || valid_ultra {
-                    if let Some(adv_map) = filter.adv_ranges.get(&icon_id) {
-                        
-                        let mut test_builds = Vec::new();
-                        if valid_inherent { test_builds.push(0); } 
-                        if valid_normal { test_builds.push(1); }   
-                        if valid_ultra { test_builds.push(2); }    
+                for (idx, g) in t_data.groups.iter().enumerate() {
+                    let is_ultra = g.limit == 1;
+                    let mode = if is_ultra { filter.ultra_talent_mode } else { filter.talent_mode };
+                    
+                    if mode == TalentFilterMode::Only {
+                        min_levels.insert(idx as u8, g.max_level);
+                        max_levels.insert(idx as u8, g.max_level);
+                    } else if mode == TalentFilterMode::Consider {
+                        max_levels.insert(idx as u8, g.max_level);
+                    }
+                }
+                
+                let s_min = apply_talent_stats(stats, t_data, &min_levels);
+                let s_max = apply_talent_stats(stats, t_data, &max_levels);
+                (s_min, s_max)
+            } else {
+                (stats.clone(), stats.clone())
+            };
 
-                        let mut any_build_passed = false;
+            // EVALUATE EXACT STATS
+            if has_stat_filters {
+                for (stat_name, range) in &filter.stat_ranges {
+                    if range.min.is_empty() && range.max.is_empty() { continue; }
+                    active_conditions += 1;
+                    
+                    let val_a = get_stat_value(&stats_min, stat_name, filter_level, cat.curve.as_ref(), cat.atk_anim_frames[form_idx]);
+                    let val_b = get_stat_value(&stats_max, stat_name, filter_level, cat.curve.as_ref(), cat.atk_anim_frames[form_idx]);
+                    
+                    let s_min = val_a.min(val_b);
+                    let s_max = val_a.max(val_b);
 
-                        for build in test_builds {
-                            let mut build_passed_all_attrs = true;
-                            
-                            for (attr, range) in adv_map {
-                                let mut val = if has_inherent { get_ability_value(stats, &name, attr) } else { 0 };
-                                
-                                if build >= 1 {
-                                    for g in &normal_talents { val += get_talent_modifier(g, attr); }
-                                }
-                                if build >= 2 {
-                                    for g in &ultra_talents { val += get_talent_modifier(g, attr); }
-                                }
+                    let r_min = range.min.parse::<i32>().unwrap_or(i32::MIN);
+                    let r_max = range.max.parse::<i32>().unwrap_or(i32::MAX);
 
-                                if let Some(min) = range.min.parse::<i32>().ok() {
-                                    if val < min {
-                                        build_passed_all_attrs = false;
-                                        break;
-                                    }
-                                }
-                                
-                                if let Some(max) = range.max.parse::<i32>().ok() {
-                                    if val > max {
-                                        build_passed_all_attrs = false;
-                                        break;
-                                    }
-                                }
-                            }
-
-                            if build_passed_all_attrs {
-                                any_build_passed = true;
-                                break;
-                            }
-                        }
-
-                        if any_build_passed {
-                            icon_passed = true;
-                        }
+                    // True Interval Overlap checks every hypothetical valid stat point
+                    if s_min <= r_max && s_max >= r_min {
+                        passed_conditions += 1;
                     } else {
-                        icon_passed = true;
-                    }
-                }
-
-                if filter.match_mode == MatchMode::And {
-                    if !icon_passed {
-                        form_passes = false;
-                        break;
-                    }
-                } 
-                else {
-                    if icon_passed {
-                        form_passes = true;
-                        break;
+                        failed_conditions += 1;
                     }
                 }
             }
 
-            if form_passes { return true; } 
+            // EVALUATE ICONS
+            if has_icon_filters {
+                for &icon_id in &filter.active_icons {
+                    active_conditions += 1;
+
+                    let name = get_icon_name(icon_id);
+                    let has_inherent = has_trait_or_ability(stats, icon_id);
+                    
+                    let mut normal_talents = Vec::new();
+                    let mut ultra_talents = Vec::new();
+
+                    if form_idx >= 2 {
+                        if let Some(t_data) = cat.talent_data.as_ref() {
+                            for g in &t_data.groups {
+                                let matches_icon = ABILITY_REGISTRY.iter()
+                                    .any(|d| d.icon_id == icon_id && (g.ability_id == d.talent_id || g.name_id as u8 == d.talent_id));
+
+                                if matches_icon {
+                                    if g.limit == 1 {
+                                        ultra_talents.push(g);
+                                    } else {
+                                        normal_talents.push(g);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    let has_normal = !normal_talents.is_empty();
+                    let has_ultra = !ultra_talents.is_empty();
+
+                    let valid_inherent = filter.talent_mode != TalentFilterMode::Only && filter.ultra_talent_mode != TalentFilterMode::Only && has_inherent;
+                    let valid_normal = filter.talent_mode != TalentFilterMode::Ignore && has_normal;
+                    let valid_ultra = filter.ultra_talent_mode != TalentFilterMode::Ignore && has_ultra;
+
+                    let mut icon_passed = false;
+
+                    if valid_inherent || valid_normal || valid_ultra {
+                        if let Some(adv_map) = filter.adv_ranges.get(&icon_id) {
+                            
+                            let mut test_builds = Vec::new();
+                            if valid_inherent { test_builds.push(0); } 
+                            if valid_normal { test_builds.push(1); }   
+                            if valid_ultra { test_builds.push(2); }    
+
+                            let mut any_build_passed = false;
+
+                            for build in test_builds {
+                                let mut build_passed_all_attrs = true;
+                                
+                                for (attr, range) in adv_map {
+                                    let mut val = if has_inherent { get_ability_value(stats, &name, attr) } else { 0 };
+                                    
+                                    if build >= 1 {
+                                        for g in &normal_talents { val += get_talent_modifier(g, attr); }
+                                    }
+                                    if build >= 2 {
+                                        for g in &ultra_talents { val += get_talent_modifier(g, attr); }
+                                    }
+
+                                    if let Some(min) = range.min.parse::<i32>().ok() {
+                                        if val < min {
+                                            build_passed_all_attrs = false;
+                                            break;
+                                        }
+                                    }
+                                    
+                                    if let Some(max) = range.max.parse::<i32>().ok() {
+                                        if val > max {
+                                            build_passed_all_attrs = false;
+                                            break;
+                                        }
+                                    }
+                                }
+
+                                if build_passed_all_attrs {
+                                    any_build_passed = true;
+                                    break;
+                                }
+                            }
+
+                            if any_build_passed {
+                                icon_passed = true;
+                            }
+                        } else {
+                            icon_passed = true;
+                        }
+                    }
+
+                    if icon_passed {
+                        passed_conditions += 1;
+                    } else {
+                        failed_conditions += 1;
+                    }
+                }
+            }
+
+            // Fallback safety to prevent empty loops blocking execution
+            if active_conditions == 0 {
+                return true; 
+            }
+
+            // Dynamic pooling of both Stat filters and Icon filters
+            if filter.match_mode == MatchMode::And {
+                if failed_conditions == 0 {
+                    return true;
+                }
+            } 
+            else {
+                if passed_conditions > 0 {
+                    return true;
+                }
+            }
         }
     }
     

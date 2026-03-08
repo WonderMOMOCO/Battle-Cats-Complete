@@ -8,7 +8,6 @@ pub fn show(ui: &mut egui::Ui, state: &mut ImportState, settings: &mut Settings)
         ui.heading("Game Data Management");
         ui.add_space(10.0);
 
-        // --- Top-Level Tab Bar (Import vs Export) ---
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 5.0; 
             
@@ -39,7 +38,6 @@ pub fn show(ui: &mut egui::Ui, state: &mut ImportState, settings: &mut Settings)
 
         ui.add_space(15.0);
 
-        // --- View Router ---
         match state.active_tab {
             DataTab::Import => import_view::show(ui, state, settings),
             DataTab::Export => export_view::show(ui, state, settings),
@@ -48,7 +46,6 @@ pub fn show(ui: &mut egui::Ui, state: &mut ImportState, settings: &mut Settings)
         ui.add_space(15.0);
         ui.separator(); 
 
-        // --- Status Message Section ---
         if (state.rx.is_some() || state.is_adb_busy) 
             && !state.status_message.contains("Success") 
             && !state.status_message.contains("Error") 
@@ -70,7 +67,6 @@ pub fn show(ui: &mut egui::Ui, state: &mut ImportState, settings: &mut Settings)
         
         ui.separator();
         
-        // --- Scrolling Log Footer ---
         egui::ScrollArea::vertical()
             .stick_to_bottom(true)
             .auto_shrink([false, false]) 
