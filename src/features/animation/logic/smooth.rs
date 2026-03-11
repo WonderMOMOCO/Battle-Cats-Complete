@@ -1,7 +1,7 @@
 // 'animate.rs' but modified for better
 // sub-frame interpolation support
-use crate::global::mamodel::{Model, ModelPart};
-use crate::global::maanim::{Animation, AnimModification};
+use crate::global::formats::mamodel::{Model, ModelPart};
+use crate::global::formats::maanim::{Animation, AnimModification};
 
 pub fn animate(model: &Model, animation: &Animation, global_frame: f32) -> Vec<ModelPart> {
     let mut parts = model.parts.clone();

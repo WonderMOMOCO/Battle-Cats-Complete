@@ -1,8 +1,8 @@
 use eframe::egui;
-use crate::features::settings::logic::Settings;
+use crate::features::settings::logic::state::AnimSettings;
 use super::tabs::toggle_ui;
 
-pub fn show(ui: &mut egui::Ui, settings: &mut Settings) -> bool {
+pub fn show(ui: &mut egui::Ui, settings: &mut AnimSettings) -> bool {
     let refresh_needed = false;
 
     egui::ScrollArea::vertical()
@@ -36,8 +36,8 @@ pub fn show(ui: &mut egui::Ui, settings: &mut Settings) -> bool {
             ui.horizontal(|ui| {
                 let tooltip = "Switches from 30fps to your monitors native refresh rate\nAllows animations to be smooth but quite buggy, so expect them\nWhile this feature is supported, it is of low importance";
                 
-                if toggle_ui(ui, &mut settings.animation_interpolation).on_hover_text(tooltip).changed() {
-                    if settings.animation_interpolation {
+                if toggle_ui(ui, &mut settings.interpolation).on_hover_text(tooltip).changed() {
+                    if settings.interpolation {
                         let dt = ui.input(|i| i.stable_dt);
                         if dt > 0.0 {
                             settings.native_fps = (1.0 / dt).round();
@@ -48,13 +48,13 @@ pub fn show(ui: &mut egui::Ui, settings: &mut Settings) -> bool {
                 
                 ui.label("Use Native Refresh Rate").on_hover_text(tooltip);
                 
-                if settings.animation_interpolation {
+                if settings.interpolation {
                     ui.label(egui::RichText::new(format!("({}fps)", settings.native_fps)).weak().size(12.0));
                 }
             });
 
             ui.horizontal(|ui| {
-                if toggle_ui(ui, &mut settings.animation_debug).changed() {
+                if toggle_ui(ui, &mut settings.debug_view).changed() {
                     ui.ctx().request_repaint();
                 }
                 ui.label("Enable Debug View");

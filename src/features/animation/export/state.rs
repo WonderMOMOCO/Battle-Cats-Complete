@@ -96,7 +96,7 @@ pub struct ExporterState {
     pub encoded_frames: i32,   
     pub tx: Option<Sender<EncoderMessage>>,
     pub abort: Option<Arc<AtomicBool>>, 
-    pub export_result_msg: Option<String>, // Separate msg for Export
+    pub export_result_msg: Option<String>,
     
     // Loop Finding Runtime
     pub is_loop_searching: bool,
@@ -104,7 +104,7 @@ pub struct ExporterState {
     pub loop_rx: Option<Receiver<LoopStatus>>,
     pub loop_abort: Option<Arc<AtomicBool>>,
     pub loop_search_start_time: Option<f64>,
-    pub loop_result_msg: Option<String>, // Separate msg for Loop
+    pub loop_result_msg: Option<String>,
 
     // UI Helpers
     pub drag_guard: DragGuard,

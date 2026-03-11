@@ -4,13 +4,13 @@ use std::sync::mpsc::TryRecvError;
 
 use super::CatListState;
 use super::scanner;
-use crate::global::imgcut::SpriteSheet; 
+use crate::global::formats::imgcut::SpriteSheet; 
 use crate::features::cat::data::unitlevel;
 use crate::features::cat::data::unitbuy;
 use crate::features::cat::data::skillacquisition;
 use crate::features::cat::data::unitevolve;
 use crate::features::cat::paths;
-use crate::features::settings::logic::handle::ScannerConfig;
+use crate::features::settings::logic::state::ScannerConfig;
 
 pub fn ensure_global_data_loaded(state: &mut CatListState, language_code: &str) {
     let cats_dir = Path::new(paths::DIR_CATS);
@@ -35,12 +35,17 @@ pub fn refresh_cat(state: &mut CatListState, id: u32, config: ScannerConfig) {
     let cats_dir = Path::new(paths::DIR_CATS);
     let unit_folder = cats_dir.join(format!("{:03}", id));
 
+    let curves = match &state.cached_level_curves { Some(c) => c, None => return };
+    let buy = match &state.cached_unit_buy { Some(b) => b, None => return };
+    let talents = match &state.cached_talents { Some(t) => t, None => return };
+    let evolve = match &state.cached_evolve_text { Some(e) => e, None => return };
+
     let new_entry = scanner::process_cat_entry(
         &unit_folder,
-        state.cached_level_curves.as_ref().unwrap(),
-        state.cached_unit_buy.as_ref().unwrap(),
-        state.cached_talents.as_ref().unwrap(),
-        state.cached_evolve_text.as_ref().unwrap(),
+        curves, 
+        buy,
+        talents,
+        evolve,
         &config 
     );
 
@@ -71,85 +76,56 @@ pub fn reload_selected_cat_data(state: &mut CatListState, config: ScannerConfig)
 }
 
 pub fn update_data(state: &mut CatListState) {
-    let Some(receiver_handle) = &state.scan_receiver else { return };
+    let Some(rx) = &state.scan_receiver else { return };
 
-    let mut received_batch = Vec::new();
-    let mut is_scan_complete = false;
+    let mut received_any = false;
+    let mut is_done = false;
 
     loop {
-        match receiver_handle.try_recv() {
-            Ok(cat_entry) => received_batch.push(cat_entry),
+        match rx.try_recv() {
+            Ok(cat_entry) => {
+                state.cats.push(cat_entry);
+                received_any = true;
+            },
             Err(TryRecvError::Empty) => break,
             Err(TryRecvError::Disconnected) => {
-                is_scan_complete = true;
+                is_done = true;
                 break;
             }
         }
     }
 
-    if !received_batch.is_empty() {
-        if state.is_cold_scan {
-            state.cats.extend(received_batch);
-            
-            let now = Instant::now();
-            let should_sort = match state.last_update_time {
-                Some(last) => now.duration_since(last) > Duration::from_millis(100),
-                None => true,
-            };
+    if received_any {
+        let now = Instant::now();
+        let should_sort = state.last_update_time
+            .map(|last| now.duration_since(last) > Duration::from_millis(150))
+            .unwrap_or(true);
 
-            if should_sort {
-                state.cats.sort_unstable_by_key(|cat| cat.id); 
-                state.last_update_time = Some(now);
+        if should_sort || is_done {
+            state.cats.sort_unstable_by_key(|cat| cat.id); 
+            state.last_update_time = Some(now);
 
-                if state.selected_cat.is_none() {
-                    if let Some(first_cat) = state.cats.first() {
-                        state.selected_cat = Some(first_cat.id);
-                    }
-                }
+            if state.selected_cat.is_none() {
+                state.selected_cat = state.cats.first().map(|c| c.id);
             }
-        } else {
-            state.incoming_cats.extend(received_batch);
         }
     }
 
-    if is_scan_complete {
-        if state.is_cold_scan {
-            state.cats.sort_unstable_by_key(|cat| cat.id);
-        } else if !state.incoming_cats.is_empty() {
-            state.incoming_cats.sort_unstable_by_key(|cat| cat.id);
-            state.cats = std::mem::take(&mut state.incoming_cats);
-            
-            state.cat_list.clear_cache();
-
-            if let Some(target_id) = state.selected_cat {
-                if !state.cats.iter().any(|cat| cat.id == target_id) {
-                    if let Some(first_cat) = state.cats.first() {
-                        state.selected_cat = Some(first_cat.id);
-                    } else {
-                        state.selected_cat = None;
-                    }
-                }
-            } else {
-                if let Some(first_cat) = state.cats.first() {
-                    state.selected_cat = Some(first_cat.id);
-                }
-            }
-        }
+    if is_done {
         state.scan_receiver = None;
-        state.last_update_time = None; 
     }
 }
 
 pub fn restart_scan(state: &mut CatListState, config: ScannerConfig) {
+    state.cats.clear();
     state.skill_descriptions = None; 
     
     let current_selection_id = state.selected_cat;
     let current_form = state.selected_form;
     let current_tab = state.selected_detail_tab;
 
-    state.is_cold_scan = state.cats.is_empty();
+    state.is_cold_scan = true;
     state.last_update_time = None;
-
     state.incoming_cats.clear();
     
     state.cached_level_curves = None;
@@ -163,11 +139,8 @@ pub fn restart_scan(state: &mut CatListState, config: ScannerConfig) {
     state.talent_name_textures.clear();
     state.gatya_item_textures.clear(); 
     state.texture_cache_version += 1;
-
     state.sprite_sheet = SpriteSheet::default();
-    state.multihit_texture = None;
-    state.kamikaze_texture = None;
-    state.boss_wave_immune_texture = None;
+    state.custom_assets = None;
 
     state.selected_cat = current_selection_id;
     state.selected_form = current_form;

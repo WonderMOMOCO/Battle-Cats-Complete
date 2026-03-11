@@ -5,8 +5,9 @@ use std::sync::mpsc::Sender;
 use std::fs;
 use super::driver; 
 use crate::features::import::logic::{AdbImportType, AdbRegion};
-use crate::features::import::logic::{decrypt, sort}; 
-use crate::features::settings::logic::handle::EmulatorConfig;
+use crate::features::import::logic::decrypt;
+use crate::features::import::sort;
+use crate::features::settings::logic::state::EmulatorConfig;
 
 pub enum AdbEvent {
     Status(String),
@@ -101,14 +102,24 @@ pub fn spawn_full_import(tx: Sender<AdbEvent>, base_output_dir: PathBuf, mode: A
         let _ = tx.send(AdbEvent::Status("Device Verified.".to_string()));
 
         if mode == AdbImportType::All {
-            let _ = tx.send(AdbEvent::Status("Requesting Root Access...".to_string()));
-            let _ = driver::run_command(&["-s", &current_serial, "root"]);
-            thread::sleep(Duration::from_secs(2));
+            let _ = tx.send(AdbEvent::Status("Checking Root Permissions...".to_string()));
             
-            if !current_serial.contains(":") {
-                 if let Some(new_s) = driver::find_usb_device() { current_serial = new_s; }
+            // Try to verify if we already have root access via 'su' without hanging the daemon
+            let is_rooted = driver::run_command(&["-s", &current_serial, "shell", "su", "-c", "echo root_test"]).unwrap_or_default();
+
+            if is_rooted.contains("root_test") {
+                let _ = tx.send(AdbEvent::Status("Root access confirmed via su.".to_string()));
             } else {
-                 let _ = driver::connect_wireless(&current_serial);
+                let _ = tx.send(AdbEvent::Status("Requesting Root Access (ADB Root)...".to_string()));
+                // Fallback: try standard adb root (might hang on some emulators if root is blocked)
+                let _ = driver::run_command(&["-s", &current_serial, "root"]);
+                thread::sleep(Duration::from_secs(2));
+                
+                if !current_serial.contains(":") {
+                     if let Some(new_s) = driver::find_usb_device() { current_serial = new_s; }
+                } else {
+                     let _ = driver::connect_wireless(&current_serial);
+                }
             }
         }
 

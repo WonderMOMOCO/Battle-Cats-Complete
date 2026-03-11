@@ -1,16 +1,17 @@
 use eframe::egui;
 use std::collections::HashMap;
-
 use crate::features::cat::logic::scanner::CatEntry;
 use crate::features::cat::logic::DetailTab;
-use crate::global::imgcut::SpriteSheet;
-use crate::global::img015;
-use crate::global::img022; 
+use crate::global::formats::imgcut::SpriteSheet;
+use crate::global::game::img015;
+use crate::global::game::img022; 
 use crate::features::settings::logic::Settings;
-use crate::global::mamodel::Model;
+use crate::global::formats::mamodel::Model;
 use crate::features::animation::ui::viewer::AnimViewer;
 use crate::features::cat::data::skilllevel::TalentCost;
-
+use crate::global::assets::CustomAssets;
+use crate::features::statblock::logic::builder::{StatblockData, SpiritData, generate_and_copy, generate_and_save};
+use crate::features::cat::registry::{get_cat_stat, format_cat_stat};
 use super::{header, stats, abilities, talents, details, viewer};
 use super::header::ExportAction;
 
@@ -24,17 +25,12 @@ pub fn show(
     current_level: &mut i32,    
     texture_cache: &mut Option<egui::TextureHandle>,
     current_key: &mut String,
-    
     icon_sheet: &mut SpriteSheet,   
     img022_sheet: &mut SpriteSheet, 
     anim_sheet: &mut SpriteSheet,   
-    
     model_data: &mut Option<Model>,
     anim_viewer: &mut AnimViewer,
-
-    multihit_texture: &mut Option<egui::TextureHandle>,
-    kamikaze_texture: &mut Option<egui::TextureHandle>,
-    boss_wave_immune_texture: &mut Option<egui::TextureHandle>,
+    assets: &CustomAssets, 
     talent_name_cache: &mut HashMap<String, egui::TextureHandle>,
     gatya_item_textures: &mut HashMap<i32, Option<egui::TextureHandle>>,
     skill_descriptions: Option<&Vec<String>>, 
@@ -44,7 +40,7 @@ pub fn show(
     cache_version: u64,
 ) {
     img015::ensure_loaded(ctx, icon_sheet, settings);
-    img022::ensure_loaded(ctx, img022_sheet, settings); 
+    img022::ensure_loaded(ctx, img022_sheet, settings);
 
     let export_action = header::render(
         ctx, ui, cat_entry, current_form, current_tab, current_level, level_input, texture_cache, current_key, settings, talent_levels, talent_costs, img022_sheet
@@ -53,7 +49,6 @@ pub fn show(
     let base_stats = cat_entry.stats.get(*current_form).and_then(|opt| opt.as_ref());
     let form_allows_talents = *current_form >= 2;
 
-    // Use our new centralized Logic function
     let final_stats_owned = if let Some(base) = base_stats {
         Some(crate::features::cat::logic::stats::get_final_stats(
             base,
@@ -64,26 +59,91 @@ pub fn show(
         ))
     } else { None };
 
-    // TRIGGER EXPORT
     match export_action {
         ExportAction::Copy | ExportAction::Save => {
-            if base_stats.is_some() {
-                let cat_clone = cat_entry.clone();
-                let lang_clone = settings.game_language.clone();
+            if let (Some(final_s), Some(base_s)) = (final_stats_owned.as_ref(), base_stats) {
+                
+                let icon_path = crate::features::cat::paths::image(
+                    std::path::Path::new(crate::features::cat::paths::DIR_CATS),
+                    crate::features::cat::paths::AssetType::Icon,
+                    cat_entry.id,
+                    *current_form,
+                    cat_entry.egg_ids
+                );
+
+                let expand_id = egui::Id::new(format!("conjure_expand_{}", cat_entry.id));
+                let is_conjure_expanded = ctx.data(|d| d.get_temp::<bool>(expand_id).unwrap_or(settings.cat_data.expand_spirit_details));
+
+                let (traits, h1, h2, b1, b2, footer) = crate::features::cat::logic::abilities::collect_ability_data(
+                    final_s, base_s, *current_level, cat_entry.curve.as_ref(), settings, false,
+                    if form_allows_talents { cat_entry.talent_data.as_ref() } else { None },
+                    if form_allows_talents { Some(&*talent_levels) } else { None }
+                );
+
+                let mut spirit_data = None;
+                if is_conjure_expanded && base_s.conjure_unit_id > 0 {
+                    if let Some(c_vec) = crate::features::cat::logic::stats::load_from_id(base_s.conjure_unit_id) {
+                        if let Some(c_stats) = c_vec.first() {
+                            let conjure_final = crate::features::cat::logic::stats::get_final_stats(c_stats, cat_entry.curve.as_ref(), *current_level, None, None);
+                            let (s_traits, s_h1, s_h2, s_b1, s_b2, s_footer) = crate::features::cat::logic::abilities::collect_ability_data(
+                                &conjure_final, c_stats, *current_level, cat_entry.curve.as_ref(), settings, true, None, None
+                            );
+                            
+                            spirit_data = Some(SpiritData {
+                                dmg_text: format!("Damage: {}\nRange: {}", conjure_final.attack_1, conjure_final.standing_range),
+                                traits: s_traits,
+                                h1: s_h1,
+                                h2: s_h2,
+                                b1: s_b1,
+                                b2: s_b2,
+                                footer: s_footer,
+                            });
+                        }
+                    }
+                }
+
+                let anim_frames = cat_entry.atk_anim_frames[*current_form];
+                
+                let cycle = (get_cat_stat("Atk Cycle").get_value)(final_s, anim_frames);
+                let atk_type = if final_s.area_attack == 0 { "Single" } else { "Area" };
+
+                let data = StatblockData {
+                    id_str: cat_entry.id_str(*current_form),
+                    name: cat_entry.display_name(*current_form),
+                    icon_path,
+                    top_label: "Level:".to_string(),
+                    top_value: level_input.clone(),
+                    
+                    hp: final_s.hitpoints.to_string(),
+                    kb: final_s.knockbacks.to_string(),
+                    speed: final_s.speed.to_string(),
+                    
+                    cd_label: get_cat_stat("Cooldown").display_name.to_string(),
+                    cd_value: format_cat_stat("Cooldown", final_s, anim_frames),
+                    is_cd_time: true, 
+                    
+                    cd_frames: (get_cat_stat("Cooldown").get_value)(final_s, anim_frames),
+                    
+                    cost_label: get_cat_stat("Cost").display_name.to_string(),
+                    cost_value: format_cat_stat("Cost", final_s, anim_frames),
+                    
+                    atk: format_cat_stat("Attack", final_s, anim_frames),
+                    dps: format_cat_stat("Dps", final_s, anim_frames),
+                    
+                    range: final_s.standing_range.to_string(),
+                    atk_cycle: cycle,
+                    atk_type: atk_type.to_string(),
+                    
+                    traits, h1, h2, b1, b2, footer, spirit_data,
+                };
+
+                let lang_clone = settings.general.game_language.clone();
                 let cuts_clone = icon_sheet.cuts_map.clone(); 
-                let levels_clone = Some(talent_levels.clone()); 
-                
-                let id = egui::Id::new(format!("conjure_expand_{}", cat_entry.id));
-                let is_conjure_expanded = ctx.data(|d| d.get_temp::<bool>(id).unwrap_or(settings.expand_spirit_details));
-                
+
                 if export_action == ExportAction::Copy {
-                    crate::features::cat::exporter::generate_and_copy_statblock(
-                        ctx.clone(), lang_clone, cat_clone, *current_form, *current_level, level_input.clone(), cuts_clone, levels_clone, is_conjure_expanded
-                    );
+                    generate_and_copy(ctx.clone(), lang_clone, data, cuts_clone);
                 } else {
-                    crate::features::cat::exporter::generate_and_save_statblock(
-                        ctx.clone(), lang_clone, cat_clone, *current_form, *current_level, level_input.clone(), cuts_clone, levels_clone, is_conjure_expanded
-                    );
+                    generate_and_save(ctx.clone(), lang_clone, data, cuts_clone);
                 }
             }
         },
@@ -92,30 +152,6 @@ pub fn show(
 
     ui.separator(); 
     ui.add_space(0.0);
-
-    if multihit_texture.is_none() {
-        const MULTIHIT_BYTES: &[u8] = include_bytes!("../../../assets/multihit.png");
-        if let Ok(img) = image::load_from_memory(MULTIHIT_BYTES) {
-            let rgba = img.to_rgba8();
-            *multihit_texture = Some(ctx.load_texture("multihit_icon", egui::ColorImage::from_rgba_unmultiplied([rgba.width() as usize, rgba.height() as usize], rgba.as_flat_samples().as_slice()), egui::TextureOptions::LINEAR));
-        }
-    }
-
-    if kamikaze_texture.is_none() {
-        const KAMIKAZE_BYTES: &[u8] = include_bytes!("../../../assets/kamikaze.png");
-        if let Ok(img) = image::load_from_memory(KAMIKAZE_BYTES) {
-            let rgba = img.to_rgba8();
-            *kamikaze_texture = Some(ctx.load_texture("kamkikaze_icon", egui::ColorImage::from_rgba_unmultiplied([rgba.width() as usize, rgba.height() as usize], rgba.as_flat_samples().as_slice()), egui::TextureOptions::LINEAR));
-        }
-    }
-
-    if boss_wave_immune_texture.is_none() {
-        const BOSS_WAVE_BYTES: &[u8] = include_bytes!("../../../assets/boss_wave_immune.png");
-        if let Ok(img) = image::load_from_memory(BOSS_WAVE_BYTES) {
-          let rgba = img.to_rgba8();
-          *boss_wave_immune_texture = Some(ctx.load_texture("boss_wave_icon", egui::ColorImage::from_rgba_unmultiplied([rgba.width() as usize, rgba.height() as usize], rgba.as_flat_samples().as_slice()), egui::TextureOptions::LINEAR));
-        }
-    }
 
     if *current_tab != DetailTab::Animation {
         if !anim_viewer.loaded_id.is_empty() {
@@ -140,7 +176,7 @@ pub fn show(
                     .show(ui, |ui| {
                         abilities::render(
                             ui, final_s, base_s, cat_entry, *current_level, icon_sheet, 
-                            multihit_texture, kamikaze_texture, boss_wave_immune_texture, 
+                            assets,
                             settings, 
                             if form_allows_talents { cat_entry.talent_data.as_ref() } else { None },
                             if form_allows_talents { Some(&*talent_levels) } else { None }

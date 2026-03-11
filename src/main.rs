@@ -33,7 +33,7 @@ fn main() -> eframe::Result<()> {
 
 fn load_icon() -> egui::IconData {
     let (icon_rgba, icon_width, icon_height) = {
-        let image = image::load_from_memory(include_bytes!("assets/icon.ico"))
+        let image = image::load_from_memory(crate::global::assets::ICON)
             .expect("Failed to open icon path")
             .into_rgba8();
         

@@ -1,7 +1,7 @@
 use eframe::egui;
 use eframe::glow::{self, HasContext};
 use std::sync::{Arc, Mutex};
-use crate::global::imgcut::SpriteSheet;
+use crate::global::formats::imgcut::SpriteSheet;
 use super::transform::WorldTransform;
 
 // Shaders

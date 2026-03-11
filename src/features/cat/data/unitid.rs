@@ -255,25 +255,6 @@ impl CatRaw {
             explosion_immune: get_int(116),
         })
     }
-    
-    pub fn attack_cycle(&self, animation_frames: i32) -> i32 {
-        let mut effective_foreswing = self.pre_attack_animation;
-        
-        if self.attack_3 > 0 && self.time_before_attack_3 > 0 {
-            effective_foreswing = self.time_before_attack_3;
-        } 
-        else if self.attack_2 > 0 && self.time_before_attack_2 > 0 {
-            effective_foreswing = self.time_before_attack_2;
-        }
-
-        let cooldown_frames = self.time_before_attack_1.saturating_sub(1);
-        
-        (effective_foreswing + cooldown_frames).max(animation_frames)
-    }
-
-    pub fn effective_cooldown(&self) -> i32 {
-        (self.cooldown - 264).max(60)
-    }
 }
 
 pub fn load_from_id(cat_id: i32) -> Option<Vec<CatRaw>> {

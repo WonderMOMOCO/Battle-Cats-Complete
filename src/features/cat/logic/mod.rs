@@ -1,8 +1,7 @@
 pub mod scanner;
 pub mod stats;
 pub mod abilities; 
-pub mod talents; 
-pub mod watcher;
+pub mod talents;
 pub mod loader;
 pub mod state;
 pub mod filter;

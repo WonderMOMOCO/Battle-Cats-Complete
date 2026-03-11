@@ -28,7 +28,6 @@ impl Clone for SpriteSheet {
 
 pub struct SpriteSheet {
     pub texture_handle: Option<egui::TextureHandle>,
-    // Raw image data for Custom GL Renderer
     pub image_data: Option<Arc<egui::ColorImage>>, 
     pub cuts_map: HashMap<usize, SpriteCut>, 
     pub is_loading_active: bool,
@@ -49,8 +48,8 @@ impl Default for SpriteSheet {
     }
 }
 
-#[allow(dead_code)]
 impl SpriteSheet {
+    #[allow(dead_code)]
     pub fn is_ready(&self) -> bool {
         self.texture_handle.is_some()
     }

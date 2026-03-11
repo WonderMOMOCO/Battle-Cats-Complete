@@ -1,11 +1,11 @@
 use std::collections::{HashSet, HashMap};
-use crate::core::utils::UI_TRAIT_ORDER;
-use crate::features::cat::registry::ABILITY_REGISTRY;
+use crate::features::cat::registry::CAT_ABILITY_REGISTRY;
 use crate::features::cat::logic::stats::CatRaw;
 use crate::features::cat::logic::scanner::CatEntry;
 use crate::features::cat::data::skillacquisition::TalentGroupRaw;
 use crate::features::cat::logic::talents::apply_talent_stats;
-use crate::global::img015;
+use crate::features::cat::registry::CAT_STATS_REGISTRY;
+use crate::global::game::img015;
 
 pub const ATTACK_TYPE_ICONS: &[usize] = &[
     img015::ICON_SINGLE_ATTACK,
@@ -89,22 +89,17 @@ impl CatFilterState {
 }
 
 pub fn get_stat_value(s: &CatRaw, stat: &str, anim_frames: i32) -> i32 {
-    match stat {
-        "Hitpoints" => s.hitpoints,
-        "Attack" => s.attack_1 + s.attack_2 + s.attack_3,
-        "Dps" => {
-            let total_atk = s.attack_1 + s.attack_2 + s.attack_3;
-            let cycle_frames = s.attack_cycle(anim_frames).max(1) as f32;
-            ((total_atk as f32 * 30.0) / cycle_frames).round() as i32
-        },
-        "Range" => s.standing_range,
-        "Atk Cycle (f)" => s.attack_cycle(anim_frames), 
-        "Knockbacks" => s.knockbacks,
-        "Speed" => s.speed,
-        "Cooldown (f)" => s.effective_cooldown(),
-        "Cost" => (s.eoc1_cost as f32 * 1.5).round() as i32, 
-        _ => 0,
+    let reg_name = match stat {
+        "Cooldown (f)" => "Cooldown", 
+        "Atk Cycle (f)" => "Atk Cycle",
+        _ => stat,
+    };
+    
+    if let Some(def) = CAT_STATS_REGISTRY.iter().find(|d| d.name == reg_name) {
+        return (def.get_value)(s, anim_frames);
     }
+
+    0 
 }
 
 pub fn get_adv_attributes(name: &str) -> Option<&'static [&'static str]> {
@@ -133,26 +128,7 @@ pub fn get_adv_attributes(name: &str) -> Option<&'static [&'static str]> {
 }
 
 pub fn get_icon_name(icon_id: usize) -> String {
-    match icon_id {
-        img015::ICON_TRAIT_RED => "Red",
-        img015::ICON_TRAIT_FLOATING => "Floating",
-        img015::ICON_TRAIT_BLACK => "Black",
-        img015::ICON_TRAIT_METAL => "Metal",
-        img015::ICON_TRAIT_ANGEL => "Angel",
-        img015::ICON_TRAIT_ALIEN => "Alien",
-        img015::ICON_TRAIT_ZOMBIE => "Zombie",
-        img015::ICON_TRAIT_RELIC => "Relic",
-        img015::ICON_TRAIT_AKU => "Aku",
-        img015::ICON_TRAIT_TRAITLESS => "Traitless",
-        img015::ICON_SINGLE_ATTACK => "Single Attack",
-        img015::ICON_AREA_ATTACK => "Area Attack",
-        img015::ICON_OMNI_STRIKE => "Omni Strike",
-        img015::ICON_LONG_DISTANCE => "Long Distance",
-        img015::ICON_MULTIHIT => "Multi-Hit",
-        img015::ICON_CONJURE => "Conjure / Spirit",
-        img015::ICON_KAMIKAZE => "Kamikaze",
-        _ => ABILITY_REGISTRY.iter().find(|d| d.icon_id == icon_id).map(|d| d.name).unwrap_or("Unknown")
-    }.to_string()
+    CAT_ABILITY_REGISTRY.iter().find(|d| d.icon_id == icon_id).map(|d| d.name).unwrap_or("Unknown").to_string()
 }
 
 pub fn get_ability_value(s: &CatRaw, ability_name: &str, attr: &str) -> i32 {
@@ -216,55 +192,7 @@ pub fn get_talent_modifier(g: &TalentGroupRaw, attr: &str) -> i32 {
 }
 
 pub fn has_trait_or_ability(s: &CatRaw, icon_id: usize) -> bool {
-    if UI_TRAIT_ORDER.contains(&icon_id) {
-        match icon_id {
-            img015::ICON_TRAIT_RED => s.target_red != 0,
-            img015::ICON_TRAIT_FLOATING => s.target_floating != 0,
-            img015::ICON_TRAIT_BLACK => s.target_black != 0,
-            img015::ICON_TRAIT_METAL => s.target_metal != 0,
-            img015::ICON_TRAIT_ANGEL => s.target_angel != 0,
-            img015::ICON_TRAIT_ALIEN => s.target_alien != 0,
-            img015::ICON_TRAIT_ZOMBIE => s.target_zombie != 0,
-            img015::ICON_TRAIT_RELIC => s.target_relic != 0,
-            img015::ICON_TRAIT_AKU => s.target_aku != 0,
-            img015::ICON_TRAIT_TRAITLESS => s.target_traitless != 0,
-            _ => false,
-        }
-    } else if icon_id == img015::ICON_CONJURE {
-        s.conjure_unit_id > 0
-    } else if icon_id == img015::ICON_KAMIKAZE {
-        s.kamikaze != 0
-    } else if ATTACK_TYPE_ICONS.contains(&icon_id) {
-        let ranges = [
-            (s.long_distance_1_anchor, s.long_distance_1_span),
-            (s.long_distance_2_anchor, s.long_distance_2_span),
-            (s.long_distance_3_anchor, s.long_distance_3_span),
-        ];
-        
-        let mut has_range = false;
-        let mut is_omni = false;
-        
-        for &(anchor, span) in &ranges {
-            if anchor != 0 || span != 0 {
-                has_range = true;
-                let min = anchor.min(anchor + span);
-                if min <= 0 {
-                    is_omni = true;
-                }
-            }
-        }
-
-        match icon_id {
-            img015::ICON_SINGLE_ATTACK => s.area_attack == 0,
-            img015::ICON_AREA_ATTACK => s.area_attack == 1,
-            img015::ICON_LONG_DISTANCE => has_range && !is_omni, 
-            img015::ICON_OMNI_STRIKE => has_range && is_omni, 
-            img015::ICON_MULTIHIT => s.attack_2 > 0,
-            _ => false,
-        }
-    } else {
-        ABILITY_REGISTRY.iter().find(|d| d.icon_id == icon_id).map_or(false, |def| (def.getter)(s) > 0)
-    }
+    CAT_ABILITY_REGISTRY.iter().find(|d| d.icon_id == icon_id).map_or(false, |def| (def.getter)(s) > 0)
 }
 
 pub fn entity_passes_filter(cat: &CatEntry, filter: &CatFilterState) -> bool {
@@ -420,7 +348,7 @@ pub fn entity_passes_filter(cat: &CatEntry, filter: &CatFilterState) -> bool {
                     if form_idx >= 2 {
                         if let Some(t_data) = cat.talent_data.as_ref() {
                             for g in &t_data.groups {
-                                let matches_icon = ABILITY_REGISTRY.iter()
+                                let matches_icon = CAT_ABILITY_REGISTRY.iter()
                                     .any(|d| d.icon_id == icon_id && (g.ability_id == d.talent_id || g.name_id as u8 == d.talent_id));
 
                                 if matches_icon {

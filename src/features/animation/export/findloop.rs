@@ -2,12 +2,12 @@ use std::sync::{mpsc, Arc, atomic::{AtomicBool, Ordering}};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use crate::global::mamodel::Model;
-use crate::global::maanim::Animation;
+use crate::global::formats::mamodel::Model;
+use crate::global::formats::maanim::Animation;
 use crate::features::animation::logic::{animator, transform};
 use crate::features::animation::export::state::LoopStatus;
 
-const TIMEOUT_SECONDS: u64 = 180; // 3 Minutes
+const TIMEOUT_SECONDS: u64 = 180;
 
 pub fn start_search(
     model: Model,

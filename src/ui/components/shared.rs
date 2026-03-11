@@ -31,30 +31,53 @@ pub fn text_with_superscript(ui: &mut egui::Ui, text: &str) {
         return;
     }
 
-    let parts: Vec<&str> = text.split('^').collect();
-    if parts.len() < 2 {
-        ui.label(text);
-        return;
-    }
-
     let body_font = ui.style().text_styles.get(&egui::TextStyle::Body)
         .cloned().unwrap_or(egui::FontId::proportional(14.0));
         
     let mut job = egui::text::LayoutJob::default();
     job.wrap.max_width = ui.spacing().tooltip_width;
 
-    job.append(parts[0], 0.0, egui::TextFormat {
+    let normal_format = egui::TextFormat {
         font_id: body_font.clone(),
         color: ui.visuals().text_color(),
         ..Default::default()
-    });
+    };
 
-    job.append(parts[1], 0.0, egui::TextFormat {
+    let super_format = egui::TextFormat {
         font_id: egui::FontId::proportional(body_font.size * 0.70), 
         color: ui.visuals().text_color(),
         valign: egui::Align::Min, 
         ..Default::default()
-    });
+    };
+
+    let mut parts = text.split('^');
+
+    // First part is always standard text before any ^ character
+    if let Some(first) = parts.next() {
+        if !first.is_empty() {
+            job.append(first, 0.0, normal_format.clone());
+        }
+    }
+
+    // Subsequent parts start as superscript, and revert to normal at the first space
+    for part in parts {
+        if let Some(space_idx) = part.find(' ') {
+            let super_str = &part[..space_idx];
+            let normal_str = &part[space_idx..]; // Includes the space
+
+            if !super_str.is_empty() {
+                job.append(super_str, 0.0, super_format.clone()); 
+            }
+            if !normal_str.is_empty() {
+                job.append(normal_str, 0.0, normal_format.clone());
+            }
+        } else {
+            // No space found, the entire remaining text is superscript
+            if !part.is_empty() {
+                job.append(part, 0.0, super_format.clone());
+            }
+        }
+    }
     
     ui.label(job);
 }

@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-use crate::global::img015::*;
+use crate::global::game::img015::*;
 use image::imageops;
 use eframe::egui;
 

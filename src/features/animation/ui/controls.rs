@@ -1,6 +1,7 @@
 use eframe::egui;
 use std::path::PathBuf;
 use crate::features::animation::ui::viewer::AnimViewer;
+use crate::features::settings::logic::state::Settings;
 
 const TILE_HEIGHT: f32 = 28.0; 
 const GAP: f32 = 4.0;
@@ -35,12 +36,13 @@ pub fn render_controls_overlay(
     secondary_pack: &Option<(PathBuf, PathBuf, PathBuf, PathBuf)>,
     interpolation: bool, 
     native_fps: f32,
+    settings: &mut Settings,
 ) -> bool {
     let mut clip_rect = rect;
     clip_rect = clip_rect.shrink(2.0); 
     ui.set_clip_rect(clip_rect);
 
-    let target_slide = if anim_viewer.is_controls_expanded { 0.0 } else { 1.0 };
+    let target_slide = if settings.animation.controls_expanded { 0.0 } else { 1.0 };
     
     let anim_id = egui::Id::new("controls_slide");
     let slide_factor = ui.ctx().animate_value_with_time(anim_id, target_slide, 0.35);
@@ -61,12 +63,15 @@ pub fn render_controls_overlay(
             .rounding(8.0)
             .show(ui, |ui| {
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
-                    render_internal_ui(ui, anim_viewer, available_anims, base_assets_available, is_loading_new, secondary_id, primary_id, secondary_pack, interpolation, native_fps);
+                    render_internal_ui(ui, anim_viewer, available_anims, base_assets_available, is_loading_new, secondary_id, primary_id, secondary_pack, interpolation, native_fps, settings);
                     let width_to_use = if anim_viewer.cached_controls_width > 1.0 { anim_viewer.cached_controls_width } else { ui.available_width() };
                     ui.add_sized(egui::vec2(width_to_use, 1.0), egui::Separator::default().horizontal());
-                    let icon = if anim_viewer.is_controls_expanded { "▼" } else { "▲" };
+                    
+                    let icon = if settings.animation.controls_expanded { "▼" } else { "▲" };
                     let btn = egui::Button::new(egui::RichText::new(icon).strong().size(14.0)).fill(egui::Color32::TRANSPARENT).stroke(egui::Stroke::NONE);
-                    if ui.add_sized(egui::vec2(width_to_use, 18.0), btn).clicked() { anim_viewer.is_controls_expanded = !anim_viewer.is_controls_expanded; }
+                    if ui.add_sized(egui::vec2(width_to_use, 18.0), btn).clicked() { 
+                        settings.animation.controls_expanded = !settings.animation.controls_expanded; 
+                    }
                 });
             })
     });
@@ -89,6 +94,7 @@ fn render_internal_ui(
     secondary_pack: &Option<(PathBuf, PathBuf, PathBuf, PathBuf)>,
     interpolation: bool,
     native_fps: f32,
+    settings: &mut Settings,
 ) {
     let mut clicked_index: Option<usize> = None;
     let active_color = egui::Color32::from_rgb(31, 106, 165);
@@ -287,7 +293,8 @@ fn render_internal_ui(
             }).inner;
             
             if btn_resp.clicked() { 
-                anim_viewer.show_export_popup = true;
+                // Write directly to settings!
+                settings.animation.export_popup_open = true;
             }
 
             ui.add_space(GAP);
@@ -387,7 +394,7 @@ fn render_internal_ui(
                 else { available_anims.iter().find(|(i, _)| *i == target_idx).map(|(_, p)| p) };
                 
                 if let Some(a_path) = anim_path { 
-                    anim_viewer.load_anim(a_path); 
+                    anim_viewer.load_anim(a_path, settings);
                 } else if target_idx == IDX_MODEL { 
                     anim_viewer.current_anim = None; 
                     anim_viewer.current_frame = 0.0;

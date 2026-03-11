@@ -47,7 +47,7 @@ pub fn find_usb_device() -> Option<String> {
 }
 
 // --- PRIORITY 2: MDNS AUTO-DISCOVERY ---
-// Retries for 3 seconds (6 x 500ms) to allow the ADB daemon to catch the broadcast
+// Retries for 3 seconds to allow the ADB daemon to catch the broadcast
 pub fn find_mdns_device() -> Option<String> {
     let _ = run_command(&["mdns", "check"]);
     

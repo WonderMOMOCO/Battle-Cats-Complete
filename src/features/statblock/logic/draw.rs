@@ -4,11 +4,12 @@ use ab_glyph::PxScale;
 use imageproc::drawing::{draw_filled_rect_mut, draw_text_mut, text_size};
 use imageproc::rect::Rect;
 
-use crate::features::cat::logic::abilities::{AbilityItem, CustomIcon};
-use crate::global::imgcut::SpriteCut;
+use crate::global::game::abilities::{AbilityItem, CustomIcon};
+use crate::global::formats::imgcut::SpriteCut;
 
 pub const SUPERSCRIPT_SCALE: f32 = 0.75;
-pub const SUPERSCRIPT_OFFSET_Y: f32 = 0.15;
+pub const SUPERSCRIPT_OFFSET_Y: f32 = 0.0;
+pub const SUPERSCRIPT_MARGIN_X: i32 = 2;
 
 pub fn draw_rounded_rect_mut(img: &mut RgbaImage, rect: Rect, r: i32, color: Rgba<u8>) {
     if r <= 0 {
@@ -68,41 +69,41 @@ pub fn get_icon_image(
     item: &AbilityItem, 
     cuts_map: &HashMap<usize, SpriteCut>,
     img015_base: &RgbaImage,
-    multihit_base: &RgbaImage,
-    kamikaze_base: &RgbaImage,
-    bosswave_base: &RgbaImage,
+    custom_assets: &HashMap<CustomIcon, RgbaImage>,
     export_icon_size: u32,
 ) -> RgbaImage {
-    let mut icon = match item.custom_icon {
-        CustomIcon::Multihit => multihit_base.clone(),
-        CustomIcon::Kamikaze => kamikaze_base.clone(),
-        CustomIcon::BossWave => bosswave_base.clone(),
-        CustomIcon::None => {
-            if let Some(cut) = cuts_map.get(&item.icon_id) {
-                let w = img015_base.width() as f32;
-                let h = img015_base.height() as f32;
-                
-                let px = (cut.uv_coordinates.min.x * w).round() as u32;
-                let py = (cut.uv_coordinates.min.y * h).round() as u32;
-                let pw = cut.original_size.x.round() as u32;
-                let ph = cut.original_size.y.round() as u32;
-                
-                if px + pw <= img015_base.width() && py + ph <= img015_base.height() {
-                    image::imageops::crop_imm(img015_base, px, py, pw, ph).to_image()
-                } else {
-                    RgbaImage::new(export_icon_size, export_icon_size)
-                }
-            } else {
-                RgbaImage::new(export_icon_size, export_icon_size)
-            }
+    // If the registry flagged this as a custom icon, use the high-res asset
+    let mut icon = if item.custom_icon != CustomIcon::None {
+        if let Some(custom_img) = custom_assets.get(&item.custom_icon) {
+            custom_img.clone()
+        } else {
+            RgbaImage::new(export_icon_size, export_icon_size)
         }
+    } 
+    // Otherwise, fallback to standard sprite sheet cropping
+    else if let Some(cut) = cuts_map.get(&item.icon_id) {
+        let w = img015_base.width() as f32;
+        let h = img015_base.height() as f32;
+        let px = (cut.uv_coordinates.min.x * w).round() as u32;
+        let py = (cut.uv_coordinates.min.y * h).round() as u32;
+        let pw = cut.original_size.x.round() as u32;
+        let ph = cut.original_size.y.round() as u32;
+        
+        if px + pw <= img015_base.width() && py + ph <= img015_base.height() {
+            image::imageops::crop_imm(img015_base, px, py, pw, ph).to_image()
+        } else {
+            RgbaImage::new(export_icon_size, export_icon_size)
+        }
+    } else {
+        RgbaImage::new(export_icon_size, export_icon_size)
     };
 
-    // Resize the base icon FIRST so it defines the proper bounding box
+    // Resize the core icon if necessary
     if icon.width() != export_icon_size || icon.height() != export_icon_size {
         icon = image::imageops::resize(&icon, export_icon_size, export_icon_size, image::imageops::FilterType::Lanczos3);
     }
 
+    // Apply the border if one exists
     if let Some(border_id) = item.border_id {
         if let Some(cut) = cuts_map.get(&border_id) {
             let w = img015_base.width() as f32;
@@ -115,12 +116,10 @@ pub fn get_icon_image(
             if px + pw <= img015_base.width() && py + ph <= img015_base.height() {
                 let mut border = image::imageops::crop_imm(img015_base, px, py, pw, ph).to_image();
                 
-                // Resize the border to perfectly match the icon's new size
                 if border.width() != export_icon_size || border.height() != export_icon_size {
                     border = image::imageops::resize(&border, export_icon_size, export_icon_size, image::imageops::FilterType::Lanczos3);
                 }
                 
-                // Overlay the now-matching border on top of the icon
                 image::imageops::overlay(&mut icon, &border, 0, 0);
             }
         }
@@ -130,13 +129,38 @@ pub fn get_icon_image(
 }
 
 pub fn measure_text_with_superscript(scale: PxScale, font: &impl ab_glyph::Font, text: &str) -> u32 {
-    let parts: Vec<&str> = text.split('^').collect();
     let mut total_w = 0;
-    for (i, part) in parts.iter().enumerate() {
-        if part.is_empty() { continue; }
-        let current_scale = if i % 2 == 0 { scale } else { PxScale::from(scale.y * SUPERSCRIPT_SCALE) };
-        let (w, _) = text_size(current_scale, font, part);
-        total_w += w;
+    let mut parts = text.split('^');
+    
+    if let Some(first) = parts.next() {
+        if !first.is_empty() {
+            let (w, _) = text_size(scale, font, first);
+            total_w += w;
+        }
+    }
+
+    for part in parts {
+        if let Some(space_idx) = part.find(' ') {
+            let super_str = &part[..space_idx];
+            let normal_str = &part[space_idx..]; 
+
+            if !super_str.is_empty() {
+                let super_scale = PxScale::from(scale.y * SUPERSCRIPT_SCALE);
+                let (w, _) = text_size(super_scale, font, super_str);
+                total_w += w + SUPERSCRIPT_MARGIN_X as u32;
+            }
+            
+            if !normal_str.is_empty() {
+                let (w, _) = text_size(scale, font, normal_str);
+                total_w += w;
+            }
+        } else {
+            if !part.is_empty() {
+                let super_scale = PxScale::from(scale.y * SUPERSCRIPT_SCALE);
+                let (w, _) = text_size(super_scale, font, part);
+                total_w += w + SUPERSCRIPT_MARGIN_X as u32;
+            }
+        }
     }
     total_w
 }
@@ -150,17 +174,45 @@ pub fn draw_text_with_superscript(
     font: &impl ab_glyph::Font,
     text: &str,
 ) {
-    let parts: Vec<&str> = text.split('^').collect();
-    for (i, part) in parts.iter().enumerate() {
-        if part.is_empty() { continue; }
-        let (current_scale, current_y) = if i % 2 == 0 {
-            (base_scale, y)
+    let mut parts = text.split('^');
+    
+    if let Some(first) = parts.next() {
+        if !first.is_empty() {
+            draw_text_mut(img, color, x, y, base_scale, font, first);
+            let (w, _) = text_size(base_scale, font, first);
+            x += w as i32;
+        }
+    }
+
+    for part in parts {
+        if let Some(space_idx) = part.find(' ') {
+            let super_str = &part[..space_idx];
+            let normal_str = &part[space_idx..];
+
+            if !super_str.is_empty() {
+                x += SUPERSCRIPT_MARGIN_X;
+                let super_scale = PxScale::from(base_scale.y * SUPERSCRIPT_SCALE);
+                let super_y = y - (base_scale.y * SUPERSCRIPT_OFFSET_Y) as i32;
+                draw_text_mut(img, color, x, super_y, super_scale, font, super_str);
+                let (w, _) = text_size(super_scale, font, super_str);
+                x += w as i32;
+            }
+
+            if !normal_str.is_empty() {
+                draw_text_mut(img, color, x, y, base_scale, font, normal_str);
+                let (w, _) = text_size(base_scale, font, normal_str);
+                x += w as i32;
+            }
         } else {
-            (PxScale::from(base_scale.y * SUPERSCRIPT_SCALE), y - (base_scale.y * SUPERSCRIPT_OFFSET_Y) as i32)
-        };
-        draw_text_mut(img, color, x, current_y, current_scale, font, part);
-        let (w, _) = text_size(current_scale, font, part);
-        x += w as i32;
+            if !part.is_empty() {
+                x += SUPERSCRIPT_MARGIN_X;
+                let super_scale = PxScale::from(base_scale.y * SUPERSCRIPT_SCALE);
+                let super_y = y - (base_scale.y * SUPERSCRIPT_OFFSET_Y) as i32;
+                draw_text_mut(img, color, x, super_y, super_scale, font, part);
+                let (w, _) = text_size(super_scale, font, part);
+                x += w as i32;
+            }
+        }
     }
 }
 

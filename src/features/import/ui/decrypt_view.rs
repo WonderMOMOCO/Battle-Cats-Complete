@@ -1,6 +1,7 @@
 use eframe::egui;
 use std::sync::mpsc;
-use crate::features::import::logic::{ImportState, decrypt, sort};
+use crate::features::import::logic::{ImportState, decrypt};
+use crate::features::import::sort;
 
 pub fn show(ui: &mut egui::Ui, state: &mut ImportState) {
     ui.label("Decrypt and sort game files into database");
@@ -23,16 +24,18 @@ pub fn show(ui: &mut egui::Ui, state: &mut ImportState) {
                 ui.selectable_value(&mut state.adb_region, crate::features::import::logic::AdbRegion::Korean, "Korea");
             });
     });
-
+    
     ui.add_space(5.0);
 
     ui.horizontal(|ui| {
-        if ui.add_enabled(state.rx.is_none(), egui::Button::new("Select Folder")).clicked() {
+        let enabled = state.rx.is_none();
+        if ui.add_enabled(enabled, egui::Button::new("Select Source")).clicked() {
             if let Some(path) = rfd::FileDialog::new().pick_folder() {
-                state.set_decrypt_path(path.display().to_string());
+                state.decrypt_path = path.to_string_lossy().to_string();
+                state.decrypt_censored = crate::features::import::logic::censor_path(&state.decrypt_path);
             }
         }
-        ui.monospace(&state.decrypt_censored);
+        ui.label(if state.decrypt_censored.is_empty() { "No source selected" } else { &state.decrypt_censored });
     });
 
     ui.add_space(15.0);
@@ -66,8 +69,6 @@ pub fn show(ui: &mut egui::Ui, state: &mut ImportState) {
             let _ = tx.send("Sorting extracted files...".to_string());
             if let Err(e) = sort::sort_game_files(tx.clone()) {
                 let _ = tx.send(format!("Error Sorting: {}", e));
-            } else {
-                let _ = tx.send("Success! Process complete.".to_string());
             }
         });
     }

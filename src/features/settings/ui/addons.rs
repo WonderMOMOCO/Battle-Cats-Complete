@@ -1,5 +1,4 @@
 use eframe::egui;
-use crate::features::settings::logic::Settings;
 use crate::core::addons::adb::download::AdbManager;
 use crate::core::addons::avifenc::download::AvifManager;
 use crate::core::addons::ffmpeg::download::FfmpegManager;
@@ -22,7 +21,7 @@ static FFMPEG_MANAGER: Mutex<Option<FfmpegManager>> = Mutex::new(None);
 #[cfg(target_os = "windows")]
 static OEM_MANAGER: Mutex<Option<OemManager>> = Mutex::new(None);
 
-pub fn show(ui: &mut egui::Ui, _settings: &mut Settings, drag_guard: &mut DragGuard) -> bool {
+pub fn show(ui: &mut egui::Ui, drag_guard: &mut DragGuard) -> bool {    
     {
         let mut adb_lock = ADB_MANAGER.lock().unwrap();
         let adb_manager = adb_lock.get_or_insert_with(AdbManager::default);

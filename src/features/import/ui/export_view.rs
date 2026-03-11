@@ -23,10 +23,10 @@ pub fn show(ui: &mut egui::Ui, state: &mut ImportState, settings: &mut Settings)
     
     ui.add_space(5.0);
 
-    let max_level = if settings.enable_ultra_compression { 21 } else { 15 };
+    let max_level = if settings.game_data.enable_ultra_compression { 21 } else { 15 };
     
     if state.compression_level == 0 {
-        state.compression_level = settings.last_compression_level;
+        state.compression_level = settings.game_data.last_compression_level;
     }
 
     if state.compression_level > max_level {
@@ -39,7 +39,7 @@ pub fn show(ui: &mut egui::Ui, state: &mut ImportState, settings: &mut Settings)
         let response = ui.add(egui::Slider::new(&mut state.compression_level, 1..=max_level));
             
         if response.changed() {
-            settings.last_compression_level = state.compression_level;
+            settings.game_data.last_compression_level = state.compression_level;
         }
     });
     

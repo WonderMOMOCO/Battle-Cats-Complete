@@ -1,5 +1,5 @@
-use crate::global::mamodel::{Model, ModelPart};
-use crate::global::maanim::{Animation, AnimModification};
+use crate::global::formats::mamodel::{Model, ModelPart};
+use crate::global::formats::maanim::{Animation, AnimModification};
 
 pub fn animate(model: &Model, animation: &Animation, global_frame: f32) -> Vec<ModelPart> {
     let mut parts = model.parts.clone();
@@ -39,8 +39,6 @@ pub fn animate(model: &Model, animation: &Animation, global_frame: f32) -> Vec<M
                 5 => part.position_y = base_part.position_y + val,
                 6 => part.pivot_x = base_part.pivot_x + val,
                 7 => part.pivot_y = base_part.pivot_y + val,
-                 // Change to modifications 8/9/10 are essential
-                 // for Kaihime, thanks SweetDonut0
                 8 => { 
                     let factor = val / model.scale_unit;
                     part.scale_x = base_part.scale_x * factor;

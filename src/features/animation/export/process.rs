@@ -1,7 +1,7 @@
 use eframe::egui;
-use crate::global::mamodel::Model;
-use crate::global::maanim::Animation;
-use crate::global::imgcut::SpriteSheet;
+use crate::global::formats::mamodel::Model;
+use crate::global::formats::maanim::Animation;
+use crate::global::formats::imgcut::SpriteSheet;
 use crate::features::animation::export::encoding::{self, ExportConfig, ExportFormat, EncoderMessage, EncoderStatus};
 use crate::features::animation::export::state::{ExporterState, ExportMode};
 use crate::features::animation::logic::{animator, smooth, transform}; 

@@ -2,7 +2,7 @@ use eframe::egui;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use crate::features::cat::data::skillacquisition::{TalentRaw, TalentGroupRaw};
-use crate::global::imgcut::SpriteSheet;
+use crate::global::formats::imgcut::SpriteSheet;
 use crate::core::utils::{self, autocrop};
 use crate::features::settings::logic::Settings; 
 use crate::features::cat::data::unitid::CatRaw; 
@@ -145,7 +145,7 @@ fn render_header(
             if let Some(def) = crate::features::cat::registry::get_by_talent_id(group.ability_id) {
                 let size = egui::vec2(40.0, 40.0);
                 
-                let force_fallback = settings.game_language == "--";
+                let force_fallback = settings.general.game_language == "--";
                 let mut drawn = false;
                 
                 if !force_fallback {
@@ -164,7 +164,7 @@ fn render_header(
                 ui.label(egui::RichText::new("?").weak());
             }
 
-            let force_fallback = settings.game_language == "--";
+            let force_fallback = settings.general.game_language == "--";
             if !force_fallback {
                 if let Some(texture) = get_or_load_skill_name(ui, group, settings, name_cache) {
                     ui.image((texture.id(), texture.size_vec2()));
@@ -225,7 +225,6 @@ fn render_body(
 
     ui.add_space(TALENT_SECTION_SPACING); 
 
-    // Capture values before entering nested scopes to avoid mutable borrow conflicts
     let current_lvl_val = *talent_levels.get(&(index as u8)).unwrap_or(&0);
     let np_cost = crate::features::cat::logic::talents::get_talent_np_cost(group.cost_id, current_lvl_val, talent_costs);
 
@@ -241,8 +240,8 @@ fn render_body(
                 ui.spacing_mut().item_spacing.x = 4.0;
                 
                 let mut drawn = false;
-                if settings.game_language != "--" {
-                    if let Some(cut) = img022_sheet.cuts_map.get(&crate::global::img022::ICON_NP_COST) {
+                if settings.general.game_language != "--" {
+                    if let Some(cut) = img022_sheet.cuts_map.get(&crate::global::game::img022::ICON_NP_COST) {
                         if let Some(tex) = &img022_sheet.texture_handle {
                             let aspect = cut.original_size.x / cut.original_size.y;
                             let size = egui::vec2(TALENT_NP_ICON_SIZE * aspect, TALENT_NP_ICON_SIZE);
@@ -347,8 +346,8 @@ fn get_or_load_skill_name(
 fn find_skill_image_path(image_id: i16, settings: &Settings) -> Option<PathBuf> {
     let root = Path::new(""); 
 
-    if !settings.game_language.is_empty() {
-        let candidate = paths::skill_icon(root, image_id, &settings.game_language);
+    if !settings.general.game_language.is_empty() {
+        let candidate = paths::skill_icon(root, image_id, &settings.general.game_language);
         if candidate.exists() { return Some(candidate); }
     }
     

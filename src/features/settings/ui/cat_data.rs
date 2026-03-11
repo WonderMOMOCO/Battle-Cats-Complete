@@ -1,8 +1,8 @@
 use eframe::egui;
-use crate::features::settings::logic::Settings;
+use crate::features::settings::logic::state::CatDataSettings;
 use super::tabs::toggle_ui;
 
-pub fn show(ui: &mut egui::Ui, settings: &mut Settings) -> bool {
+pub fn show(ui: &mut egui::Ui, settings: &mut CatDataSettings) -> bool {
     let mut refresh_needed = false;
     egui::ScrollArea::vertical()
         .id_salt("cat_data_scroll")

@@ -72,7 +72,7 @@ pub fn show(ui: &mut egui::Ui, state: &mut ImportState, settings: &Settings) {
     }
 }
 
-fn start_adb_import(state: &mut ImportState, config: crate::features::settings::logic::handle::EmulatorConfig) {
+fn start_adb_import(state: &mut ImportState, config: crate::features::settings::logic::state::EmulatorConfig) {
     state.is_adb_busy = true;
     state.status_message = "Initializing ADB...".to_string(); 
     

@@ -1,7 +1,8 @@
 use eframe::egui;
 use std::sync::mpsc;
-use crate::features::import::logic::{ImportState, ImportMode, sort};
-use crate::features::import::archive;use std::thread;
+use crate::features::import::logic::{ImportState, ImportMode};
+use crate::features::import::{archive, sort};
+use std::thread;
 
 pub fn show(ui: &mut egui::Ui, state: &mut ImportState) {
     ui.label("Sort game archive or decrypted files into database");
@@ -30,13 +31,12 @@ pub fn show(ui: &mut egui::Ui, state: &mut ImportState) {
                 ImportMode::Zip => rfd::FileDialog::new()
                     .add_filter("Game Archive", &["zst", "tar", "zip"]) 
                     .pick_file(),
-                ImportMode::Folder => rfd::FileDialog::new()
-                    .pick_folder(),
+                ImportMode::Folder => rfd::FileDialog::new().pick_folder(),
                 _ => None,
             };
-
             if let Some(path) = res {
                 state.import_path = path.to_string_lossy().to_string();
+                state.import_censored = crate::features::import::logic::censor_path(&state.import_path);
             }
         }
         ui.label(if state.import_censored.is_empty() { "No source selected" } else { &state.import_censored });
@@ -71,13 +71,11 @@ fn start_manual_sort(state: &mut ImportState) {
                     let _ = tx.send("Starting Sort...".to_string());
                     if let Err(e) = sort::sort_game_files(tx.clone()) {
                         let _ = tx.send(format!("Error Sorting: {}", e));
-                    } else {
-                        let _ = tx.send("Success! Files processed and sorted.".to_string());
                     }
                 }
-            },
+            }
             Err(e) => {
-                let _ = tx.send(format!("Error: {}", e));
+                let _ = tx.send(format!("Error Importing: {}", e));
             }
         }
     });

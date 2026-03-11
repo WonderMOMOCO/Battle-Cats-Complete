@@ -5,7 +5,7 @@ use std::sync::{Arc, mpsc::{self, Receiver}};
 use rayon::prelude::*;
 use regex::Regex; 
 use image::GenericImageView; 
-use crate::core::patterns; 
+use crate::features::cat::patterns; 
 use crate::features::cat::data::unitid::CatRaw;
 use crate::features::cat::data::unitbuy::{self, UnitBuyRow};
 use crate::features::cat::data::unitlevel::{self, CatLevelCurve};
@@ -14,8 +14,8 @@ use crate::features::cat::data::unitevolve;
 use crate::features::cat::data::unitexplanation; 
 use crate::core::utils; 
 use crate::features::cat::paths::{self, AssetType};
-use crate::features::settings::logic::handle::ScannerConfig;
-use crate::global::maanim::Animation;
+use crate::features::settings::logic::state::ScannerConfig;
+use crate::global::formats::maanim::Animation;
 
 #[derive(Clone, Debug)]
 pub struct CatEntry {
@@ -31,6 +31,25 @@ pub struct CatEntry {
     pub talent_data: Option<TalentRaw>,
     pub unit_buy: UnitBuyRow,
     pub evolve_text: [Vec<String>; 4], 
+}
+
+impl CatEntry {
+    pub fn id_str(&self, form_index: usize) -> String {
+        format!("{:03}-{}", self.id, form_index + 1)
+    }
+
+    pub fn display_name(&self, form_index: usize) -> String {
+        let raw_name = self.names.get(form_index).cloned().unwrap_or_default();
+        if raw_name.is_empty() {
+            self.id_str(form_index)
+        } else {
+            raw_name
+        }
+    }
+    
+    pub fn base_id_str(&self) -> String {
+    format!("{:03}", self.id)
+}
 }
 
 pub fn start_scan(config: ScannerConfig) -> Receiver<CatEntry> {
@@ -89,6 +108,7 @@ pub fn process_cat_entry(
 
     let ub_row = unit_buys.get(&cat_id)?;
 
+    let _is_hidden = ub_row.guide_order == -1;
     let is_egg_unit = ub_row.egg_id_normal != -1;
     let is_summon = ub_row.level_cap_standard == 1 && ub_row.level_cap_plus == 0 && ub_row.purchase_cost == 0;
 

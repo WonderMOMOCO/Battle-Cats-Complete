@@ -198,7 +198,7 @@ impl Updater {
     }
 
     fn show_update_found_window(&mut self, ctx: &egui::Context, settings: &mut Settings, drag_guard: &mut DragGuard, tag: String, release: self_update::update::Release) {
-        if matches!(settings.update_mode, UpdateMode::AutoReset | UpdateMode::AutoLoad) {
+        if matches!(settings.general.update_mode, UpdateMode::AutoReset | UpdateMode::AutoLoad) {
             self.download_and_install(release);
             return;
         }
@@ -262,7 +262,7 @@ impl Updater {
             self.download_and_install(release);
         }
         if disable_future {
-            settings.update_mode = UpdateMode::Ignore;
+            settings.general.update_mode = UpdateMode::Ignore;
             close_modal = true;
         }
         if close_modal {
@@ -298,11 +298,11 @@ impl Updater {
     }
 
     fn show_restart_pending_window(&mut self, ctx: &egui::Context, settings: &Settings, drag_guard: &mut DragGuard, tag: String) {
-        if matches!(settings.update_mode, UpdateMode::AutoReset) {
+        if matches!(settings.general.update_mode, UpdateMode::AutoReset) {
             restart_app();
             return;
         }
-        if matches!(settings.update_mode, UpdateMode::AutoLoad) {
+        if matches!(settings.general.update_mode, UpdateMode::AutoLoad) {
             self.status = UpdateStatus::Idle; 
             return;
         }
