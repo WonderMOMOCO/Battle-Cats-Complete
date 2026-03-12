@@ -29,6 +29,7 @@ pub struct SpiritData {
 
 #[derive(Clone)]
 pub struct StatblockData {
+    pub is_cat: bool,
     pub id_str: String,
     pub name: String,
     pub icon_path: Option<PathBuf>,
@@ -41,7 +42,7 @@ pub struct StatblockData {
     
     pub cd_label: String,   // "Cooldown" or "Endure"
     pub cd_value: String,   // The fallback string if not rendering a time block
-    pub is_cd_time: bool,   // Draw stylized time block (Cats) vs plain text block (Enemies)
+    pub is_cd_time: bool,   // Draw stylized time block vs plain text block
     pub cd_frames: i32,     
     
     pub cost_label: String, // "Cost" or "Cash Drop"
@@ -235,8 +236,7 @@ fn build_statblock_image(
             }
             
             let x_offset = padding as i64 + ((max_w - target_w) / 2) as i64;
-            let y_offset = padding as i64 + ((max_h - target_h) / 2) as i64;
-            
+            let y_offset = padding as i64 + (max_h - target_h) as i64;            
             image::imageops::overlay(&mut img, &rgba, x_offset, y_offset);
         }
     }
@@ -308,10 +308,31 @@ fn build_statblock_image(
     cursor_y += STAT_GRID_PADDING_Y * scale;
 
     // === STAT GRID ===
-    let stat_headers_1 = ["Atk", "Dps", "Range", "Atk Cycle", "Atk Type"];
-    let stat_data_1 = [data.atk.clone(), data.dps.clone(), data.range.clone(), "".to_string(), data.atk_type.clone()];
+    let get_label = |key: &str| -> &'static str {
+        if data.is_cat {
+            crate::features::cat::registry::get_cat_stat(key).display_name
+        } else {
+            crate::features::enemy::registry::get_enemy_stat(key).display_name
+        }
+    };
+
+    let stat_headers_1 = [
+        get_label("Attack"), 
+        get_label("Dps"), 
+        get_label("Range"), 
+        get_label("Atk Cycle"), 
+        get_label("Atk Type")
+    ];
     
-    let stat_headers_2 = ["Hp", "Kb", "Speed", data.cd_label.as_str(), data.cost_label.as_str()];
+    let stat_headers_2 = [
+        get_label("Hitpoints"), 
+        get_label("Knockbacks"), 
+        get_label("Speed"), 
+        data.cd_label.as_str(), 
+        data.cost_label.as_str() 
+    ];
+
+    let stat_data_1 = [data.atk.clone(), data.dps.clone(), data.range.clone(), "".to_string(), data.atk_type.clone()];
     let stat_data_2 = [data.hp.clone(), data.kb.clone(), data.speed.clone(), data.cd_value.clone(), data.cost_value.clone()];
 
     let row_h = 24 * scale;
@@ -674,6 +695,7 @@ pub fn generate_and_save(
     std::thread::spawn(move || {
         let id_str = data.id_str.clone();
         let val_str = data.top_value.clone();
+        let is_cat = data.is_cat;
         
         let img_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             build_statblock_image(&language, data, cuts_map)
@@ -693,7 +715,8 @@ pub fn generate_and_save(
 
             if success {
                 let safe_val_str = val_str.replace(|c: char| !c.is_alphanumeric() && c != '+', "");
-                let filename = export_dir.join(format!("{}.{}.statblock.png", id_str, safe_val_str));
+                let prefix = if is_cat { "Lv" } else { "Mag" };
+                let filename = export_dir.join(format!("{}.{}{}.statblock.png", id_str, prefix, safe_val_str));
                 success = img.save(filename).is_ok();
             }
         }

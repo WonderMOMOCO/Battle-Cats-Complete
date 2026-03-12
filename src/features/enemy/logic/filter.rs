@@ -65,107 +65,16 @@ pub fn get_stat_value(s: &EnemyRaw, stat: &str, anim_frames: i32, mag: i32) -> i
     if let Some(def) = ENEMY_STATS_REGISTRY.iter().find(|d| d.name == reg_name) {
         return (def.get_value)(s, anim_frames, mag);
     }
-
     0 
-}
-
-pub fn get_adv_attributes(name: &str) -> Option<&'static [&'static str]> {
-    match name {
-        "Wave Attack" => Some(&["Chance", "Level"]),
-        "Mini-Wave" => Some(&["Chance", "Level"]),
-        "Surge Attack" => Some(&["Chance", "Level", "Min-Range", "Max-Range"]),
-        "Mini-Surge" => Some(&["Chance", "Level", "Min-Range", "Max-Range"]),
-        "Death Surge" => Some(&["Chance", "Level", "Min-Range", "Max-Range"]),
-        "Explosion" => Some(&["Chance", "Min-Range", "Max-Range"]),
-        "Savage Blow" => Some(&["Chance", "Boost (%)"]),
-        "Critical Hit" => Some(&["Chance"]),
-        "Strengthen" => Some(&["Hitpoints (%)", "Boost (%)"]),
-        "Survive" => Some(&["Chance"]),
-        "Barrier" => Some(&["Hitpoints"]),
-        "Aku Shield" => Some(&["Hitpoints", "Regen (%)"]),
-        "Dodge" => Some(&["Chance", "Duration (f)"]),
-        "Weaken" => Some(&["Chance", "Reduced-To", "Duration (f)"]),
-        "Freeze" => Some(&["Chance", "Duration (f)"]),
-        "Slow" => Some(&["Chance", "Duration (f)"]),
-        "Knockback" => Some(&["Chance"]),
-        "Curse" => Some(&["Chance", "Duration (f)"]),
-        "Warp" => Some(&["Chance", "Duration (f)", "Min-Distance", "Max-Distance"]),
-        "Toxic" => Some(&["Chance", "Damage (%)"]),
-        "Burrow" => Some(&["Count", "Distance"]),
-        "Revive" => Some(&["Count", "Duration (f)", "Hitpoints (%)"]),
-        _ => None,
-    }
 }
 
 pub fn get_icon_name(icon_id: usize) -> String {
     ENEMY_ABILITY_REGISTRY.iter().find(|d| d.icon_id == icon_id).map(|d| d.name).unwrap_or("Unknown").to_string()
 }
 
-pub fn get_ability_value(s: &EnemyRaw, ability_name: &str, attr: &str) -> i32 {
-    match (ability_name, attr) {
-        ("Wave Attack", "Chance") => s.wave_chance,
-        ("Wave Attack", "Level") => s.wave_level,
-        ("Mini-Wave", "Chance") => s.wave_chance, 
-        ("Mini-Wave", "Level") => s.wave_level,
-        ("Surge Attack", "Chance") => s.surge_chance,
-        ("Surge Attack", "Level") => s.surge_level,
-        ("Surge Attack", "Min-Range") => s.surge_spawn_min,
-        ("Surge Attack", "Max-Range") => s.surge_spawn_min + s.surge_spawn_max,
-        ("Mini-Surge", "Chance") => s.surge_chance, 
-        ("Mini-Surge", "Level") => s.surge_level,
-        ("Mini-Surge", "Min-Range") => s.surge_spawn_min,
-        ("Mini-Surge", "Max-Range") => s.surge_spawn_min + s.surge_spawn_max,
-        ("Death Surge", "Chance") => s.death_surge_chance,
-        ("Death Surge", "Level") => s.death_surge_level,
-        ("Death Surge", "Min-Range") => s.death_surge_spawn_min,
-        ("Death Surge", "Max-Range") => s.death_surge_spawn_min + s.death_surge_spawn_max,
-        ("Explosion", "Chance") => s.explosion_chance,
-        ("Explosion", "Min-Range") => s.explosion_anchor,
-        ("Explosion", "Max-Range") => s.explosion_anchor + s.explosion_span,
-        ("Savage Blow", "Chance") => s.savage_blow_chance,
-        ("Savage Blow", "Boost (%)") => s.savage_blow_boost,
-        ("Critical Hit", "Chance") => s.critical_chance,
-        ("Strengthen", "Hitpoints (%)") => s.strengthen_threshold,
-        ("Strengthen", "Boost (%)") => s.strengthen_boost,
-        ("Survive", "Chance") => s.survive_chance,
-        ("Barrier", "Hitpoints") => s.barrier_hitpoints,
-        ("Aku Shield", "Hitpoints") => s.shield_hitpoints,
-        ("Aku Shield", "Regen (%)") => s.shield_regen,
-        ("Dodge", "Chance") => s.dodge_chance,
-        ("Dodge", "Duration (f)") => s.dodge_duration,
-        ("Weaken", "Chance") => s.weaken_chance,
-        ("Weaken", "Reduced-To") => s.weaken_percent,
-        ("Weaken", "Duration (f)") => s.weaken_duration,
-        ("Freeze", "Chance") => s.freeze_chance,
-        ("Freeze", "Duration (f)") => s.freeze_duration,
-        ("Slow", "Chance") => s.slow_chance,
-        ("Slow", "Duration (f)") => s.slow_duration,
-        ("Knockback", "Chance") => s.knockback_chance,
-        ("Curse", "Chance") => s.curse_chance,
-        ("Curse", "Duration (f)") => s.curse_duration,
-        ("Warp", "Chance") => s.warp_chance,
-        ("Warp", "Duration (f)") => s.warp_duration,
-        ("Warp", "Min-Distance") => s.warp_distance_min,
-        ("Warp", "Max-Distance") => s.warp_distance_max,
-        ("Toxic", "Chance") => s.toxic_chance,
-        ("Toxic", "Damage (%)") => s.toxic_damage,
-        ("Burrow", "Count") => s.burrow_amount,
-        ("Burrow", "Distance") => s.burrow_distance,
-        ("Revive", "Count") => s.revive_count,
-        ("Revive", "Duration (f)") => s.revive_time,
-        ("Revive", "Hitpoints (%)") => s.revive_hp,
-        _ => 0,
-    }
-}
-
 pub fn has_trait_or_ability(s: &EnemyRaw, icon_id: usize) -> bool {
     ENEMY_ABILITY_REGISTRY.iter().find(|d| d.icon_id == icon_id).map_or(false, |def| {
-        let val = (def.getter)(s);
-        if def.minus_one_is_inf {
-            val != 0 
-        } else {
-            val > 0 
-        }
+        !(def.get_attributes)(s).is_empty()
     })
 }
 
@@ -205,7 +114,6 @@ pub fn entity_passes_filter(enemy: &EnemyEntry, filter: &EnemyFilterState) -> bo
         for &icon_id in &filter.active_icons {
             active_conditions += 1;
 
-            let name = get_icon_name(icon_id);
             let has_inherent = has_trait_or_ability(stats, icon_id);
             let mut icon_passed = false;
 
@@ -215,8 +123,15 @@ pub fn entity_passes_filter(enemy: &EnemyEntry, filter: &EnemyFilterState) -> bo
                 if let Some(adv_map) = filter.adv_ranges.get(&icon_id) {
                     let mut build_passed_all_attrs = true;
                     
+                    // Dynamically generates the ability vector
+                    let attrs = ability_def.map(|def| (def.get_attributes)(stats)).unwrap_or_default();
+                    
                     for (attr, range) in adv_map {
-                        let mut val = get_ability_value(stats, &name, attr);
+                        // Blindly pulls the requested stat from the vector
+                        let mut val = attrs.iter()
+                            .find(|(k, _, _)| k == attr)
+                            .map(|(_, v, _)| *v)
+                            .unwrap_or(0);
                         
                         if let Some(def) = ability_def {
                             if def.minus_one_is_inf && val == -1 {

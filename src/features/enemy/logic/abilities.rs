@@ -1,6 +1,6 @@
 use crate::features::settings::logic::Settings;
 use crate::features::enemy::data::t_unit::EnemyRaw;
-use crate::features::enemy::registry::{self, DisplayGroup};
+use crate::features::enemy::registry::{self, DisplayGroup, AttrUnit};
 use crate::global::game::abilities::{AbilityItem, CustomIcon};
 use crate::global::game::img015;
 
@@ -20,9 +20,14 @@ pub fn collect_ability_data(
     for def in registry::ENEMY_ABILITY_REGISTRY {
         if def.group == DisplayGroup::Hidden { continue; } 
 
-        let val = (def.getter)(stats);
-        if val > 0 || val == -1 {
-            let dur = if let Some(d_get) = def.duration_getter { d_get(stats) } else { 0 };
+        let attrs = (def.get_attributes)(stats);
+        
+        // If the vector isn't empty, the enemy has the ability
+        if !attrs.is_empty() {
+            // Grab the primary value and the duration (if it exists)
+            let val = attrs.first().map(|(_, v, _)| *v).unwrap_or(0);
+            let dur = attrs.iter().find(|(_, _, u)| *u == AttrUnit::Frames).map(|(_, v, _)| *v).unwrap_or(0);
+            
             let text = (def.formatter)(val, stats, dur, magnification);
 
             let mut custom_icon = def.custom_icon;

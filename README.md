@@ -10,29 +10,36 @@ Battle Cats Complete is still far from its fully functional state. This app is a
 ## Usage
 To use this app, you must provide game files for it to read. These files are not included in the app or repository; they must be obtained through your own personal and legal means.
 
-Heres what the app is currently capable of:
-- Importing Game Data
-  - Import from emulator
-  - Import from pack/apk
-  - Import from archives
-- Displaying Cat Data
-  - Forms
-  - Stats
-  - Abilities
-  - Talents
-  - Descriptions
-  - Evolution Info
-- Play Animations
-  - Walk
-  - Idle
-  - Attack
-  - Knockback
-  - Spirit
-- Export Animations
-  - GIF/WebP/AVIF/PNG
-  - Single Animations
-  - Sequence of Animations
-  - User-Defined Camera Area
+## Current Features
+- **Importing Game Data**
+  - Direct import from emulator
+  - Import from `.pack` / `.apk` files
+  - Import from standard archives
+- **Displaying Cat Data**
+  - Icons and Banners
+  - Forms, Stats, and Abilities
+  - Talents and Evolution Info
+  - In-game Descriptions
+- **Displaying Enemy Data**
+  - Icons, Stats, and Abilities
+  - In-game Descriptions
+- **Entity Animations**
+  - View Walk, Idle, Attack, and Knockback
+  - View Burrow, Surface, and Spirit animations
+  - Raw Model viewing
+- **Export Animations**
+  - Export to GIF, WebP, AVIF, or PNG sequences
+  - Export single animations or custom sequences
+  - User-defined camera area rendering
+- **Advanced Filtering**
+  - Filter Cats and Enemies by Forms, Rarity, or Talents
+  - Search using specific Ability Toggles
+  - Search using exact Ability Mathematical Attributes
+- **Export Statblocks**
+  - Generate statblocks for both Cats and Enemies
+  - Instantly copy to clipboard
+  - Export as a saved Image
+  - Dynamically scaling image sizes
 
 
 ### Setup

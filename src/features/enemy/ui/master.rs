@@ -47,6 +47,7 @@ pub fn show(
             let cycle = (get_enemy_stat("Atk Cycle").get_value)(&enemy_entry.stats, frames, *magnification);
 
             let data = StatblockData {
+                is_cat: false,
                 id_str: enemy_entry.id_str(),
                 name: enemy_entry.display_name(),
                 icon_path: enemy_entry.icon_path.clone(),

@@ -108,6 +108,7 @@ pub fn show(
                 let atk_type = if final_s.area_attack == 0 { "Single" } else { "Area" };
 
                 let data = StatblockData {
+                    is_cat: true,
                     id_str: cat_entry.id_str(*current_form),
                     name: cat_entry.display_name(*current_form),
                     icon_path,

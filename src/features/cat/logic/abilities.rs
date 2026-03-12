@@ -3,7 +3,7 @@ use crate::features::settings::logic::Settings;
 use super::stats::{self, CatRaw};
 use crate::features::cat::data::skillacquisition::TalentRaw;
 use std::collections::HashMap;
-use crate::features::cat::registry::{self, DisplayGroup};
+use crate::features::cat::registry::{self, DisplayGroup, AttrUnit};
 use crate::global::game::abilities::{AbilityItem, CustomIcon};
 
 pub fn collect_ability_data(
@@ -57,6 +57,7 @@ pub fn collect_ability_data(
 
     let target_label = if is_conjure_unit { "Enemies" } else { "Target Traits" };
 
+    // --- 1. STANDARD ABILITIES LOOP ---
     for def in registry::CAT_ABILITY_REGISTRY {
         if def.group == DisplayGroup::Hidden { continue; }
         
@@ -65,9 +66,12 @@ pub fn collect_ability_data(
             if def.name == "Dodge" || def.name == "Immune Boss Wave" || def.name == "Conjure / Spirit" || def.name == "Kamikaze" { continue; }
         }
 
-        let val = (def.getter)(final_stats);
-        if val > 0 {
-            let dur = if let Some(d_get) = def.duration_getter { d_get(final_stats) } else { 0 };
+        let attrs = (def.get_attributes)(final_stats);
+        
+        if !attrs.is_empty() {
+            let val = attrs.first().map(|(_, v, _)| *v).unwrap_or(0);
+            let dur = attrs.iter().find(|(_, _, u)| *u == AttrUnit::Frames).map(|(_, v, _)| *v).unwrap_or(0);
+            
             let text = (def.formatter)(val, final_stats, target_label, dur);
             let border = get_talent_border(def.talent_id);
 
@@ -94,6 +98,7 @@ pub fn collect_ability_data(
         }
     }
 
+    // --- 2. TALENT-ONLY STATS LOOP ---
     if let (Some(t_data), Some(levels)) = (talent_data, talent_levels) {
         let mut talent_headline = Vec::new();
 
@@ -102,23 +107,22 @@ pub fn collect_ability_data(
             if lv == 0 { continue; }
 
             if let Some(def) = registry::get_by_talent_id(group.ability_id) {
-                if let Some(desc_gen) = def.talent_desc_func {
-                    let v1 = crate::features::cat::logic::talents::calculate_talent_value(group.min_1, group.max_1, lv, group.max_level);
-                    let v2 = crate::features::cat::logic::talents::calculate_talent_value(group.min_2, group.max_2, lv, group.max_level);
-                    
-                    let text = desc_gen(v1, v2, base_stats, level_curve, current_level, group, lv);
-                    
-                    match group.ability_id {
-                        25 | 26 | 27 | 31 | 32 | 61 | 82 => { 
+                match group.ability_id {
+                    // Stat Buffs: Leverage the dynamic Diff Engine
+                    25 | 26 | 27 | 31 | 32 | 61 | 82 => { 
+                        if let Some(text) = crate::features::cat::logic::talents::calculate_talent_display(group, base_stats, lv, level_curve, current_level) {
                             let item = AbilityItem { icon_id: def.icon_id, text, custom_icon: CustomIcon::None, border_id: get_talent_border(def.talent_id) };
                             talent_headline.push(item);
-                        },
-                        18 | 19 | 20 | 21 | 22 | 24 | 30 | 52 | 54 => { 
-                            let item = AbilityItem { icon_id: def.icon_id, text, custom_icon: CustomIcon::None, border_id: get_talent_border(def.talent_id) };
-                            group_footer.push(item);
-                        },
-                        _ => {}
-                    }
+                        }
+                    },
+                    // Resistances: Calculate the value and use the registry's base formatter
+                    18 | 19 | 20 | 21 | 22 | 24 | 30 | 52 | 54 => { 
+                        let val = crate::features::cat::logic::talents::calculate_talent_value(group.min_1, group.max_1, lv, group.max_level);
+                        let text = (def.formatter)(val, final_stats, target_label, 0);
+                        let item = AbilityItem { icon_id: def.icon_id, text, custom_icon: CustomIcon::None, border_id: get_talent_border(def.talent_id) };
+                        group_footer.push(item);
+                    },
+                    _ => {}
                 }
             }
         }
