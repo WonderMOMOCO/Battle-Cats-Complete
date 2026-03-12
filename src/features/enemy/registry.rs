@@ -436,7 +436,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
         },
         formatter: |val, e, _, _| {
             let reach = 467.5 + ((e.wave_level - 1) as f32 * 200.0);
-            format!("{}% Chance to create a Level {} Wave reaching {} Range", val, e.wave_level, reach)
+            format!("{}% Chance to create a Level {} Wave\nWave reaches {} Range", val, e.wave_level, reach)
         },
         minus_one_is_inf: false,
     },
@@ -463,8 +463,8 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
             }
         },
         formatter: |val, e, _, _| {
-            let reach = 332.5 + ((e.wave_level - 1) as f32 * 200.0);
-            format!("{}% Chance to create a Level {} Mini-Wave reaching {} Range", val, e.wave_level, reach)
+            let reach = 467.5 + ((e.wave_level - 1) as f32 * 200.0);
+            format!("{}% Chance to create a Level {} Mini-Wave\nMini-Wave reaches {} Range", val, e.wave_level, reach)
         },
         minus_one_is_inf: false,
     },

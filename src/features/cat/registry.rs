@@ -635,7 +635,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         },
         formatter: |val, c, _, _| {
             let reach = 332.5 + ((c.wave_level - 1) as f32 * 200.0);
-            format!("{}% Chance to create a Level {} Wave reaching {} Range", val, c.wave_level, reach)
+            format!("{}% Chance to create a Level {} Wave\nWave reaches {} Range", val, c.wave_level, reach)
         },
         apply_func: Some(|c, v1, v2, _| { c.wave_chance += v1; c.wave_level = v2; }),
     },
@@ -664,7 +664,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         },
         formatter: |val, c, _, _| {
              let reach = 332.5 + ((c.wave_level - 1) as f32 * 200.0);
-             format!("{}% Chance to create a Level {} Mini-Wave reaching {} Range", val, c.wave_level, reach)
+             format!("{}% Chance to create a Level {} Mini-Wave\nMini-Wave reaches {} Range", val, c.wave_level, reach)
         },
         apply_func: Some(|c, v1, v2, _| { c.mini_wave_flag = 1; c.wave_chance += v1; c.wave_level = v2; }),
     },
