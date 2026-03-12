@@ -10,6 +10,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   BIN_NAME: "Battle Cats Complete"
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true 
 
 jobs:
   check-version:
@@ -130,7 +131,7 @@ jobs:
       - name: List artifacts (Verification)
         run: ls -R artifacts
       - name: Create Release Draft
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           token: ${{ secrets.MY_RELEASE_TOKEN }}
           tag_name: v${{ needs.check-version.outputs.app_version }}
