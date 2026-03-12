@@ -20,7 +20,7 @@ pub fn show(ui: &mut egui::Ui, state: &mut ImportState, settings: &Settings) {
         }
 
         let is_decrypt = state.import_sub_tab == ImportSubTab::Decrypt;
-        if ui.add(egui::Button::new(egui::RichText::new("Encrypted").color(egui::Color32::WHITE).size(14.0))
+        if ui.add(egui::Button::new(egui::RichText::new("Pack").color(egui::Color32::WHITE).size(14.0))
             .fill(if is_decrypt { active_color } else { inactive_color })
             .min_size(egui::vec2(80.0, 30.0)))
             .clicked() 
@@ -29,7 +29,7 @@ pub fn show(ui: &mut egui::Ui, state: &mut ImportState, settings: &Settings) {
         }
 
         let is_sort = state.import_sub_tab == ImportSubTab::Sort;
-        if ui.add(egui::Button::new(egui::RichText::new("Decrypted").color(egui::Color32::WHITE).size(14.0))
+        if ui.add(egui::Button::new(egui::RichText::new("Raw").color(egui::Color32::WHITE).size(14.0))
             .fill(if is_sort { active_color } else { inactive_color })
             .min_size(egui::vec2(80.0, 30.0)))
             .clicked() 

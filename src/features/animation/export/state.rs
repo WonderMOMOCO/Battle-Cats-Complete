@@ -1,7 +1,7 @@
 use std::sync::mpsc::{Sender, Receiver};
 use std::sync::{Arc, atomic::AtomicBool};
 use crate::features::animation::export::encoding::{ExportFormat, EncoderMessage};
-use crate::core::utils::DragGuard;
+use crate::global::ui::shared::DragGuard;
 
 pub const DEFAULT_WALK_LEN: i32 = 90;
 pub const DEFAULT_IDLE_LEN: i32 = 90;
@@ -145,7 +145,6 @@ impl Default for ExporterState {
             detected_walk_len: DEFAULT_WALK_LEN,
             detected_idle_len: DEFAULT_IDLE_LEN,
             
-            // Initialize with hardcoded constants first
             last_known_walk_default: DEFAULT_WALK_LEN,
             last_known_idle_default: DEFAULT_IDLE_LEN,
             last_known_kb_default: DEFAULT_KB_LEN,

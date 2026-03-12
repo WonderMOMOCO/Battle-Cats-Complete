@@ -4,7 +4,7 @@ use crate::features::import::logic::{ImportState, decrypt};
 use crate::features::import::sort;
 
 pub fn show(ui: &mut egui::Ui, state: &mut ImportState) {
-    ui.label("Decrypt and sort game files into database");
+    ui.label("Decrypt and sort game pack files into database");
     ui.add_space(10.0);
 
     ui.horizontal(|ui| {

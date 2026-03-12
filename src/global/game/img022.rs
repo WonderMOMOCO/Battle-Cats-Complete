@@ -25,7 +25,7 @@ pub fn ensure_loaded(ctx: &egui::Context, sheet: &mut SpriteSheet, settings: &Se
         codes_to_try.push(current_language.clone());
     }
     
-    for code in crate::core::utils::LANGUAGE_PRIORITY {
+    for code in crate::global::utils::LANGUAGE_PRIORITY {
         codes_to_try.push(code.to_string());
     }
 

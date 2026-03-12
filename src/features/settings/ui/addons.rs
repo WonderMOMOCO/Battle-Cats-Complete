@@ -1,11 +1,11 @@
 use eframe::egui;
-use crate::core::addons::adb::download::AdbManager;
-use crate::core::addons::avifenc::download::AvifManager;
-use crate::core::addons::ffmpeg::download::FfmpegManager;
+use crate::features::addons::adb::download::AdbManager;
+use crate::features::addons::avifenc::download::AvifManager;
+use crate::features::addons::ffmpeg::download::FfmpegManager;
 #[cfg(target_os = "windows")]
-use crate::core::addons::oem::download::{OemManager, OemDriver}; 
-use crate::core::addons::toolpaths::AddonStatus;
-use crate::core::utils::DragGuard;
+use crate::features::addons::oem::download::{OemManager, OemDriver}; 
+use crate::features::addons::toolpaths::AddonStatus;
+use crate::global::ui::shared::DragGuard;
 use std::sync::Mutex;
 
 #[derive(Default, Clone)]

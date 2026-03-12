@@ -12,7 +12,7 @@ use crate::features::cat::data::unitlevel::{self, CatLevelCurve};
 use crate::features::cat::data::skillacquisition::{self, TalentRaw}; 
 use crate::features::cat::data::unitevolve; 
 use crate::features::cat::data::unitexplanation; 
-use crate::core::utils; 
+use crate::global::utils; 
 use crate::features::cat::paths::{self, AssetType};
 use crate::features::settings::logic::state::ScannerConfig;
 use crate::global::formats::maanim::Animation;

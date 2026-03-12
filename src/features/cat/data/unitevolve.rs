@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::Path;
 use std::collections::HashMap;
-use crate::core::utils; 
+use crate::global::utils; 
 use crate::features::cat::paths;
 
 pub fn load(cats_directory: &Path, language_code: &str) -> HashMap<u32, [Vec<String>; 4]> {

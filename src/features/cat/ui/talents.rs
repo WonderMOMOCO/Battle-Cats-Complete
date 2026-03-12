@@ -3,14 +3,14 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use crate::features::cat::data::skillacquisition::{TalentRaw, TalentGroupRaw};
 use crate::global::formats::imgcut::SpriteSheet;
-use crate::core::utils::{self, autocrop};
+use crate::global::utils::{self, autocrop};
 use crate::features::settings::logic::Settings; 
 use crate::features::cat::data::unitid::CatRaw; 
 use crate::features::cat::data::unitlevel::CatLevelCurve;
 use crate::features::cat::logic::talents;
 use crate::features::cat::paths;
 use crate::features::cat::data::skilllevel::TalentCost;
-use crate::ui::components::shared::render_fallback_icon;
+use crate::global::ui::shared::render_fallback_icon;
 
 pub const TALENT_NP_ICON_SIZE: f32 = 20.0;
 pub const TALENT_NP_TEXT_SIZE: f32 = 18.0;

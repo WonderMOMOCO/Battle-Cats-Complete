@@ -4,7 +4,7 @@ use std::fs;
 use std::thread;
 use std::sync::{Arc, Mutex, mpsc::{self, Receiver}};
 use std::collections::HashMap;
-use crate::core::utils;
+use crate::global::utils;
 
 #[derive(Clone, Debug)]
 pub struct SpriteCut {

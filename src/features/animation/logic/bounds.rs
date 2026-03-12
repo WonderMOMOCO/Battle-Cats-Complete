@@ -1,8 +1,51 @@
 use eframe::egui;
+use std::path::PathBuf;
 use crate::global::formats::mamodel::Model;
 use crate::global::formats::maanim::Animation;
 use crate::global::formats::imgcut::SpriteSheet;
 use crate::features::animation::logic::{animator, transform};
+use crate::features::animation::ui::controls;
+
+// Scans all valid Showcase animations and mathematically unions their bounds
+pub fn calculate_showcase_bounds(
+    model: &Model,
+    sheet: &SpriteSheet,
+    available_anims: &[(usize, PathBuf)],
+    walk_len: i32,
+    idle_len: i32,
+    attack_len: i32,
+    kb_len: i32,
+    use_tight_bounds: bool,
+) -> Option<egui::Rect> {
+    let mut master: Option<egui::Rect> = None;
+    
+    let targets = [
+        (controls::IDX_WALK, walk_len),
+        (controls::IDX_IDLE, idle_len),
+        (controls::IDX_ATTACK, attack_len),
+        (controls::IDX_KB, kb_len),
+    ];
+
+    for (idx, len) in targets {
+        if len > 0 { // Skip unused animations!
+            if let Some((_, path)) = available_anims.iter().find(|(i, _)| *i == idx) {
+                if let Some(a) = Animation::load(path) {
+                    let b_opt = if use_tight_bounds {
+                        calculate_tight_bounds(model, Some(&a), sheet)
+                    } else {
+                        calculate_loose_bounds(model, Some(&a), sheet)
+                    };
+                    
+                    if let Some(b) = b_opt {
+                        // Union the rect with our existing master rect
+                        master = Some(master.map_or(b, |mb| mb.union(b)));
+                    }
+                }
+            }
+        }
+    }
+    master
+}
 
 // Calculates a tight bounding box using the exact renderer logic for the ENTIRE animation
 // Uses "Smart Filtering" to ignore faint effects while keeping giant solid limbs
@@ -22,21 +65,35 @@ pub fn calculate_tight_bounds(
     scan_bounds(model, anim, sheet, false, None)
 }
 
+// Calculates a loose bounding box for the ENTIRE animation
+// Only crops out 100% transparency (alpha <= 0.01)
+pub fn calculate_loose_bounds(
+    model: &Model,
+    anim: Option<&Animation>,
+    sheet: &SpriteSheet
+) -> Option<egui::Rect> {
+    scan_bounds(model, anim, sheet, false, None)
+}
+
 // Calculates the initial Camera Pan and Zoom to fit the unit in the viewport
 // Uses only Frame 0 (or static pose) to determine the resting position
 pub fn calculate_initial_view(
     model: &Model,
     anim: Option<&Animation>,
     sheet: &SpriteSheet,
-    viewport_size: egui::Vec2
+    viewport_size: egui::Vec2,
+    use_tight_bounds: bool,
 ) -> Option<(egui::Vec2, f32)> {
     
     // We only scan Frame 0 for the initial centering
     let frame_zero = Some((0, 0));
 
-    // Try Strict Scan first
-    let bounds = scan_bounds(model, anim, sheet, true, frame_zero)
-        .or_else(|| scan_bounds(model, anim, sheet, false, frame_zero));
+    let bounds = if use_tight_bounds {
+        scan_bounds(model, anim, sheet, true, frame_zero)
+            .or_else(|| scan_bounds(model, anim, sheet, false, frame_zero))
+    } else {
+        scan_bounds(model, anim, sheet, false, frame_zero)
+    };
 
     if let Some(b) = bounds {
         // Calculate Pan

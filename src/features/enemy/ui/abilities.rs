@@ -3,7 +3,7 @@ use crate::features::enemy::logic::scanner::EnemyEntry;
 use crate::features::enemy::logic::abilities;
 use crate::global::formats::imgcut::SpriteSheet;
 use crate::features::settings::logic::Settings;
-use crate::ui::components::shared::{render_fallback_icon, text_with_superscript};
+use crate::global::ui::shared::{render_fallback_icon, text_with_superscript};
 use crate::global::game::img015;
 use crate::global::assets::CustomAssets;
 use crate::global::game::abilities::{AbilityItem, CustomIcon};

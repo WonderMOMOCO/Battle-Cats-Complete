@@ -3,9 +3,9 @@ use std::sync::{mpsc, Arc, atomic::{AtomicBool, Ordering}};
 use std::thread;
 
 use crate::features::animation::export::encoding::{self, ExportConfig, ExportFormat, EncoderMessage, EncoderStatus};
-use crate::core::addons::toolpaths::{self, Presence};
-use crate::core::addons::avifenc::encoding as avif_addon;
-use crate::core::addons::ffmpeg::encoding as ffmpeg_addon;
+use crate::features::addons::toolpaths::{self, Presence};
+use crate::features::addons::avifenc::encoding as avif_addon;
+use crate::features::addons::ffmpeg::encoding as ffmpeg_addon;
 
 pub fn start_encoding_thread(
     config: ExportConfig, 

@@ -1,8 +1,8 @@
 use eframe::egui;
 use crate::features::enemy::logic::scanner::EnemyEntry;
 use crate::features::enemy::logic::state::EnemyDetailTab;
-use crate::ui::components::name_box;
-use crate::core::utils::autocrop;
+use crate::global::ui::name_box;
+use crate::global::utils::autocrop;
 
 pub const INPUT_SPACING: f32 = 4.0;
 

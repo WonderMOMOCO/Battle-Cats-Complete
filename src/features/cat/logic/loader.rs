@@ -1,5 +1,5 @@
 use std::path::Path;
-use std::time::{Instant, Duration};
+use std::time::Instant;
 use std::sync::mpsc::TryRecvError;
 
 use super::CatListState;
@@ -51,27 +51,19 @@ pub fn refresh_cat(state: &mut CatListState, id: u32, config: ScannerConfig) {
 
     match new_entry {
         Some(entry) => {
-            if let Some(index) = state.cats.iter().position(|c| c.id == id) {
-                state.cats[index] = entry;
-            } else {
-                state.cats.push(entry);
-                state.cats.sort_unstable_by_key(|c| c.id);
+            match state.cats.binary_search_by_key(&id, |c| c.id) {
+                Ok(pos) => state.cats[pos] = entry,
+                Err(pos) => state.cats.insert(pos, entry),
             }
         },
         None => {
-            if let Some(index) = state.cats.iter().position(|c| c.id == id) {
-                state.cats.remove(index);
+            if let Ok(pos) = state.cats.binary_search_by_key(&id, |c| c.id) {
+                state.cats.remove(pos);
                 if state.selected_cat == Some(id) {
                     state.selected_cat = None;
                 }
             }
         }
-    }
-}
-
-pub fn reload_selected_cat_data(state: &mut CatListState, config: ScannerConfig) {
-    if let Some(id) = state.selected_cat {
-        refresh_cat(state, id, config);
     }
 }
 
@@ -84,7 +76,16 @@ pub fn update_data(state: &mut CatListState) {
     loop {
         match rx.try_recv() {
             Ok(cat_entry) => {
-                state.cats.push(cat_entry);
+                let id = cat_entry.id;
+                
+                state.active_scan_ids.insert(id);
+                
+                match state.cats.binary_search_by_key(&id, |c| c.id) {
+                    Ok(pos) => state.cats[pos] = cat_entry,       
+                    Err(pos) => state.cats.insert(pos, cat_entry), 
+                }
+                
+                state.cat_list.flush_icon(id);
                 received_any = true;
             },
             Err(TryRecvError::Empty) => break,
@@ -97,23 +98,34 @@ pub fn update_data(state: &mut CatListState) {
 
     if received_any {
         let now = Instant::now();
-        let should_sort = state.last_update_time
-            .map(|last| now.duration_since(last) > Duration::from_millis(150))
-            .unwrap_or(true);
+        state.last_update_time = Some(now);
 
-        if should_sort || is_done {
-            state.cats.sort_unstable_by_key(|cat| cat.id); 
-            state.last_update_time = Some(now);
-
-            if state.selected_cat.is_none() {
-                state.selected_cat = state.cats.first().map(|c| c.id);
-            }
+        if state.selected_cat.is_none() && !state.cats.is_empty() {
+            state.selected_cat = Some(state.cats[0].id);
         }
     }
 
     if is_done {
+        state.cats.retain(|c| state.active_scan_ids.contains(&c.id));
+        
+        if let Some(sel) = state.selected_cat {
+            if !state.active_scan_ids.contains(&sel) {
+                state.selected_cat = None;
+            }
+        }
+
         state.scan_receiver = None;
     }
+}
+
+pub fn resync_scan(state: &mut CatListState, config: ScannerConfig) {
+    state.cached_level_curves = None;
+    state.cached_unit_buy = None;
+    state.cached_talents = None;
+    state.cached_evolve_text = None;
+    
+    state.active_scan_ids.clear();
+    state.scan_receiver = Some(scanner::start_scan(config));
 }
 
 pub fn restart_scan(state: &mut CatListState, config: ScannerConfig) {
@@ -127,6 +139,7 @@ pub fn restart_scan(state: &mut CatListState, config: ScannerConfig) {
     state.is_cold_scan = true;
     state.last_update_time = None;
     state.incoming_cats.clear();
+    state.active_scan_ids.clear();
     
     state.cached_level_curves = None;
     state.cached_unit_buy = None;

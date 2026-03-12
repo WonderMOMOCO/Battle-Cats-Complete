@@ -1,4 +1,5 @@
 use eframe::egui;
+use std::collections::HashSet;
 use std::sync::mpsc::Receiver;
 use std::collections::{HashMap, VecDeque};
 use serde::{Deserialize, Serialize};
@@ -19,7 +20,7 @@ use crate::features::cat::data::unitbuy::UnitBuyRow;
 use crate::features::cat::data::skillacquisition::TalentRaw;
 use crate::features::settings::logic::state::ScannerConfig;
 use crate::features::settings::logic::Settings;
-use crate::core::utils::DragGuard; 
+use crate::global::ui::shared::DragGuard; 
 
 pub const TOP_PANEL_PADDING: f32 = 2.5;
 pub const SEARCH_FILTER_GAP: f32 = 5.0;
@@ -58,6 +59,7 @@ pub struct CatListState {
     pub current_level: i32,
     #[serde(skip)] pub cat_list: CatList,
     #[serde(skip)] pub scan_receiver: Option<Receiver<CatEntry>>,
+    #[serde(skip)] pub active_scan_ids: HashSet<u32>,
     #[serde(skip)] pub detail_texture: Option<egui::TextureHandle>,
     #[serde(skip)] pub detail_key: String, 
     #[serde(skip)] pub icon_sheet: SpriteSheet,   
@@ -65,9 +67,7 @@ pub struct CatListState {
     #[serde(skip)] pub sprite_sheet: SpriteSheet, 
     #[serde(skip)] pub model_data: Option<Model>,
     #[serde(skip)] pub anim_viewer: AnimViewer,
-    
     #[serde(skip)] pub custom_assets: Option<CustomAssets>,
-    
     #[serde(skip)] pub talent_name_textures: HashMap<String, egui::TextureHandle>, 
     #[serde(skip)] pub gatya_item_textures: HashMap<i32, Option<egui::TextureHandle>>,
     #[serde(skip)] pub texture_cache_version: u64,
@@ -101,6 +101,7 @@ impl Default for CatListState {
             selected_detail_tab: DetailTab::default(),
             level_input: "50".to_string(),
             current_level: 50,
+            active_scan_ids: HashSet::new(),
             detail_texture: None,
             detail_key: String::new(),
             icon_sheet: SpriteSheet::default(), 
@@ -197,8 +198,6 @@ pub fn show(ctx: &egui::Context, state: &mut CatListState, settings: &mut Settin
                     &state.search_query, &state.filter_state, 
                     settings.cat_data.high_banner_quality
                 );
-            } else if state.scan_receiver.is_some() {
-                ui.centered_and_justified(|ui| { ui.spinner(); });
             }
             
             if state.selected_cat != old_selection_id {
@@ -280,7 +279,7 @@ pub fn show(ctx: &egui::Context, state: &mut CatListState, settings: &mut Settin
                         ui.label("Loading Unit Data...");
                     } else {
                         ui.heading("No Data Found");
-                        ui.label(egui::RichText::new("Could not find any units in game/cats.").color(ui.visuals().weak_text_color()));
+                        ui.label(egui::RichText::new("Could not find any units in game/cats").color(ui.visuals().weak_text_color()));
                         ui.add_space(5.0);
                         if ui.button("Retry Scan").clicked() {
                             state.restart_scan(settings.scanner_config());

@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 use std::fs;
 use std::path::Path;
-use crate::core::utils;
+use crate::global::utils;
 use crate::features::cat::paths;
 
 pub const ICON_SIZE: f32 = 40.0;

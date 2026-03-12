@@ -91,7 +91,7 @@ impl Default for AnimViewer {
 }
 
 impl AnimViewer {
-    fn update_export_state(&mut self, settings: &Settings) {
+    fn update_export_state(&mut self, _settings: &Settings) {
         self.export_state.loop_supported = self.loaded_anim_index == anim_controls::IDX_WALK || self.loaded_anim_index == anim_controls::IDX_IDLE;
 
         if self.export_state.export_mode != ExportMode::Showcase {
@@ -106,18 +106,6 @@ impl AnimViewer {
             }
             self.export_state.frame_start_str.clear(); 
             self.export_state.frame_end_str.clear();
-        }
-
-        if settings.animation.export_popup_open && settings.animation.auto_set_camera_region {
-            if let (Some(m), Some(s)) = (&self.held_model, &self.held_sheet) {
-                if let Some(bounds) = bounds::calculate_tight_bounds(m, self.current_anim.as_ref(), s) {
-                    self.export_state.region_x = bounds.min.x;
-                    self.export_state.region_y = bounds.min.y;
-                    self.export_state.region_w = bounds.width();
-                    self.export_state.region_h = bounds.height();
-                    self.export_state.zoom = 1.0;
-                }
-            }
         }
 
         let type_str = match self.loaded_anim_index {
@@ -207,7 +195,7 @@ impl AnimViewer {
                     if available_anims.iter().any(|(i, _)| *i == check_idx) {
                         valid_idx = check_idx;
                         break;
-                    }
+                        }
                 }
             }
 
@@ -407,6 +395,8 @@ impl AnimViewer {
         let centering_behavior = settings.animation.centering_behavior;
         let native_fps = settings.animation.native_fps;
         
+        let mut just_finished_selection = false;
+
         if !primary_id.is_empty() { self.summoner_id = primary_id.to_string(); }
 
         if self.loaded_id != self.last_loaded_id {
@@ -435,6 +425,7 @@ impl AnimViewer {
 
             let prev_mode = self.export_state.export_mode.clone();
             
+            // Re-Initialize the entire state natively, resetting the camera to 0.0
             self.export_state = ExporterState::default();
             self.export_state.export_mode = prev_mode;
 
@@ -477,10 +468,11 @@ impl AnimViewer {
         let mut should_clear_pending = false;
 
         if let (Some(model), Some(sheet)) = (&self.held_model, &self.held_sheet) {
+
             if self.pending_initial_center {
                 if centering_behavior == 0 { 
                     if !model.parts.is_empty() {
-                        if let Some((offset, fit_zoom)) = bounds::calculate_initial_view(model, self.current_anim.as_ref(), sheet, ui.available_size()) {
+                        if let Some((offset, fit_zoom)) = bounds::calculate_initial_view(model, self.current_anim.as_ref(), sheet, ui.available_size(), settings.animation.use_tight_bounds) {
                             new_center = Some((offset, fit_zoom));
                         }
                     }
@@ -579,6 +571,7 @@ impl AnimViewer {
                         self.export_state.zoom = 1.0; 
                         self.is_selecting_export_region = false; 
                         settings.animation.export_popup_open = true; 
+                        just_finished_selection = true;
                     } else { 
                         self.is_selecting_export_region = false; 
                         settings.animation.export_popup_open = true; 
@@ -602,21 +595,34 @@ impl AnimViewer {
                  };
              }
 
-             if settings.animation.auto_set_camera_region {
-                 if let (Some(m), Some(s)) = (&self.held_model, &self.held_sheet) {
-                    if let Some(bounds) = bounds::calculate_tight_bounds(m, self.current_anim.as_ref(), s) {
-                        self.export_state.region_x = bounds.min.x;
-                        self.export_state.region_y = bounds.min.y;
-                        self.export_state.region_w = bounds.width();
-                        self.export_state.region_h = bounds.height();
-                        self.export_state.zoom = 1.0;
+             if !just_finished_selection {
+                 if settings.animation.auto_set_camera_region {
+                     if let (Some(m), Some(s)) = (&self.held_model, &self.held_sheet) {
+                         
+                        let master_bounds = if self.export_state.export_mode == ExportMode::Showcase {
+                            bounds::calculate_showcase_bounds(
+                                m, s, available_anims, 
+                                self.export_state.showcase_walk_len, self.export_state.showcase_idle_len, 
+                                self.export_state.showcase_attack_len, self.export_state.showcase_kb_len,
+                                settings.animation.use_tight_bounds
+                            )
+                        } else {
+                            if settings.animation.use_tight_bounds {
+                                bounds::calculate_tight_bounds(m, self.current_anim.as_ref(), s)
+                            } else {
+                                bounds::calculate_loose_bounds(m, self.current_anim.as_ref(), s)
+                            }
+                        };
+
+                        if let Some(bounds) = master_bounds {
+                            self.export_state.region_x = bounds.min.x;
+                            self.export_state.region_y = bounds.min.y;
+                            self.export_state.region_w = bounds.width();
+                            self.export_state.region_h = bounds.height();
+                            self.export_state.zoom = 1.0;
+                        }
                     }
-                }
-             } else {
-                self.export_state.region_w = 0.0;
-                self.export_state.region_h = 0.0;
-                self.export_state.region_x = 0.0;
-                self.export_state.region_y = 0.0;
+                 }
              }
         }
         self.was_export_popup_open = settings.animation.export_popup_open;
@@ -787,7 +793,7 @@ impl AnimViewer {
         let controls_hovered = anim_controls::render_controls_overlay(ui, rect_alloc, self, available_anims, base_assets_available, is_loading_new, secondary_id, primary_id, secondary_assets, interpolation, native_fps, settings);
         self.is_pointer_over_controls = controls_hovered || btn_response.hovered();
 
-        export::show_popup(ui, &mut self.export_state, self.held_model.as_ref(), self.current_anim.as_ref(), self.held_sheet.as_ref(), &mut self.is_selecting_export_region, settings);
+        export::show_popup(ui, &mut self.export_state, self.held_model.as_ref(), self.current_anim.as_ref(), self.held_sheet.as_ref(), &mut self.is_selecting_export_region, settings, available_anims);
     }
 }
 

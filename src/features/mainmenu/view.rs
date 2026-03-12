@@ -1,5 +1,5 @@
 use eframe::egui;
-use crate::core::utils::DragGuard;
+use crate::global::ui::shared::DragGuard;
 use super::changelog;
 
 pub fn show(ctx: &egui::Context, drag_guard: &mut DragGuard) {

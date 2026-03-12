@@ -88,7 +88,21 @@ pub fn run(folder_path: &str, region_code: &str, tx: Sender<String>) -> Result<(
                         let path_obj = Path::new(asset_name);
                         let stem = path_obj.file_stem().unwrap().to_string_lossy();
                         let ext = path_obj.extension().unwrap().to_string_lossy();
-                        final_filename = format!("{}_{}.{}", stem, current_code, ext);
+                        
+                        let mut clean_stem = stem.to_string();
+                        for code in ["en", "ja", "tw", "kr", "th", "it", "fr", "de", "es"] {
+                            let suffix = format!("_{}", code);
+                            if clean_stem.ends_with(&suffix) {
+                                clean_stem = clean_stem.trim_end_matches(&suffix).to_string();
+                                break;
+                            }
+                        }
+
+                        if current_code.is_empty() {
+                            final_filename = format!("{}.{}", clean_stem, ext);
+                        } else {
+                            final_filename = format!("{}_{}.{}", clean_stem, current_code, ext);
+                        }
                     }
 
                     // Insert into map. Newer files overwrite older files naturally
@@ -103,7 +117,10 @@ pub fn run(folder_path: &str, region_code: &str, tx: Sender<String>) -> Result<(
         }
     }
 
-    let _ = tx.send(format!("Found {} up-to-date files. Starting extraction...", master_map.len()));
+    let total_files = master_map.len();
+    let _ = tx.send(format!("Found {} total files. Starting extraction...", total_files));
+
+    let update_interval = (total_files / 100).max(10) as i32;
 
     // Group tasks by pack file to minimize disk IO overhead
     let mut pack_tasks: HashMap<PathBuf, Vec<(String, PackEntry)>> = HashMap::new();
@@ -119,17 +136,17 @@ pub fn run(folder_path: &str, region_code: &str, tx: Sender<String>) -> Result<(
             for (final_name, entry) in entries {
                 let target_path = raw_dir.join(&final_name);
 
-                // --- GLOBAL INDEX BYPASS ---
-                let mut already_exists = false;
+                let mut should_extract = true; 
                 let name_lower = final_name.to_lowercase();
-                
+
+                let size_tolerance = 128;
+
                 // Check if it exists anywhere in the game folder
                 if let Some(existing_paths) = shared_index.get(&name_lower) {
                     for path in existing_paths {
                         if let Ok(meta) = fs::metadata(path) {
-                            let actual_size = meta.len() as usize;
-                            if actual_size >= entry.size.saturating_sub(16) && actual_size <= entry.size {
-                                already_exists = true;
+                            if meta.len() as usize + size_tolerance >= entry.size {
+                                should_extract = false;
                                 break;
                             }
                         }
@@ -137,24 +154,19 @@ pub fn run(folder_path: &str, region_code: &str, tx: Sender<String>) -> Result<(
                 }
                 
                 // Check the raw_dir just in case it was freshly written or not indexed
-                if !already_exists && target_path.exists() {
+                if should_extract && target_path.exists() {
                      if let Ok(meta) = fs::metadata(&target_path) {
-                         let actual_size = meta.len() as usize;
-                         if actual_size >= entry.size.saturating_sub(16) && actual_size <= entry.size {
-                             already_exists = true;
+                         if meta.len() as usize + size_tolerance >= entry.size {
+                             should_extract = false;
                          }
                      }
                 }
 
-                if already_exists {
-                    let c = count.fetch_add(1, Ordering::Relaxed);
-                    if c % 250 == 0 { 
-                        let _ = tx.send(format!("Skipped {} existing files | Current: {}", c, final_name)); 
-                    }
+                if !should_extract {
                     continue; 
                 }
 
-                // If it doesn't exist, extract it normally
+                // If it doesn't exist (or the incoming file is strictly larger), extract it
                 let aligned_size = if entry.size % 16 == 0 { entry.size } else { ((entry.size / 16) + 1) * 16 };
                 if file.seek(SeekFrom::Start(entry.offset)).is_err() { continue; }
                 
@@ -169,8 +181,8 @@ pub fn run(folder_path: &str, region_code: &str, tx: Sender<String>) -> Result<(
                     }
                     let _ = fs::write(&target_path, final_data);
 
-                    let c = count.fetch_add(1, Ordering::Relaxed);
-                    if c % 250 == 0 { 
+                    let c = count.fetch_add(1, Ordering::Relaxed) + 1;
+                    if c % update_interval == 0 { 
                         let _ = tx.send(format!("Extracted {} files | Current: {}", c, final_name)); 
                     }
                 }
@@ -183,7 +195,7 @@ pub fn run(folder_path: &str, region_code: &str, tx: Sender<String>) -> Result<(
         let _ = fs::remove_dir_all(dir);
     }
 
-    let _ = tx.send(format!("Decryption complete. Processed {} files.", count.load(Ordering::Relaxed)));
+    let _ = tx.send(format!("Decryption complete. Extracted {} new or updated files.", count.load(Ordering::Relaxed)));
     Ok(())
 }
 
@@ -198,9 +210,8 @@ fn determine_code(filename: &str, selected_region: &str) -> String {
 
 fn calculate_order(path: &Path, temp_apk_dirs: &[PathBuf]) -> u64 {
     let name = path.file_stem().unwrap_or_default().to_string_lossy().to_string();
-    let mut score = 5_000; // Fallback
+    let mut score = 5_000; 
     
-    // 1. Dynamic Versioned Patches (e.g., UnitServer_150200_00_en)
     let parts: Vec<&str> = name.split('_').collect();
     if parts.len() >= 3 {
         if let (Ok(v1), Ok(v2)) = (parts[1].parse::<u64>(), parts[2].parse::<u64>()) {
@@ -208,23 +219,19 @@ fn calculate_order(path: &Path, temp_apk_dirs: &[PathBuf]) -> u64 {
         }
     }
 
-    // 2. Alphabet Server Patches
     if score == 5_000 && name.ends_with("Server") {
         let chars: Vec<char> = name.chars().collect();
-        // Tier 2 check: Exactly one uppercase letter followed by another uppercase letter
         if chars.len() > 1 && chars[0].is_ascii_uppercase() && chars[1].is_ascii_uppercase() {
-            score = 20_000 + (chars[0] as u64); // Tier 2
+            score = 20_000 + (chars[0] as u64); 
         } else {
-            score = 10_000; // Tier 1 (UnitServer, MapServer)
+            score = 10_000; 
         }
     }
 
-    // 3. Absolute Base Data (if loose in the folder, not in APK)
     if score == 5_000 && (name == "DataLocal" || name == "UpdateLocal" || name.ends_with("Local")) {
-        score = 0; // Oldest possible files if they aren't part of the modern APK
+        score = 0; 
     }
 
-    // 4. APK OVERRIDE
     if temp_apk_dirs.iter().any(|dir| path.starts_with(dir)) {
         score += 500_000_000;
     }
@@ -243,7 +250,6 @@ fn scan_for_index(dir: &Path, index: &mut HashMap<String, Vec<PathBuf>>) -> std:
     for entry_result in fs::read_dir(dir)?.flatten() {
         let path = entry_result.path();
         if path.is_dir() {
-            // IGNORE THE `game/app` DIRECTORY
             let path_str = path.to_string_lossy().replace('\\', "/");
             if path_str == "game/app" {
                 continue;

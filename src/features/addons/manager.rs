@@ -4,7 +4,7 @@ use std::thread;
 use std::io::Cursor;
 use zip::ZipArchive;
 
-use crate::core::addons::toolpaths::{get_tools_dir, AddonStatus};
+use crate::features::addons::toolpaths::{get_tools_dir, AddonStatus};
 
 const RELEASE_TAG: &str = "tools"; 
 const REPO_OWNER: &str = "WonderMOMOCO";

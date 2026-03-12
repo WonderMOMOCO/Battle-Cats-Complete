@@ -1,14 +1,197 @@
+use std::fs;
+use std::path::Path;
 use eframe::egui;
 use crate::features::settings::logic::state::{GameDataSettings, RuntimeState};
+use crate::features::settings::logic::delete::FolderDeleter;
+use crate::global::ui::shared::DragGuard;
 use super::tabs::toggle_ui;
 
-pub fn show(ui: &mut egui::Ui, settings: &mut GameDataSettings, runtime: &mut RuntimeState) -> bool {
+#[derive(Clone, Default)]
+struct FolderDeleteState {
+    is_open: bool,
+    size_str: Option<String>,
+}
+
+fn get_folder_size(path: &Path) -> u64 {
+    let mut size = 0;
+    if let Ok(entries) = fs::read_dir(path) {
+        for entry in entries.flatten() {
+            if let Ok(metadata) = entry.metadata() {
+                if metadata.is_dir() {
+                    size += get_folder_size(&entry.path());
+                } else {
+                    size += metadata.len();
+                }
+            }
+        }
+    }
+    size
+}
+
+fn format_size(size: u64) -> String {
+    let kb = 1024.0;
+    let mb = kb * 1024.0;
+    let gb = mb * 1024.0;
+    let size_f = size as f64;
+
+    if size_f >= gb {
+        format!("{:.2} GB", size_f / gb)
+    } else if size_f >= mb {
+        format!("{:.2} MB", size_f / mb)
+    } else if size_f >= kb {
+        format!("{:.2} KB", size_f / kb)
+    } else {
+        format!("{} B", size)
+    }
+}
+
+fn show_folder_delete_modal(
+    ctx: &egui::Context,
+    drag_guard: &mut DragGuard,
+    id_str: &str,
+    content: &str,
+) -> bool {
+    let state_id = egui::Id::new(id_str);
+    let mut state = ctx.data(|d| d.get_temp::<FolderDeleteState>(state_id)).unwrap_or_default();
+    let mut yes_clicked = false;
+
+    if state.is_open {
+        let window_id = egui::Id::new(format!("{}_window", id_str));
+        let (allow_drag, fixed_pos) = drag_guard.assign_bounds(ctx, window_id);
+        let mut should_close = false;
+
+        let mut window = egui::Window::new("Confirm Deletion")
+            .id(window_id)
+            .collapsible(false)
+            .resizable(false)
+            .constrain(false)
+            .movable(allow_drag) 
+            .default_pos(ctx.screen_rect().center() - egui::vec2(150.0, 50.0));
+            
+        if let Some(pos) = fixed_pos { window = window.current_pos(pos); }
+            
+        window.show(ctx, |ui| {
+            ui.set_min_width(280.0);
+            ui.vertical_centered(|ui| {
+                ui.add_space(5.0);
+                ui.label(content); 
+                
+                if let Some(size) = &state.size_str {
+                    ui.add_space(5.0);
+                    ui.label(egui::RichText::new(format!("\"raw\" folder size: {}", size)).color(ui.visuals().weak_text_color()));
+                }
+
+                ui.add_space(15.0);
+                
+                ui.horizontal(|ui| {
+                    let total_width = 130.0;
+                    let x_offset = (ui.available_width() - total_width) / 2.0;
+                    ui.add_space(x_offset);
+
+                    // If YES is clicked, flag it and close immediately
+                    if ui.add_sized([60.0, 30.0], egui::Button::new("Yes")).clicked() {
+                        yes_clicked = true;
+                        should_close = true;
+                    }
+                    
+                    ui.add_space(10.0);
+
+                    if ui.add_sized([60.0, 30.0], egui::Button::new("No")).clicked() {
+                        should_close = true;
+                    }
+                });
+                ui.add_space(5.0);
+            });
+        });
+        
+        if should_close {
+            state.is_open = false;
+        }
+        
+        ctx.data_mut(|d| d.insert_temp(state_id, state));
+    }
+    
+    yes_clicked
+}
+
+pub fn show(ui: &mut egui::Ui, settings: &mut GameDataSettings, runtime: &mut RuntimeState, drag_guard: &mut DragGuard) -> bool {
     let mut refresh_needed = false;
+    let ctx = ui.ctx().clone();
+
+    // Pull our background deleters from Egui's temporary memory
+    let mut game_deleter = ctx.data_mut(|d| d.get_temp::<FolderDeleter>(egui::Id::new("game_deleter")).unwrap_or_default());
+    let mut raw_deleter = ctx.data_mut(|d| d.get_temp::<FolderDeleter>(egui::Id::new("raw_deleter")).unwrap_or_default());
+
+    game_deleter.update();
+    raw_deleter.update();
+
+    // If either folder is actively deleting/showing success, redraw at 60 FPS so the UI changes instantly
+    if game_deleter.is_active() || raw_deleter.is_active() {
+        ctx.request_repaint();
+    }
+
+    let game_exists = Path::new("game").exists();
+    let raw_exists = Path::new("game/raw").exists();
+
     egui::ScrollArea::vertical()
         .id_salt("game_data_scroll")
         .auto_shrink([false, true])
         .show(ui, |ui| {
 
+            ui.heading("Files");
+            ui.add_space(5.0);
+
+            // GAME FOLDER BUTTON LOGIC
+            if game_deleter.is_deleting() {
+                let btn = egui::Button::new("Deleting \"game\" Folder...")
+                    .fill(egui::Color32::from_rgb(200, 180, 50)); // Yellow
+                ui.add_sized([180.0, 30.0], btn);
+            } else if game_deleter.is_done() {
+                let btn = egui::Button::new("Deleted \"game\" Folder!")
+                    .fill(egui::Color32::from_rgb(40, 160, 40)); // Green
+                ui.add_sized([180.0, 30.0], btn);
+            } else if game_exists {
+                let btn = egui::Button::new("Delete \"game\" Folder")
+                    .fill(egui::Color32::from_rgb(180, 50, 50)); // Red
+                if ui.add_sized([180.0, 30.0], btn).clicked() {
+                    let state_id = egui::Id::new("delete_game_modal");
+                    ctx.data_mut(|d| d.insert_temp(state_id, FolderDeleteState { is_open: true, size_str: None }));
+                }
+            } else {
+                let btn = egui::Button::new("No \"game\" Folder")
+                    .fill(egui::Color32::from_rgb(60, 60, 60)); // Gray
+                ui.add_sized([180.0, 30.0], btn);
+            }
+
+            ui.add_space(5.0);
+
+            // RAW FOLDER BUTTON LOGIC
+            if raw_deleter.is_deleting() {
+                let btn = egui::Button::new("Deleting \"raw\" Folder...")
+                    .fill(egui::Color32::from_rgb(200, 180, 50)); // Yellow
+                ui.add_sized([180.0, 30.0], btn);
+            } else if raw_deleter.is_done() {
+                let btn = egui::Button::new("Deleted \"raw\" Folder!")
+                    .fill(egui::Color32::from_rgb(40, 160, 40)); // Green
+                ui.add_sized([180.0, 30.0], btn);
+            } else if raw_exists {
+                let btn = egui::Button::new("Delete \"raw\" Folder")
+                    .fill(egui::Color32::from_rgb(180, 50, 50)); // Red
+                if ui.add_sized([180.0, 30.0], btn).clicked() {
+                    let size = get_folder_size(Path::new("game/raw"));
+                    let state_id = egui::Id::new("delete_raw_modal");
+                    ctx.data_mut(|d| d.insert_temp(state_id, FolderDeleteState { 
+                        is_open: true, 
+                        size_str: Some(format_size(size)) 
+                    }));
+                }
+            } else {
+                let btn = egui::Button::new("No \"raw\" Folder")
+                    .fill(egui::Color32::from_rgb(60, 60, 60)); // Gray
+                ui.add_sized([180.0, 30.0], btn);
+            }
+
+            ui.add_space(20.0);
             ui.heading("Android");
             ui.add_space(5.0);
 
@@ -70,6 +253,21 @@ pub fn show(ui: &mut egui::Ui, settings: &mut GameDataSettings, runtime: &mut Ru
                     }
                 }
             });
+    });
+
+    // Check if the user confirmed deletion in the modals
+    if show_folder_delete_modal(&ctx, drag_guard, "delete_game_modal", "Are you sure you want to delete the \"game\" folder?\nMost app function will be lost.") {
+        game_deleter.start("game");
+    }
+
+    if show_folder_delete_modal(&ctx, drag_guard, "delete_raw_modal", "Are you sure you want to delete the \"raw\" folder?\nYou may need to import again if an app update requires new game assets.") {
+        raw_deleter.start("game/raw");
+    }
+
+    // Save the thread trackers back into memory for the next frame
+    ctx.data_mut(|d| {
+        d.insert_temp(egui::Id::new("game_deleter"), game_deleter);
+        d.insert_temp(egui::Id::new("raw_deleter"), raw_deleter);
     });
 
     refresh_needed

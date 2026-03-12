@@ -1,7 +1,7 @@
 use eframe::egui;
 use crate::features::cat::logic::scanner::CatEntry;
 use crate::features::cat::logic::stats::CatRaw;
-use crate::ui::components::stat_grid::{grid_cell, grid_cell_custom, render_frames};
+use crate::global::ui::stat_grid::{grid_cell, grid_cell_custom, render_frames};
 use crate::features::cat::registry::{get_cat_stat, format_cat_stat};
 
 pub fn render(

@@ -1,5 +1,6 @@
 use eframe::egui;
 use std::time::Duration;
+use std::path::PathBuf;
 use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 use crate::global::formats::mamodel::Model;
 use crate::global::formats::maanim::Animation;
@@ -10,7 +11,7 @@ use crate::features::animation::export::process::{start_export, STATUS_RX};
 use crate::features::animation::export::findloop;
 use crate::features::settings::ui::toggle_ui; 
 use crate::features::animation::logic::bounds;
-use crate::core::addons::toolpaths::{self, Presence};
+use crate::features::addons::toolpaths::{self, Presence};
 use crate::features::settings::logic::Settings;
 
 const EXPORT_MODE_SPACING: f32 = 2.0; 
@@ -24,6 +25,7 @@ pub fn show_popup(
     sheet: Option<&SpriteSheet>,
     start_region_selection: &mut bool,
     settings: &mut Settings,
+    available_anims: &[(usize, PathBuf)],
 ) {
     // TOOL VALIDATION CHECK
     let ffmpeg_missing = toolpaths::ffmpeg_status() != Presence::Installed;
@@ -158,7 +160,7 @@ pub fn show_popup(
             .min_size([250.0, 300.0])
             .with_stroke(false) 
             .show(ui, |ui| {
-                render_content(ui, state, model, anim, sheet, start_region_selection, settings); 
+                render_content(ui, state, model, anim, sheet, start_region_selection, settings, available_anims); 
             });
     });
     
@@ -173,6 +175,7 @@ fn render_content(
     sheet: Option<&SpriteSheet>,
     start_region_selection: &mut bool,
     settings: &mut Settings,
+    available_anims: &[(usize, PathBuf)],
 ) {
     if state.anim_name.is_empty() {
         if let Some(a) = anim {
@@ -474,7 +477,23 @@ fn render_content(
                 if ui.button("Use Bounds").on_hover_text("Auto-calculate camera from unit size").clicked() { 
                     let mut calculated = false;
                     if let (Some(m), Some(s)) = (model, sheet) {
-                        if let Some(bounds) = bounds::calculate_tight_bounds(m, anim, s) {
+                        
+                        let master_bounds = if state.export_mode == ExportMode::Showcase {
+                            bounds::calculate_showcase_bounds(
+                                m, s, available_anims, 
+                                state.showcase_walk_len, state.showcase_idle_len, 
+                                state.showcase_attack_len, state.showcase_kb_len,
+                                settings.animation.use_tight_bounds
+                            )
+                        } else {
+                            if settings.animation.use_tight_bounds {
+                                bounds::calculate_tight_bounds(m, anim, s)
+                            } else {
+                                bounds::calculate_loose_bounds(m, anim, s)
+                            }
+                        };
+
+                        if let Some(bounds) = master_bounds {
                             state.region_x = bounds.min.x;
                             state.region_y = bounds.min.y;
                             state.region_w = bounds.width();

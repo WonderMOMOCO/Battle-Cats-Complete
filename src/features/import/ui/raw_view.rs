@@ -5,7 +5,7 @@ use crate::features::import::{archive, sort};
 use std::thread;
 
 pub fn show(ui: &mut egui::Ui, state: &mut ImportState) {
-    ui.label("Sort game archive or decrypted files into database");
+    ui.label("Sort game archive or raw game files into database");
     ui.add_space(10.0);
 
     ui.horizontal(|ui| {

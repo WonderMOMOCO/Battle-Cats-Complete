@@ -65,6 +65,12 @@ pub fn show(ui: &mut egui::Ui, settings: &mut AnimSettings) -> bool {
             ui.add_space(10.0);
 
             ui.horizontal(|ui| {
+                let tooltip_tight = "Automatically crops out minor vfx and glow when calculating camera bounds";
+                toggle_ui(ui, &mut settings.use_tight_bounds).on_hover_text(tooltip_tight);
+                ui.label("Use Tight Bounds").on_hover_text(tooltip_tight);
+            });
+
+            ui.horizontal(|ui| {
                 let tooltip_cam = "Automatically calculates a Units tight bounding box when exporting\nThis setting may cause lag spikes on some devices";
                 toggle_ui(ui, &mut settings.auto_set_camera_region).on_hover_text(tooltip_cam);
                 ui.label("Auto-Set Camera Region").on_hover_text(tooltip_cam);

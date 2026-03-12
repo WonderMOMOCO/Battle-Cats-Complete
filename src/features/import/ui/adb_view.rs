@@ -1,7 +1,7 @@
 use eframe::egui;
 use crate::features::import::logic::{ImportState, AdbImportType, AdbRegion};
-use crate::core::addons::adb::bridge;
-use crate::core::addons::toolpaths::{self, Presence};
+use crate::features::addons::adb::bridge;
+use crate::features::addons::toolpaths::{self, Presence};
 use crate::features::settings::logic::Settings;
 use std::sync::mpsc;
 use std::path::PathBuf;

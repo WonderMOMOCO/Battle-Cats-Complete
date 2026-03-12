@@ -7,7 +7,7 @@ use eframe::egui;
 use std::process::Command;
 
 use crate::features::settings::logic::{Settings, upd::UpdateMode};
-use crate::core::utils::DragGuard;
+use crate::global::ui::shared::DragGuard;
 
 const REPO_OWNER: &str = "WonderMOMOCO"; 
 const REPO_NAME: &str = "Battle-Cats-Complete";

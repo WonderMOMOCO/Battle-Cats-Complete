@@ -1,6 +1,6 @@
 use std::fs;
 use std::path::Path;
-use crate::core::utils;
+use crate::global::utils;
 
 pub fn load(lang_dir: &Path, target_lang: &str) -> Vec<String> {
     let mut names: Vec<String> = Vec::new();

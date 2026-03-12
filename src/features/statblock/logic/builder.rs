@@ -9,7 +9,7 @@ use imageproc::rect::Rect;
 use arboard::{Clipboard, ImageData};
 use eframe::egui;
 
-use crate::core::utils::autocrop;
+use crate::global::utils::autocrop;
 use crate::global::formats::imgcut::SpriteCut;
 use crate::global::game::abilities::{CustomIcon, AbilityItem, ABILITY_X, ABILITY_Y, TRAIT_Y};
 use crate::global::assets;
@@ -189,7 +189,7 @@ fn build_statblock_image(
     let img015_folder = crate::global::io::paths::img015_folder(Path::new(""));
     
     let codes_to_try: Vec<String> = if language == "--" || language.is_empty() {
-        crate::core::utils::LANGUAGE_PRIORITY.iter().map(|s| s.to_string()).collect()
+        crate::global::utils::LANGUAGE_PRIORITY.iter().map(|s| s.to_string()).collect()
     } else {
         vec![language.to_string()]
     };

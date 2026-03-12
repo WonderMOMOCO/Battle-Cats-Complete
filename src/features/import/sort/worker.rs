@@ -65,7 +65,11 @@ pub fn sort_game_files(tx: Sender<String>) -> Result<(), String> {
         return Err("Raw directory not found.".to_string());
     }
 
-    let _ = tx.send("Sorting files...".to_string());
+    // THE FIX: Peek at the raw directory to see exactly how many files we have to sort
+    let total_files = fs::read_dir(raw_dir).map(|iter| iter.count()).unwrap_or(0);
+    let update_interval = (total_files / 100).max(10);
+
+    let _ = tx.send(format!("Sorting {} files...", total_files));
 
     let cat_matcher = cat::CatMatcher::new();
     let global_matcher = global::GlobalMatcher::new();
@@ -115,7 +119,7 @@ pub fn sort_game_files(tx: Sender<String>) -> Result<(), String> {
                 if move_fast(&path, &dest).is_ok() { count += 1; }
             }
             
-            if count % 500 == 0 {
+            if count % update_interval == 0 {
                 let _ = tx.send(format!("Sorted {} files | Current: {}", count, name));
             }
         }

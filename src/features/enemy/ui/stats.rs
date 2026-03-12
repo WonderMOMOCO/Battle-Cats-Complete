@@ -1,6 +1,6 @@
 use eframe::egui;
 use crate::features::enemy::logic::scanner::EnemyEntry;
-use crate::ui::components::stat_grid::{grid_cell, grid_cell_custom, render_frames};
+use crate::global::ui::stat_grid::{grid_cell, grid_cell_custom, render_frames};
 use crate::features::enemy::registry::{get_enemy_stat, format_enemy_stat};
 
 pub fn render(ui: &mut egui::Ui, enemy: &EnemyEntry, magnification: i32) {

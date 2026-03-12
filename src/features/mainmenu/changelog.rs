@@ -4,7 +4,7 @@ use std::thread;
 use std::time::Instant;
 use self_update;
 use regex::Regex;
-use crate::core::utils::DragGuard;
+use crate::global::ui::shared::DragGuard;
 
 #[derive(Clone)]
 struct ChangelogState {

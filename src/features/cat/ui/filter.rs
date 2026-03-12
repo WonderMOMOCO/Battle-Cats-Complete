@@ -3,7 +3,8 @@ use std::collections::HashSet;
 
 use crate::global::formats::imgcut::SpriteSheet;
 use crate::global::assets::CustomAssets;
-use crate::core::utils::{DragGuard, UI_TRAIT_ORDER};
+use crate::global::game::abilities::UI_TRAIT_ORDER;
+use crate::global::ui::shared::DragGuard;
 use crate::features::cat::registry::{CAT_ABILITY_REGISTRY, DisplayGroup};
 use crate::global::game::img015;
 use crate::features::settings::logic::Settings;

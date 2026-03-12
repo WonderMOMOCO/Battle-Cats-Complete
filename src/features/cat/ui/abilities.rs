@@ -4,7 +4,7 @@ use crate::features::cat::logic::stats::{self, CatRaw};
 use crate::features::cat::logic::abilities;
 use crate::global::formats::imgcut::SpriteSheet;
 use crate::features::settings::logic::Settings;
-use crate::ui::components::shared::{render_fallback_icon, text_with_superscript};
+use crate::global::ui::shared::{render_fallback_icon, text_with_superscript};
 use crate::global::game::img015;
 use crate::features::cat::data::skillacquisition::TalentRaw;
 use std::collections::HashMap;

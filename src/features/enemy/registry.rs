@@ -616,7 +616,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |val, _, _, _| format!("{}% Chance to perform a Critical Hit dealing 2× Damage", val),
+        formatter: |val, _, _, _| format!("{}% Chance to perform a Critical Hit dealing 2× Damage\nCritcal Hits bypass Metal resistance", val),
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {

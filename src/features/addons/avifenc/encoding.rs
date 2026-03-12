@@ -6,8 +6,8 @@ use std::fs;
 use std::thread;
 use crate::features::animation::export::encoding::{ExportConfig, EncoderMessage, EncoderStatus, prepare_image};
 use super::download; 
-use crate::core::addons::ffmpeg::download as ffmpeg_dl; 
-use crate::core::addons::toolpaths::{self, Presence};
+use crate::features::addons::ffmpeg::download as ffmpeg_dl; 
+use crate::features::addons::toolpaths::{self, Presence};
 
 pub fn encode(
     config: ExportConfig, 

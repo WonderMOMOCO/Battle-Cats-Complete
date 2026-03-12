@@ -4,7 +4,7 @@ use std::env;
 use eframe::egui;
 use std::path::Path;
 
-use crate::core::addons::adb::bridge::AdbEvent; 
+use crate::features::addons::adb::bridge::AdbEvent; 
 use crate::features::settings::logic::Settings;
 
 #[derive(PartialEq, Clone, Copy, Debug, Deserialize, Serialize)]
@@ -109,7 +109,10 @@ impl ImportState {
             while let Ok(msg) = rx.try_recv() {
                 self.status_message = msg.clone();
                 self.log_content.push_str(&format!("{}\n", msg));
-                if self.status_message.contains("Success") || self.status_message.contains("Error") {
+                
+                let msg_lower = self.status_message.to_lowercase();
+                
+                if msg_lower.contains("success") || msg_lower.contains("error") || msg_lower.contains("complete") {
                     job_finished = true;
                 }
             }
@@ -153,8 +156,14 @@ impl ImportState {
             }
         }
 
-        if finished_just_now && (self.status_message.contains("Success") || self.status_message.contains("Complete")) {
-            settings.runtime.rx_lang = Some(crate::features::settings::logic::lang::start_scan());
+        if finished_just_now {
+            let msg_lower = self.status_message.to_lowercase();
+            let is_sort_done = msg_lower.contains("files sorted");
+            let is_adb_done = msg_lower.contains("success") && !msg_lower.contains("decryption");
+            
+            if is_sort_done || is_adb_done {
+                settings.runtime.rx_lang = Some(crate::features::settings::logic::lang::start_scan());
+            }
         }
 
         finished_just_now

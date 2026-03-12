@@ -2,6 +2,7 @@ use eframe::egui;
 use serde::{Deserialize, Serialize};
 use std::sync::mpsc::Receiver;
 use std::time::Instant;
+use std::collections::HashSet;
 use crate::features::enemy::logic::scanner::EnemyEntry;
 use crate::features::settings::logic::state::Settings;
 use crate::features::settings::logic::state::ScannerConfig;
@@ -10,7 +11,7 @@ use crate::features::enemy::ui::master;
 use crate::global::formats::mamodel::Model;
 use crate::features::animation::ui::viewer::AnimViewer;
 use crate::global::assets::CustomAssets;
-use crate::core::utils::DragGuard;
+use crate::global::ui::shared::DragGuard;
 use crate::features::enemy::ui::filter::EnemyFilterState; 
 use super::loader;
 
@@ -44,6 +45,7 @@ pub struct EnemyListState {
     pub magnification: i32,
     #[serde(skip)] pub enemy_list: EnemyList, 
     #[serde(skip)] pub initialized: bool,
+    #[serde(skip)] pub active_scan_ids: HashSet<u32>,
     #[serde(skip)] pub detail_texture: Option<egui::TextureHandle>,
     #[serde(skip)] pub detail_key: String,
     #[serde(skip)] pub icon_sheet: crate::global::formats::imgcut::SpriteSheet,   
@@ -70,6 +72,7 @@ impl Default for EnemyListState {
             magnification: 100,
             enemy_list: EnemyList::default(),
             initialized: false,
+            active_scan_ids: HashSet::new(),
             detail_texture: None,
             detail_key: String::new(),
             icon_sheet: crate::global::formats::imgcut::SpriteSheet::default(), 
@@ -151,18 +154,6 @@ pub fn show(ctx: &egui::Context, state: &mut EnemyListState, settings: &mut Sett
 
             if !state.enemies.is_empty() {
                 state.enemy_list.show(ctx, ui, &state.enemies, &mut state.selected_enemy, &state.search_query, &state.filter_state);
-            } else if state.scan_receiver.is_some() {
-                ui.centered_and_justified(|ui| { ui.spinner(); });
-            } else {
-                ui.centered_and_justified(|ui| {
-                    ui.vertical_centered(|ui| {
-                        ui.heading("No Data Found");
-                        if ui.button("Retry Scan").clicked() {
-                            state.restart_scan(settings.scanner_config());
-                            ui.ctx().request_repaint();
-                        }
-                    });
-                });
             }
         });
 
@@ -175,7 +166,25 @@ pub fn show(ctx: &egui::Context, state: &mut EnemyListState, settings: &mut Sett
 
     egui::CentralPanel::default().show(ctx, |ui| {
         if state.enemies.is_empty() {
-            ui.centered_and_justified(|ui| { ui.heading("No Enemy Data Found"); });
+             ui.centered_and_justified(|ui| {
+                ui.vertical_centered(|ui| {
+                    ui.add_space(ui.available_height() * 0.4);
+                    ui.set_max_width(400.0);
+                    if state.scan_receiver.is_some() {
+                        ui.spinner();
+                        ui.add_space(10.0);
+                        ui.label("Loading Unit Data...");
+                    } else {
+                        ui.heading("No Data Found");
+                        ui.label(egui::RichText::new("Could not find any units in game/enemies").color(ui.visuals().weak_text_color()));
+                        ui.add_space(5.0);
+                        if ui.button("Retry Scan").clicked() {
+                            state.restart_scan(settings.scanner_config());
+                            ui.ctx().request_repaint();
+                        }
+                    }
+                });
+            });
             return;
         }
 

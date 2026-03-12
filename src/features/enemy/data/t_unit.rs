@@ -144,7 +144,7 @@ pub fn load_all(t_unit_path: &Path) -> Option<Vec<EnemyRaw>> {
 
     for line in file_content.lines().skip(2) {
         let cols: Vec<&str> = line.split(',').collect();
-        if cols.len() < 111 { continue; } 
+        if cols.len() < 10 { continue; } 
 
         let get_int = |idx: usize| -> i32 {
             cols.get(idx).and_then(|s| s.trim().parse::<i32>().ok()).unwrap_or(0)

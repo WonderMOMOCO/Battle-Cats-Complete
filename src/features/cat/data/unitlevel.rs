@@ -1,6 +1,6 @@
 use std::fs;
 use std::path::Path;
-use crate::core::utils;
+use crate::global::utils;
 use crate::features::cat::paths;
 
 #[derive(Clone, Debug, Default)]

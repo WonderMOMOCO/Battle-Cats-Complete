@@ -2,8 +2,8 @@ use std::path::PathBuf;
 use std::fs;
 use std::sync::mpsc::Receiver;
 
-use crate::core::addons::toolpaths::{get_tools_dir, AddonStatus, ADB_BIN};
-use crate::core::addons::manager::{self, DownloadConfig};
+use crate::features::addons::toolpaths::{get_tools_dir, AddonStatus, ADB_BIN};
+use crate::features::addons::manager::{self, DownloadConfig};
 use super::driver;
 
 pub struct AdbManager {

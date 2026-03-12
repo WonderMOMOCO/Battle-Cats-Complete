@@ -1,6 +1,6 @@
 use std::fs;
 use std::path::Path;
-use crate::core::utils;
+use crate::global::utils;
 
 // Math Helpers
 fn gcd(number1: i32, number2: i32) -> i32 {
