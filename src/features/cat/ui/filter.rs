@@ -9,7 +9,7 @@ use crate::global::game::img015;
 use crate::features::settings::logic::Settings;
 
 pub use crate::features::cat::logic::filter::{CatFilterState, MatchMode, TalentFilterMode};
-use crate::features::cat::logic::filter::{get_adv_attributes, get_icon_name, ATTACK_TYPE_ICONS};
+use crate::features::cat::logic::filter::{get_icon_name, ATTACK_TYPE_ICONS};
 
 pub const WINDOW_WIDTH: f32 = 500.0;
 pub const WINDOW_HEIGHT: f32 = 580.0;
@@ -353,7 +353,11 @@ fn render_filter_icon_row(
 ) {
     let is_active = state.active_icons.contains(&icon_id);
     let name = get_icon_name(icon_id);
-    let has_adv = get_adv_attributes(&name).is_some();
+    
+    // Look up the static schema directly from the registry
+    let ability_def = CAT_ABILITY_REGISTRY.iter().find(|d| d.icon_id == icon_id);
+    let schema = ability_def.map(|d| d.schema).unwrap_or(&[]);
+    let has_adv = !schema.is_empty();
 
     let bg_fill = if is_active && has_adv { egui::Color32::from_black_alpha(150) } else { egui::Color32::TRANSPARENT };
     let margin = if is_active && has_adv { egui::Margin::symmetric(8.0, 8.0) } else { egui::Margin::same(0.0) };
@@ -378,45 +382,43 @@ fn render_filter_icon_row(
                 });
 
                 if is_active && has_adv {
-                    if let Some(attrs) = get_adv_attributes(&name) {
-                        ui.add_space(4.0);
-                        ui.horizontal(|ui| {
-                            ui.add_space(3.0); 
-                            
-                            egui::Grid::new(format!("adv_grid_{}", icon_id))
-                                .spacing([8.0, 6.0]) 
-                                .show(ui, |ui| {
-                                    for &attr in attrs {
-                                        ui.label(format!("{}:", attr));
-                                        
-                                        let range = state.adv_ranges
-                                            .entry(icon_id)
-                                            .or_default()
-                                            .entry(attr)
-                                            .or_default();
-                                        
-                                        ui.horizontal(|ui| {
-                                            ui.spacing_mut().item_spacing.x = TILDE_SPACING;
+                    ui.add_space(4.0);
+                    ui.horizontal(|ui| {
+                        ui.add_space(3.0); 
+                        
+                        egui::Grid::new(format!("adv_grid_{}", icon_id))
+                            .spacing([8.0, 6.0]) 
+                            .show(ui, |ui| {
+                                for &(attr, _) in schema {
+                                    ui.label(format!("{}:", attr));
+                                    
+                                    let range = state.adv_ranges
+                                        .entry(icon_id)
+                                        .or_default()
+                                        .entry(attr)
+                                        .or_default();
+                                    
+                                    ui.horizontal(|ui| {
+                                        ui.spacing_mut().item_spacing.x = TILDE_SPACING;
 
-                                            let hint = egui::RichText::new("Any").color(egui::Color32::from_gray(100));
-                                            
-                                            ui.add_sized(
-                                                egui::vec2(45.0, 20.0), 
-                                                egui::TextEdit::singleline(&mut range.min).hint_text(hint.clone())
-                                            );
-                                            
-                                            ui.label("~");
-                                            
-                                            ui.add_sized(
-                                                egui::vec2(45.0, 20.0), 
-                                                egui::TextEdit::singleline(&mut range.max).hint_text(hint)
-                                            );
-                                        });
-                                        ui.end_row();
-                                    }
-                                });
-                        });
-                    }
+                                        let hint = egui::RichText::new("Any").color(egui::Color32::from_gray(100));
+                                        
+                                        ui.add_sized(
+                                            egui::vec2(45.0, 20.0), 
+                                            egui::TextEdit::singleline(&mut range.min).hint_text(hint.clone())
+                                        );
+                                        
+                                        ui.label("~");
+                                        
+                                        ui.add_sized(
+                                            egui::vec2(45.0, 20.0), 
+                                            egui::TextEdit::singleline(&mut range.max).hint_text(hint)
+                                        );
+                                    });
+                                    ui.end_row();
+                                }
+                            });
+                    });
                 }
             });
         });
@@ -432,19 +434,16 @@ fn render_filter_icon(
     let is_active = active_icons.contains(&icon_id);
     let tint = if is_active { egui::Color32::WHITE } else { egui::Color32::from_gray(80) };
     
-    // 1. Ask the Registry for the CustomIcon variant associated with this ID
     let custom_variant = crate::features::cat::registry::CAT_ABILITY_REGISTRY.iter()
         .find(|d| d.icon_id == icon_id)
         .map(|d| d.custom_icon)
         .unwrap_or(crate::global::game::abilities::CustomIcon::None);
 
-    // 2. Try to get a custom texture handle
     let custom_tex = custom_variant.get_texture(assets);
 
     let mut drawn = false;
     
     if let Some(tex) = custom_tex {
-        // DRAW CUSTOM EMBEDDED TEXTURE
         let img = egui::Image::new(tex).fit_to_exact_size(egui::vec2(32.0, 32.0)).tint(tint);
         let response = ui.add(egui::ImageButton::new(img).frame(false));
         if response.clicked() {
@@ -454,7 +453,6 @@ fn render_filter_icon(
         response.on_hover_text(get_icon_name(icon_id));
         drawn = true;
     } else if let Some(cut) = sheet.cuts_map.get(&icon_id) {
-        // DRAW SPRITESHEET CUT (Fallback)
         if let Some(tex) = &sheet.texture_handle {
             let img = egui::Image::new(egui::load::SizedTexture::new(tex.id(), egui::vec2(32.0, 32.0)))
                 .uv(cut.uv_coordinates)
@@ -470,7 +468,6 @@ fn render_filter_icon(
     }
 
     if !drawn {
-        // DRAW "?" PLACEHOLDER
         let (rect, response) = ui.allocate_exact_size(egui::vec2(32.0, 32.0), egui::Sense::click());
         if ui.is_rect_visible(rect) {
             ui.painter().rect_filled(rect, 4.0, egui::Color32::from_black_alpha(100));

@@ -2,7 +2,7 @@ use eframe::egui;
 use crate::features::enemy::logic::scanner::EnemyEntry;
 use crate::features::enemy::logic::state::EnemyDetailTab;
 use crate::ui::components::name_box;
-use image::imageops;
+use crate::core::utils::autocrop;
 
 pub const INPUT_SPACING: f32 = 4.0;
 
@@ -68,9 +68,23 @@ pub fn render(
             }
 
             if let Some(tex) = texture_cache {
-                let icon_size = egui::vec2(85.0, 85.0);
-                let x_off = (container_size.x - icon_size.x) / 2.0;
-                let icon_rect = egui::Rect::from_min_size(rect.min + egui::vec2(x_off, 0.0), icon_size);
+                let max_w = container_size.x;
+                let max_h = container_size.y;
+                
+                let tex_size = tex.size();
+                let aspect = tex_size[0] as f32 / tex_size[1] as f32;
+                let target_aspect = max_w / max_h;
+                
+                let (draw_w, draw_h) = if aspect > target_aspect {
+                    (max_w, max_w / aspect)
+                } else {
+                    (max_h * aspect, max_h)
+                };
+
+                let x_off = (max_w - draw_w) / 2.0;
+                let y_off = max_h - draw_h;
+                
+                let icon_rect = egui::Rect::from_min_size(rect.min + egui::vec2(x_off, y_off), egui::vec2(draw_w, draw_h));
                 ui.painter().image(tex.id(), icon_rect, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), egui::Color32::WHITE);
             } else { 
                 ui.painter().rect_filled(rect, 4.0, egui::Color32::from_gray(30)); 
@@ -178,7 +192,9 @@ pub fn render(
 fn load_icon_texture(ctx: &egui::Context, path_str: &str) -> Option<egui::TextureHandle> {
     let path = std::path::Path::new(path_str);
     let img = image::open(path).ok()?;
-    let rgba = imageops::resize(&img.to_rgba8(), 85, 85, imageops::FilterType::Lanczos3);
+    
+    let rgba = autocrop(img.to_rgba8());
+    
     let size = [rgba.width() as usize, rgba.height() as usize];
     Some(ctx.load_texture("enemy_detail_icon", egui::ColorImage::from_rgba_unmultiplied(size, rgba.as_flat_samples().as_slice()), egui::TextureOptions::LINEAR))
 }

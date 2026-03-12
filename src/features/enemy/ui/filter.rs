@@ -9,7 +9,7 @@ use crate::global::game::img015;
 use crate::features::settings::logic::state::Settings;
 
 pub use crate::features::enemy::logic::filter::{EnemyFilterState, MatchMode};
-use crate::features::enemy::logic::filter::{get_adv_attributes, get_icon_name, ATTACK_TYPE_ICONS};
+use crate::features::enemy::logic::filter::{get_icon_name, ATTACK_TYPE_ICONS};
 
 pub const WINDOW_WIDTH: f32 = 500.0;
 pub const WINDOW_HEIGHT: f32 = 580.0;
@@ -128,7 +128,7 @@ pub fn show_popup(
                 ui.spacing_mut().item_spacing = egui::vec2(4.0, 4.0);
                 for &icon_id in UI_TRAIT_ORDER {
                     render_filter_icon(ui, icon_id, &mut state.active_icons, sheet, assets);
-                    rendered_icons.insert(icon_id); // Track these so they don't double-render
+                    rendered_icons.insert(icon_id); 
                 }
             });
 
@@ -150,7 +150,6 @@ pub fn show_popup(
             ui.heading("Abilities");
             ui.add_space(5.0);
 
-            // Headline 1 is removed from here
             render_display_group(ui, state, &mut rendered_icons, DisplayGroup::Headline2, false, true, sheet, assets);
             render_display_group(ui, state, &mut rendered_icons, DisplayGroup::Body1, true, true, sheet, assets); 
             render_display_group(ui, state, &mut rendered_icons, DisplayGroup::Body2, true, true, sheet, assets); 
@@ -240,7 +239,11 @@ fn render_filter_icon_row(
 ) {
     let is_active = state.active_icons.contains(&icon_id);
     let name = get_icon_name(icon_id);
-    let has_adv = get_adv_attributes(&name).is_some();
+    
+    // Grab the ability definition from the registry to read its static schema
+    let ability_def = ENEMY_ABILITY_REGISTRY.iter().find(|d| d.icon_id == icon_id);
+    let schema = ability_def.map(|d| d.schema).unwrap_or(&[]);
+    let has_adv = !schema.is_empty();
 
     let bg_fill = if is_active && has_adv { egui::Color32::from_black_alpha(150) } else { egui::Color32::TRANSPARENT };
     let margin = if is_active && has_adv { egui::Margin::symmetric(8.0, 8.0) } else { egui::Margin::same(0.0) };
@@ -264,46 +267,51 @@ fn render_filter_icon_row(
                     }
                 });
 
+                // Auto-Generate the Advanced Grid directly from the Registry Schema
                 if is_active && has_adv {
-                    if let Some(attrs) = get_adv_attributes(&name) {
-                        ui.add_space(4.0);
-                        ui.horizontal(|ui| {
-                            ui.add_space(3.0); 
-                            
-                            egui::Grid::new(format!("adv_grid_{}", icon_id))
-                                .spacing([8.0, 6.0]) 
-                                .show(ui, |ui| {
-                                    for &attr in attrs {
-                                        ui.label(format!("{}:", attr));
-                                        
-                                        let range = state.adv_ranges
-                                            .entry(icon_id)
-                                            .or_default()
-                                            .entry(attr)
-                                            .or_default();
+                    ui.add_space(4.0);
+                    ui.horizontal(|ui| {
+                        ui.add_space(3.0); 
+                        
+                        egui::Grid::new(format!("adv_grid_{}", icon_id))
+                            .spacing([8.0, 6.0]) 
+                            .show(ui, |ui| {
+                                for &(attr, _unit) in schema {
+                                    ui.label(format!("{}:", attr));
+                                    
+                                    let range = state.adv_ranges
+                                        .entry(icon_id)
+                                        .or_default()
+                                        .entry(attr)
+                                        .or_default();
+                                    
+                                    ui.horizontal(|ui| {
+                                        ui.spacing_mut().item_spacing.x = TILDE_SPACING;
+
+                                        let hint = egui::RichText::new("Any").color(egui::Color32::from_gray(100));
                                         
                                         ui.horizontal(|ui| {
-                                            ui.spacing_mut().item_spacing.x = TILDE_SPACING;
-
-                                            let hint = egui::RichText::new("Any").color(egui::Color32::from_gray(100));
-                                            
+                                            ui.spacing_mut().item_spacing.x = 2.0;
                                             ui.add_sized(
                                                 egui::vec2(45.0, 20.0), 
                                                 egui::TextEdit::singleline(&mut range.min).hint_text(hint.clone())
                                             );
-                                            
-                                            ui.label("~");
-                                            
+                                        });
+                                        
+                                        ui.label("~");
+                                        
+                                        ui.horizontal(|ui| {
+                                            ui.spacing_mut().item_spacing.x = 2.0;
                                             ui.add_sized(
                                                 egui::vec2(45.0, 20.0), 
                                                 egui::TextEdit::singleline(&mut range.max).hint_text(hint)
                                             );
                                         });
-                                        ui.end_row();
-                                    }
-                                });
-                        });
-                    }
+                                    });
+                                    ui.end_row();
+                                }
+                            });
+                    });
                 }
             });
         });
