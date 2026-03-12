@@ -37,7 +37,6 @@ pub fn run(folder_path: &str, region_code: &str, tx: Sender<String>) -> Result<(
 
     let mut dynamic_temp_dirs = Vec::new();
 
-    // Extract APK lists to dynamic sibling directories
     if !apk_paths.is_empty() {
         let _ = tx.send("Extracting base data from APK...".to_string());
         for apk in apk_paths {
@@ -55,11 +54,9 @@ pub fn run(folder_path: &str, region_code: &str, tx: Sender<String>) -> Result<(
         }
     }
 
-    // Chronological Sort with God Mode
     let _ = tx.send("Sorting patch history chronologically...".to_string());
     list_paths.sort_by_key(|p| calculate_order(p, &dynamic_temp_dirs));
 
-    // Build the "Last One Wins" In-Memory Map
     let mut master_map: HashMap<String, PackEntry> = HashMap::new();
     
     for list_path in list_paths {
@@ -79,7 +76,6 @@ pub fn run(folder_path: &str, region_code: &str, tx: Sender<String>) -> Result<(
                     let offset: u64 = parts[1].parse().unwrap_or(0);
                     let size: usize = parts[2].parse().unwrap_or(0);
 
-                    // --- LANGUAGE SENSITIVE LOGIC ---
                     let is_lang_sensitive = patterns::LANGUAGE_SENSITIVE_FILES.iter()
                         .any(|&x| asset_name.ends_with(x) || asset_name.starts_with(x));
 
@@ -105,7 +101,6 @@ pub fn run(folder_path: &str, region_code: &str, tx: Sender<String>) -> Result<(
                         }
                     }
 
-                    // Insert into map. Newer files overwrite older files naturally
                     master_map.insert(final_filename, PackEntry {
                         pack_path: pack_path.clone(),
                         original_name: asset_name.to_string(),
@@ -117,56 +112,59 @@ pub fn run(folder_path: &str, region_code: &str, tx: Sender<String>) -> Result<(
         }
     }
 
-    let total_files = master_map.len();
-    let _ = tx.send(format!("Found {} total files. Starting extraction...", total_files));
+    // --- NEW PRE-SCAN LOGIC ---
+    // We filter the map to find exactly what needs to be written to disk.
+    let size_tolerance = 128;
+    let filtered_tasks: Vec<(String, PackEntry)> = master_map.into_iter().filter(|(final_name, entry)| {
+        let name_lower = final_name.to_lowercase();
+        
+        // Check index
+        if let Some(existing_paths) = shared_index.get(&name_lower) {
+            for path in existing_paths {
+                if let Ok(meta) = fs::metadata(path) {
+                    if meta.len() as usize + size_tolerance >= entry.size {
+                        return false;
+                    }
+                }
+            }
+        }
+        
+        // Check raw_dir
+        let target_path = raw_dir.join(final_name);
+        if target_path.exists() {
+            if let Ok(meta) = fs::metadata(&target_path) {
+                if meta.len() as usize + size_tolerance >= entry.size {
+                    return false;
+                }
+            }
+        }
+        true
+    }).collect();
 
-    let update_interval = (total_files / 100).max(10) as i32;
+    let to_extract_count = filtered_tasks.len();
+    if to_extract_count == 0 {
+        let _ = tx.send("Workspace is already up to date. No new files to extract.".to_string());
+        // Clean up and return early
+        for dir in &dynamic_temp_dirs { let _ = fs::remove_dir_all(dir); }
+        return Ok(());
+    }
+
+    let _ = tx.send(format!("Found {} new or updated files. Starting extraction...", to_extract_count));
+
+    let update_interval = (to_extract_count / 100).max(10) as i32;
+    let count = AtomicI32::new(0);
 
     // Group tasks by pack file to minimize disk IO overhead
     let mut pack_tasks: HashMap<PathBuf, Vec<(String, PackEntry)>> = HashMap::new();
-    for (final_name, entry) in master_map {
+    for (final_name, entry) in filtered_tasks {
         pack_tasks.entry(entry.pack_path.clone()).or_default().push((final_name, entry));
     }
 
-    let count = AtomicI32::new(0);
-
-    // High-Speed Parallel Extraction
     pack_tasks.into_par_iter().for_each(|(pack_path, entries)| {
         if let Ok(mut file) = fs::File::open(&pack_path) {
             for (final_name, entry) in entries {
                 let target_path = raw_dir.join(&final_name);
 
-                let mut should_extract = true; 
-                let name_lower = final_name.to_lowercase();
-
-                let size_tolerance = 128;
-
-                // Check if it exists anywhere in the game folder
-                if let Some(existing_paths) = shared_index.get(&name_lower) {
-                    for path in existing_paths {
-                        if let Ok(meta) = fs::metadata(path) {
-                            if meta.len() as usize + size_tolerance >= entry.size {
-                                should_extract = false;
-                                break;
-                            }
-                        }
-                    }
-                }
-                
-                // Check the raw_dir just in case it was freshly written or not indexed
-                if should_extract && target_path.exists() {
-                     if let Ok(meta) = fs::metadata(&target_path) {
-                         if meta.len() as usize + size_tolerance >= entry.size {
-                             should_extract = false;
-                         }
-                     }
-                }
-
-                if !should_extract {
-                    continue; 
-                }
-
-                // If it doesn't exist (or the incoming file is strictly larger), extract it
                 let aligned_size = if entry.size % 16 == 0 { entry.size } else { ((entry.size / 16) + 1) * 16 };
                 if file.seek(SeekFrom::Start(entry.offset)).is_err() { continue; }
                 
@@ -190,12 +188,12 @@ pub fn run(folder_path: &str, region_code: &str, tx: Sender<String>) -> Result<(
         }
     });
 
-    // Cleanup Phase
     for dir in &dynamic_temp_dirs {
         let _ = fs::remove_dir_all(dir);
     }
 
-    let _ = tx.send(format!("Decryption complete. Extracted {} new or updated files.", count.load(Ordering::Relaxed)));
+    let total_processed = count.load(Ordering::Relaxed);
+    let _ = tx.send(format!("Decryption complete. Extracted {} new or updated files.", total_processed));
     Ok(())
 }
 

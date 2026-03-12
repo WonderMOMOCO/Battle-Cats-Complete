@@ -359,6 +359,9 @@ impl BattleCatsApp {
         let mass_threshold = 5;
 
         if global_cat_refresh || cat_ids_to_refresh.len() > mass_threshold {
+            self.cat_list_state.detail_texture = None;
+            self.cat_list_state.detail_key.clear();
+            self.cat_list_state.texture_cache_version += 1;
             crate::features::cat::logic::loader::resync_scan(&mut self.cat_list_state, self.settings.scanner_config());
         } else {
             for id in cat_ids_to_refresh {
@@ -373,10 +376,16 @@ impl BattleCatsApp {
         }
 
         if global_enemy_refresh || enemy_ids_to_refresh.len() > mass_threshold {
+            self.enemy_list_state.detail_texture = None;
+            self.enemy_list_state.detail_key.clear();
             crate::features::enemy::logic::loader::resync_scan(&mut self.enemy_list_state, self.settings.scanner_config());
         } else {
             for id in enemy_ids_to_refresh {
                 self.enemy_list_state.enemy_list.flush_icon(id);
+                if self.enemy_list_state.selected_enemy == Some(id) {
+                    self.enemy_list_state.detail_texture = None;
+                    self.enemy_list_state.detail_key.clear();
+                }
                 crate::features::enemy::logic::loader::refresh_enemy(&mut self.enemy_list_state, id, &self.settings.scanner_config());
             }
         }

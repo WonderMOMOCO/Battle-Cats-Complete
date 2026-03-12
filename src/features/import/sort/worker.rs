@@ -65,11 +65,16 @@ pub fn sort_game_files(tx: Sender<String>) -> Result<(), String> {
         return Err("Raw directory not found.".to_string());
     }
 
-    // THE FIX: Peek at the raw directory to see exactly how many files we have to sort
-    let total_files = fs::read_dir(raw_dir).map(|iter| iter.count()).unwrap_or(0);
-    let update_interval = (total_files / 100).max(10);
+    // THE FIX: We are sorting exactly what was just extracted
+    let files_to_sort = fs::read_dir(raw_dir).map(|iter| iter.count()).unwrap_or(0);
+    
+    if files_to_sort == 0 {
+        let _ = tx.send("No new files to sort.".to_string());
+        return Ok(());
+    }
 
-    let _ = tx.send(format!("Sorting {} files...", total_files));
+    let update_interval = (files_to_sort / 100).max(10);
+    let _ = tx.send(format!("Sorting {} new or updated files...", files_to_sort));
 
     let cat_matcher = cat::CatMatcher::new();
     let global_matcher = global::GlobalMatcher::new();
@@ -87,38 +92,32 @@ pub fn sort_game_files(tx: Sender<String>) -> Result<(), String> {
             None => continue,
         };
 
+        let mut processed = false;
         if cat_patterns::CAT_UNIVERSAL_FILES.contains(&name) {
             let dest = cats_dir.join(name);
-            
             if global_patterns::CHECK_LINE_FILES.contains(&name) {
-                if let Ok(moved) = move_if_bigger(&path, &dest) {
-                    if moved { count += 1; }
-                }
+                if let Ok(moved) = move_if_bigger(&path, &dest) { if moved { processed = true; } }
             } else {
-                if move_fast(&path, &dest).is_ok() { count += 1; }
+                if move_fast(&path, &dest).is_ok() { processed = true; }
             }
-            continue; 
+        } else {
+            let dest_folder = global_matcher.get_dest(name, assets_dir)
+                .or_else(|| cat_matcher.get_dest(name, cats_dir))
+                .or_else(|| enemy_matcher.get_dest(name, enemy_dir));
+
+            if let Some(folder) = dest_folder {
+                if !folder.exists() { let _ = fs::create_dir_all(&folder); }
+                let dest = folder.join(name);
+                if global_patterns::CHECK_LINE_FILES.contains(&name) {
+                    if let Ok(moved) = move_if_bigger(&path, &dest) { if moved { processed = true; } }
+                } else {
+                    if move_fast(&path, &dest).is_ok() { processed = true; }
+                }
+            }
         }
 
-        let dest_folder = global_matcher.get_dest(name, assets_dir)
-            .or_else(|| cat_matcher.get_dest(name, cats_dir))
-            .or_else(|| enemy_matcher.get_dest(name, enemy_dir));
-
-        if let Some(folder) = dest_folder {
-            if !folder.exists() { 
-                let _ = fs::create_dir_all(&folder); 
-            }
-            
-            let dest = folder.join(name);
-
-            if global_patterns::CHECK_LINE_FILES.contains(&name) {
-                if let Ok(moved) = move_if_bigger(&path, &dest) {
-                    if moved { count += 1; }
-                }
-            } else {
-                if move_fast(&path, &dest).is_ok() { count += 1; }
-            }
-            
+        if processed {
+            count += 1;
             if count % update_interval == 0 {
                 let _ = tx.send(format!("Sorted {} files | Current: {}", count, name));
             }

@@ -6,12 +6,21 @@ use self_update;
 use regex::Regex;
 use crate::global::ui::shared::DragGuard;
 
+// --- UI TUNING VARIABLES ---
+const HEADER_TEXT_SIZE: f32 = 22.0;
+const DROPDOWN_ITEM_SIZE: f32 = 15.0;
+const HEADER_SPACING_X: f32 = 6.0;
+const HEADER_SPACING_Y: f32 = 6.0;
+const LABEL_OFFSET_Y: f32 = 7.0; // Nudge the title down manually
+// ---------------------------
+
 #[derive(Clone)]
 struct ChangelogState {
     is_open: bool,
     is_loading: bool,
     fetched: bool,
-    content: String,
+    releases: Vec<(String, String)>, 
+    selected_version: String,
     error: bool,
     fetch_start: Option<Instant>,
 }
@@ -22,7 +31,8 @@ impl Default for ChangelogState {
             is_open: false,
             is_loading: false,
             fetched: false,
-            content: String::new(),
+            releases: Vec::new(),
+            selected_version: String::new(),
             error: false,
             fetch_start: None,
         }
@@ -30,7 +40,7 @@ impl Default for ChangelogState {
 }
 
 pub fn link(ui: &mut egui::Ui, ctx: &egui::Context) {
-    if ui.link("Changelog").clicked() {
+    if ui.link("Changelogs").clicked() {
         let state_id = egui::Id::new("changelog_state");
         let state = ctx.data(|temp_storage| temp_storage.get_temp::<Arc<Mutex<ChangelogState>>>(state_id))
             .unwrap_or_else(|| Arc::new(Mutex::new(ChangelogState::default())));
@@ -68,15 +78,28 @@ pub fn link(ui: &mut egui::Ui, ctx: &egui::Context) {
 
                 match releases_result {
                     Ok(releases) => {
-                        let match_found = releases.iter().find(|r| r.version == current_version);
-                        if let Some(release) = match_found {
-                            let raw_body = release.body.clone().unwrap_or_else(|| "No notes.".to_string());
-                            locked_thread.content = strip_markdown(&raw_body);
-                            locked_thread.error = false;
-                        } else {
-                            locked_thread.error = true;
-                            locked_thread.content = "Current version not found in releases.".to_string();
+                        let mut formatted_releases = Vec::new();
+                        for r in releases {
+                            let clean_version = r.version.trim_start_matches('v').to_string();
+                            
+                            if !clean_version.is_empty() && clean_version.chars().all(|c| c.is_ascii_digit() || c == '.') {
+                                let raw_body = r.body.unwrap_or_else(|| "No notes.".to_string());
+                                formatted_releases.push((clean_version, strip_markdown(&raw_body)));
+                            }
                         }
+                        locked_thread.releases = formatted_releases;
+                        
+                        let clean_current = current_version.trim_start_matches('v');
+                        if locked_thread.releases.iter().any(|(v, _)| v == clean_current) {
+                            locked_thread.selected_version = clean_current.to_string();
+                        } else if let Some(first) = locked_thread.releases.first() {
+                            locked_thread.selected_version = first.0.clone();
+                        } else {
+                            locked_thread.selected_version = "Unknown".to_string();
+                            locked_thread.releases.push(("Unknown".to_string(), "No releases found.".to_string()));
+                        }
+                        
+                        locked_thread.error = false;
                     }
                     Err(_) => { locked_thread.error = true; }
                 }
@@ -102,11 +125,11 @@ pub fn window(ctx: &egui::Context, drag_guard: &mut DragGuard) {
             if should_show_window {
                 let show_error = locked.error || (!locked.fetched && time_expired);
                 
-                let window_id = egui::Id::new("Changelog");
+                let window_id = egui::Id::new("Changelogs");
                 let (allow_drag, fixed_pos) = drag_guard.assign_bounds(ctx, window_id);
 
                 let mut is_open = true;
-                let mut window = egui::Window::new("Changelog")
+                let mut window = egui::Window::new("Changelogs")
                     .id(window_id)
                     .open(&mut is_open)
                     .collapsible(false)
@@ -127,12 +150,49 @@ pub fn window(ctx: &egui::Context, drag_guard: &mut DragGuard) {
                         } else if locked.is_loading {
                             ui.centered_and_justified(|ui| { ui.spinner(); });
                         } else {
+                            
+                            ui.horizontal(|ui| {
+                                ui.spacing_mut().item_spacing.x = HEADER_SPACING_X;
+                                
+                                ui.vertical(|ui| {
+                                    ui.add_space(LABEL_OFFSET_Y);
+                                    ui.label(egui::RichText::new("Battle Cats Complete").size(HEADER_TEXT_SIZE).strong());
+                                });
+
+                                let mut selected = locked.selected_version.clone();
+                                let display_text = format!("v{}", selected);
+
+                                egui::ComboBox::from_id_salt("changelog_version_select")
+                                    .selected_text(egui::RichText::new(&display_text).size(HEADER_TEXT_SIZE).strong())
+                                    .show_ui(ui, |ui| {
+                                        for (version, _) in &locked.releases {
+                                            let item_text = format!("v{}", version);
+                                            ui.selectable_value(
+                                                &mut selected, 
+                                                version.clone(), 
+                                                egui::RichText::new(item_text).size(DROPDOWN_ITEM_SIZE)
+                                            );
+                                        }
+                                    });
+                                
+                                if selected != locked.selected_version {
+                                    locked.selected_version = selected;
+                                }
+                            });
+                            
+                            ui.add_space(HEADER_SPACING_Y);
+
+                            let content = locked.releases.iter()
+                                .find(|(v, _)| v == &locked.selected_version)
+                                .map(|(_, c)| c.as_str())
+                                .unwrap_or("No notes available.");
+
                             egui::ScrollArea::vertical()
-                                .auto_shrink([true, true]) 
+                                .auto_shrink([false, true]) 
                                 .show(ui, |ui| {
                                     ui.spacing_mut().item_spacing.y = 0.0;
 
-                                    for line in locked.content.lines() {
+                                    for line in content.lines() {
                                         let leading_spaces = line.chars().take_while(|c| c.is_whitespace()).count();
                                         let trimmed = line.trim();
 

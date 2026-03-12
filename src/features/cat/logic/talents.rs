@@ -118,7 +118,8 @@ pub fn calculate_talent_display(
 
                         diffs_changed.push(format!("{}: {} {} -> {}", suffix, fmt_r(old_min, old_max), diff_str, fmt_r(new_min, new_max)));
                     } else {
-                        diffs_unchanged.push(format!("{}: {}", suffix, fmt_r(max_min, max_max)));
+                        // Edge case fix: Display the Lv1 value even at Lv0 if it doesn't scale
+                        diffs_unchanged.push(format!("{}: {}", suffix, fmt_r(min_min, min_max)));
                     }
                     continue;
                 }
@@ -130,7 +131,9 @@ pub fn calculate_talent_display(
             let min_v = get_val(key, &min_attrs);
             let max_v = get_val(key, &max_attrs);
 
-            let is_scalable = min_v != max_v || (old_v != max_v && (key == "Chance" || key == "Damage" || key == "Hitpoints" || key == "Count")); 
+            // Logic: Is scalable if Lv1 != MaxLv. 
+            // If it is NOT scalable, we force it into unchanged to hide arrows.
+            let is_scalable = min_v != max_v;
             
             let fmt_val = |v| match unit {
                 AttrUnit::Percent => format!("{}%", v),
@@ -149,7 +152,8 @@ pub fn calculate_talent_display(
 
                 diffs_changed.push(format!("{}: {} {} -> {}", key, fmt_val(old_v), diff_str, fmt_val(new_v)));
             } else {
-                diffs_unchanged.push(format!("{}: {}", key, fmt_val(max_v))); 
+                // Edge case fix: display min_v (Lv1 value) to ensure it shows at Lv0
+                diffs_unchanged.push(format!("{}: {}", key, fmt_val(min_v))); 
             }
             handled_keys.insert(key);
         }
@@ -165,7 +169,12 @@ pub fn calculate_talent_display(
     // 2. RESISTANCES 
     if def.name.starts_with("Resist ") {
         if val1 == 0 {
-            return Some("Resist: 0% (+0%) -> 0%".to_string());
+            let val1_min = calculate_talent_value(group.min_1, group.max_1, 1, group.max_level);
+            let val1_max = calculate_talent_value(group.min_1, group.max_1, group.max_level, group.max_level);
+            if val1_min == val1_max {
+                return Some(format!("Resist: {}%", val1_min));
+            }
+            return Some(format!("Resist: 0% (+{}%) -> 0%", val1));
         } else {
             return Some(format!("Resist: 0% (+{}%) -> {}%", val1, val1));
         }
@@ -173,13 +182,20 @@ pub fn calculate_talent_display(
 
     // 3. BASE STATS 
     if let Some(stat_def) = registry::CAT_STATS_REGISTRY.iter().find(|s| s.linked_talent_id == Some(group.ability_id)) {
-        
         let old_val = (stat_def.get_value)(&leveled_base, 0); 
         let new_val = (stat_def.get_value)(&mutated, 0);
         
+        // Edge case: does it scale?
+        let val1_min = calculate_talent_value(group.min_1, group.max_1, 1, group.max_level);
+        let val1_max = calculate_talent_value(group.min_1, group.max_1, group.max_level, group.max_level);
+        
+        if val1_min == val1_max {
+            let lv1_stats = (stat_def.get_value)(&dummy_min, 0);
+            return Some(format!("{}: {}", stat_def.display_name, (stat_def.formatter)(lv1_stats)));
+        }
+
         let old_str = (stat_def.formatter)(old_val);
         let new_str = (stat_def.formatter)(new_val);
-        
         let mod_str = stat_def.talent_modifier_fmt.map(|f| f(val1, val2)).unwrap_or_default();
         
         return Some(format!("{}: {} {} -> {}", stat_def.display_name, old_str, mod_str, new_str));

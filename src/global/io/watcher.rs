@@ -22,7 +22,7 @@ impl GlobalWatcher {
 
         let mut watcher = notify::recommended_watcher(move |res: notify::Result<Event>| {
             if let Ok(event) = res {
-                if event.kind.is_modify() || event.kind.is_create() || event.kind.is_remove() {
+                if !matches!(event.kind, notify::EventKind::Access(_)) {
                     for path in event.paths {
                         let path_str = path.to_string_lossy().to_lowercase();
                         if path_str.contains("raw") { continue; }
