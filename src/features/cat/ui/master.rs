@@ -46,7 +46,9 @@ pub fn show(
         ctx, ui, cat_entry, current_form, current_tab, current_level, level_input, texture_cache, current_key, settings, talent_levels, talent_costs, img022_sheet
     );
 
-    let base_stats = cat_entry.stats.get(*current_form).and_then(|opt| opt.as_ref());
+    // --- VFS SYNC: Bypass scanner cache and fetch modded stats dynamically ---
+    let dynamic_stats = crate::features::cat::logic::stats::load_from_id(cat_entry.id as i32, &settings.general.language_priority);
+    let base_stats = dynamic_stats.as_ref().and_then(|v| v.get(*current_form));
     let form_allows_talents = *current_form >= 2;
 
     let final_stats_owned = if let Some(base) = base_stats {
@@ -63,14 +65,6 @@ pub fn show(
         ExportAction::Copy | ExportAction::Save => {
             if let (Some(final_s), Some(base_s)) = (final_stats_owned.as_ref(), base_stats) {
                 
-                let icon_path = crate::features::cat::paths::image(
-                    std::path::Path::new(crate::features::cat::paths::DIR_CATS),
-                    crate::features::cat::paths::AssetType::Icon,
-                    cat_entry.id,
-                    *current_form,
-                    cat_entry.egg_ids
-                );
-
                 let expand_id = egui::Id::new(format!("conjure_expand_{}", cat_entry.id));
                 let is_conjure_expanded = ctx.data(|d| d.get_temp::<bool>(expand_id).unwrap_or(settings.cat_data.expand_spirit_details));
 
@@ -82,7 +76,7 @@ pub fn show(
 
                 let mut spirit_data = None;
                 if is_conjure_expanded && base_s.conjure_unit_id > 0 {
-                    if let Some(c_vec) = crate::features::cat::logic::stats::load_from_id(base_s.conjure_unit_id) {
+                    if let Some(c_vec) = crate::features::cat::logic::stats::load_from_id(base_s.conjure_unit_id, &settings.general.language_priority) {
                         if let Some(c_stats) = c_vec.first() {
                             let conjure_final = crate::features::cat::logic::stats::get_final_stats(c_stats, cat_entry.curve.as_ref(), *current_level, None, None);
                             let (s_traits, s_h1, s_h2, s_b1, s_b2, s_footer) = crate::features::cat::logic::abilities::collect_ability_data(
@@ -103,7 +97,6 @@ pub fn show(
                 }
 
                 let anim_frames = cat_entry.atk_anim_frames[*current_form];
-                
                 let cycle = (get_cat_stat("Atk Cycle").get_value)(final_s, anim_frames);
                 let atk_type = if final_s.area_attack == 0 { "Single" } else { "Area" };
 
@@ -111,40 +104,33 @@ pub fn show(
                     is_cat: true,
                     id_str: cat_entry.id_str(*current_form),
                     name: cat_entry.display_name(*current_form),
-                    icon_path,
+                    icon_path: cat_entry.deploy_icon_paths[*current_form].clone(),
                     top_label: "Level:".to_string(),
                     top_value: level_input.clone(),
-                    
                     hp: final_s.hitpoints.to_string(),
                     kb: final_s.knockbacks.to_string(),
                     speed: final_s.speed.to_string(),
-                    
                     cd_label: get_cat_stat("Cooldown").display_name.to_string(),
                     cd_value: format_cat_stat("Cooldown", final_s, anim_frames),
                     is_cd_time: true, 
-                    
                     cd_frames: (get_cat_stat("Cooldown").get_value)(final_s, anim_frames),
-                    
                     cost_label: get_cat_stat("Cost").display_name.to_string(),
                     cost_value: format_cat_stat("Cost", final_s, anim_frames),
-                    
                     atk: format_cat_stat("Attack", final_s, anim_frames),
                     dps: format_cat_stat("Dps", final_s, anim_frames),
-                    
                     range: final_s.standing_range.to_string(),
                     atk_cycle: cycle,
                     atk_type: atk_type.to_string(),
-                    
                     traits, h1, h2, b1, b2, footer, spirit_data,
                 };
 
-                let lang_clone = settings.general.game_language.clone();
+                let priority_clone = settings.general.language_priority.clone();
                 let cuts_clone = icon_sheet.cuts_map.clone(); 
 
                 if export_action == ExportAction::Copy {
-                    generate_and_copy(ctx.clone(), lang_clone, data, cuts_clone);
+                    generate_and_copy(ctx.clone(), priority_clone, data, cuts_clone);
                 } else {
-                    generate_and_save(ctx.clone(), lang_clone, data, cuts_clone);
+                    generate_and_save(ctx.clone(), priority_clone, data, cuts_clone);
                 }
             }
         },
@@ -171,7 +157,6 @@ pub fn show(
                 stats::render(ui, cat_entry, final_s, *current_form);
                 ui.spacing_mut().item_spacing.y = 7.0;
                 ui.separator(); 
-            
                 egui::ScrollArea::vertical()
                     .auto_shrink([false, false]) 
                     .show(ui, |ui| {
@@ -196,8 +181,17 @@ pub fn show(
              details::render(ui, desc);
              let text_fallback = Vec::new();
              let ev_text = cat_entry.evolve_text.get(*current_form).unwrap_or(&text_fallback);
-             details::render_evolve(ui, ctx, &cat_entry.unit_buy, ev_text, *current_form, gatya_item_textures, cache_version);
-        },
+             details::render_evolve(
+                ui, 
+                ctx, 
+                &cat_entry.unit_buy, 
+                ev_text, 
+                *current_form, 
+                gatya_item_textures, 
+                cache_version, 
+                &settings.general.language_priority 
+            );
+        }
         DetailTab::Animation => {
             viewer::show(ui, ctx, cat_entry, *current_form, anim_viewer, model_data, anim_sheet, settings);
         }

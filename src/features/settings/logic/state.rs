@@ -1,6 +1,4 @@
 use serde::{Deserialize, Serialize};
-use std::sync::mpsc::Receiver;
-
 use super::lang;
 use super::upd::UpdateMode;
 
@@ -19,14 +17,15 @@ pub struct Settings {
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(default)]
 pub struct GeneralSettings {
-    pub game_language: String, 
+    #[serde(default = "crate::features::settings::logic::lang::default_priority")]
+    pub language_priority: Vec<String>, 
     pub update_mode: UpdateMode,
 }
 
 impl Default for GeneralSettings {
     fn default() -> Self {
         Self {
-            game_language: "".to_string(),
+            language_priority: lang::default_priority(),
             update_mode: UpdateMode::default(),
         }
     }
@@ -119,8 +118,6 @@ impl Default for AnimSettings {
 pub struct RuntimeState {
     pub manual_check_requested: bool,
     pub active_tab: String,
-    pub available_languages: Vec<String>,
-    pub rx_lang: Option<Receiver<Vec<String>>>,
     pub show_ip_field: bool,
 }
 
@@ -129,26 +126,14 @@ impl Default for RuntimeState {
         Self {
             manual_check_requested: false,
             active_tab: "General".to_string(),
-            available_languages: Vec::new(),
-            rx_lang: Some(lang::start_scan()), 
             show_ip_field: false,
         }
     }
 }
 
-impl Settings {
-    pub fn update_language_list(&mut self) {
-        lang::handle_update(
-            &mut self.runtime.rx_lang, 
-            &mut self.runtime.available_languages, 
-            &mut self.general.game_language
-        );
-    }
-}
-
 #[derive(Clone, Debug)]
 pub struct ScannerConfig {
-    pub language: String,
+    pub language_priority: Vec<String>,
     pub preferred_form: usize,
     pub show_invalid: bool,
 }
@@ -162,7 +147,7 @@ pub struct EmulatorConfig {
 impl Settings {
     pub fn scanner_config(&self) -> ScannerConfig {
         ScannerConfig {
-            language: self.general.game_language.clone(),
+            language_priority: self.general.language_priority.clone(),
             preferred_form: self.cat_data.preferred_banner_form,
             show_invalid: self.cat_data.show_invalid_units,
         }

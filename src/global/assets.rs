@@ -1,7 +1,6 @@
 use eframe::egui;
 use crate::global::game::abilities::CustomIcon;
 
-// --- RAW BYTES ---
 pub const MULTIHIT: &[u8] = include_bytes!("../assets/multihit.png");
 pub const KAMIKAZE: &[u8] = include_bytes!("../assets/kamikaze.png");
 pub const BOSS_WAVE: &[u8] = include_bytes!("../assets/boss_wave_immune.png");
@@ -10,6 +9,7 @@ pub const STARRED_ALIEN: &[u8] = include_bytes!("../assets/starred_alien.png");
 pub const BURROW: &[u8] = include_bytes!("../assets/burrow.png");
 pub const REVIVE: &[u8] = include_bytes!("../assets/revive.png");
 pub const UDI_F: &[u8] = include_bytes!("../assets/udi_f.png");
+pub const STOP: &[u8] = include_bytes!("../assets/stop_attack.png");
 
 pub const ICON: &[u8] = include_bytes!("../assets/icon.ico");
 pub const FONT_JP: &[u8] = include_bytes!("../assets/NotoSansJP-Regular.ttf");
@@ -25,9 +25,8 @@ pub const CUSTOM_ICON_DATA: &[(CustomIcon, &[u8])] = &[
     (CustomIcon::StarredAlien, STARRED_ALIEN),
     (CustomIcon::Burrow, BURROW),
     (CustomIcon::Revive, REVIVE),
+    (CustomIcon::Stop, STOP),
 ];
-
-// --- TEXTURE MANAGER ---
 
 #[derive(Clone)]
 pub struct CustomAssets {
@@ -38,6 +37,7 @@ pub struct CustomAssets {
     pub starred_alien: egui::TextureHandle,
     pub burrow: egui::TextureHandle,
     pub revive: egui::TextureHandle,
+    pub stop: egui::TextureHandle,
     #[allow(dead_code)] pub udi_f: egui::TextureHandle,
 }
 
@@ -61,6 +61,7 @@ impl CustomAssets {
             starred_alien: load("starred_alien", STARRED_ALIEN),
             burrow: load("burrow", BURROW),
             revive: load("revive", REVIVE),
+            stop: load("stop", STOP),
             udi_f: load("udi_f", UDI_F),
         }
     }

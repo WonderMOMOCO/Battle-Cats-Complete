@@ -88,7 +88,6 @@ fn show_folder_delete_modal(
                     let x_offset = (ui.available_width() - total_width) / 2.0;
                     ui.add_space(x_offset);
 
-                    // If YES is clicked, flag it and close immediately
                     if ui.add_sized([60.0, 30.0], egui::Button::new("Yes")).clicked() {
                         yes_clicked = true;
                         should_close = true;
@@ -118,14 +117,12 @@ pub fn show(ui: &mut egui::Ui, settings: &mut GameDataSettings, runtime: &mut Ru
     let mut refresh_needed = false;
     let ctx = ui.ctx().clone();
 
-    // Pull our background deleters from Egui's temporary memory
     let mut game_deleter = ctx.data_mut(|d| d.get_temp::<FolderDeleter>(egui::Id::new("game_deleter")).unwrap_or_default());
     let mut raw_deleter = ctx.data_mut(|d| d.get_temp::<FolderDeleter>(egui::Id::new("raw_deleter")).unwrap_or_default());
 
     game_deleter.update();
     raw_deleter.update();
 
-    // If either folder is actively deleting/showing success, redraw at 60 FPS so the UI changes instantly
     if game_deleter.is_active() || raw_deleter.is_active() {
         ctx.request_repaint();
     }
@@ -138,45 +135,43 @@ pub fn show(ui: &mut egui::Ui, settings: &mut GameDataSettings, runtime: &mut Ru
         .auto_shrink([false, true])
         .show(ui, |ui| {
 
-            ui.heading("Files");
+            ui.heading("Disk");
             ui.add_space(5.0);
 
-            // GAME FOLDER BUTTON LOGIC
             if game_deleter.is_deleting() {
                 let btn = egui::Button::new("Deleting \"game\" Folder...")
-                    .fill(egui::Color32::from_rgb(200, 180, 50)); // Yellow
+                    .fill(egui::Color32::from_rgb(200, 180, 50)); 
                 ui.add_sized([180.0, 30.0], btn);
             } else if game_deleter.is_done() {
                 let btn = egui::Button::new("Deleted \"game\" Folder!")
-                    .fill(egui::Color32::from_rgb(40, 160, 40)); // Green
+                    .fill(egui::Color32::from_rgb(40, 160, 40)); 
                 ui.add_sized([180.0, 30.0], btn);
             } else if game_exists {
                 let btn = egui::Button::new("Delete \"game\" Folder")
-                    .fill(egui::Color32::from_rgb(180, 50, 50)); // Red
+                    .fill(egui::Color32::from_rgb(180, 50, 50)); 
                 if ui.add_sized([180.0, 30.0], btn).clicked() {
                     let state_id = egui::Id::new("delete_game_modal");
                     ctx.data_mut(|d| d.insert_temp(state_id, FolderDeleteState { is_open: true, size_str: None }));
                 }
             } else {
                 let btn = egui::Button::new("No \"game\" Folder")
-                    .fill(egui::Color32::from_rgb(60, 60, 60)); // Gray
+                    .fill(egui::Color32::from_rgb(60, 60, 60)); 
                 ui.add_sized([180.0, 30.0], btn);
             }
 
             ui.add_space(5.0);
 
-            // RAW FOLDER BUTTON LOGIC
             if raw_deleter.is_deleting() {
                 let btn = egui::Button::new("Deleting \"raw\" Folder...")
-                    .fill(egui::Color32::from_rgb(200, 180, 50)); // Yellow
+                    .fill(egui::Color32::from_rgb(200, 180, 50)); 
                 ui.add_sized([180.0, 30.0], btn);
             } else if raw_deleter.is_done() {
                 let btn = egui::Button::new("Deleted \"raw\" Folder!")
-                    .fill(egui::Color32::from_rgb(40, 160, 40)); // Green
+                    .fill(egui::Color32::from_rgb(40, 160, 40)); 
                 ui.add_sized([180.0, 30.0], btn);
             } else if raw_exists {
                 let btn = egui::Button::new("Delete \"raw\" Folder")
-                    .fill(egui::Color32::from_rgb(180, 50, 50)); // Red
+                    .fill(egui::Color32::from_rgb(180, 50, 50)); 
                 if ui.add_sized([180.0, 30.0], btn).clicked() {
                     let size = get_folder_size(Path::new("game/raw"));
                     let state_id = egui::Id::new("delete_raw_modal");
@@ -187,7 +182,7 @@ pub fn show(ui: &mut egui::Ui, settings: &mut GameDataSettings, runtime: &mut Ru
                 }
             } else {
                 let btn = egui::Button::new("No \"raw\" Folder")
-                    .fill(egui::Color32::from_rgb(60, 60, 60)); // Gray
+                    .fill(egui::Color32::from_rgb(60, 60, 60)); 
                 ui.add_sized([180.0, 30.0], btn);
             }
 
@@ -236,6 +231,17 @@ pub fn show(ui: &mut egui::Ui, settings: &mut GameDataSettings, runtime: &mut Ru
             });
 
             ui.add_space(20.0);
+            ui.heading("Import");
+            ui.add_space(5.0);
+
+            let import_btn = egui::Button::new("Manage Exceptions")
+                .fill(egui::Color32::from_rgb(40, 90, 160));
+            
+            if ui.add_sized([180.0, 30.0], import_btn).clicked() {
+                crate::features::settings::ui::exceptions::open(&ctx);
+            }
+
+            ui.add_space(20.0);
             ui.heading("Export");
             ui.add_space(10.0);
 
@@ -255,7 +261,6 @@ pub fn show(ui: &mut egui::Ui, settings: &mut GameDataSettings, runtime: &mut Ru
             });
     });
 
-    // Check if the user confirmed deletion in the modals
     if show_folder_delete_modal(&ctx, drag_guard, "delete_game_modal", "Are you sure you want to delete the \"game\" folder?\nMost app function will be lost.") {
         game_deleter.start("game");
     }
@@ -264,7 +269,8 @@ pub fn show(ui: &mut egui::Ui, settings: &mut GameDataSettings, runtime: &mut Ru
         raw_deleter.start("game/raw");
     }
 
-    // Save the thread trackers back into memory for the next frame
+    crate::features::settings::ui::exceptions::show(&ctx, drag_guard);
+
     ctx.data_mut(|d| {
         d.insert_temp(egui::Id::new("game_deleter"), game_deleter);
         d.insert_temp(egui::Id::new("raw_deleter"), raw_deleter);

@@ -44,9 +44,6 @@ pub fn show_popup(
         _ => {}
     }
 
-    // SETUP
-    let attention_latch_id = egui::Id::new("export_needs_critical_attention");
-
     // EXPORT STATUS POLLING
     if state.is_processing {
         ui.ctx().request_repaint_after(Duration::from_millis(100));
@@ -59,7 +56,6 @@ pub fn show_popup(
                         EncoderStatus::Finished => { 
                             state.is_processing = false; 
                             state.completion_time = Some(ui.input(|i| i.time));
-                            ui.ctx().data_mut(|d| d.insert_temp(attention_latch_id, true));
                             ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("export_done_seen"), false));
                         }
                     }
@@ -84,16 +80,13 @@ pub fn show_popup(
                         state.frame_start_str = start.to_string();
                         state.frame_end_str = end.to_string();
                         
-                        // Grab Attention on Success
-                        ui.ctx().data_mut(|d| d.insert_temp(attention_latch_id, true));
-                        
+                        state.completion_time = Some(ui.input(|i| i.time));
                         loop_finished = true;
                     },
                     LoopStatus::NotFound => {
                         loop_finished = true;
                     },
                     LoopStatus::Error(e) => {
-                        // Mark as done but with error message
                         if e.contains("Timed out") {
                             state.loop_result_msg = Some("Loop Search Timeout (180s)".to_string());
                         } else {
@@ -101,9 +94,6 @@ pub fn show_popup(
                         }
                         
                         state.completion_time = Some(ui.input(|i| i.time));
-                        
-                        // Grab Attention
-                        ui.ctx().data_mut(|d| d.insert_temp(attention_latch_id, true));
                         ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("export_done_seen"), false));
                         
                         loop_finished = true;
@@ -113,22 +103,10 @@ pub fn show_popup(
         }
     }
     
-    // Cleanup outside the borrow scope
     if loop_finished {
         state.is_loop_searching = false;
         state.loop_rx = None;
         state.loop_abort = None;
-    }
-
-    // LATCH EXECUTION
-    let needs_attention = ui.ctx().data(|d| d.get_temp(attention_latch_id).unwrap_or(false));
-    if needs_attention {
-        if ui.input(|i| i.focused) {
-            ui.ctx().data_mut(|d| d.insert_temp(attention_latch_id, false));
-        } else {
-            ui.ctx().send_viewport_cmd(egui::ViewportCommand::RequestUserAttention(egui::UserAttentionType::Critical));
-            ui.ctx().request_repaint_after(Duration::from_millis(200));
-        }
     }
 
     // UI RENDERING
@@ -362,8 +340,9 @@ fn render_content(
                             }
                         }
 
-                        // Define Action Logic Closure
-                        let mut trigger_search = |ui: &mut egui::Ui| {
+                        // THE FIX: Clone context so `ui` is not borrowed by the closure
+                        let search_ctx = ui.ctx().clone();
+                        let mut trigger_search = || {
                             if let (Some(m), Some(a)) = (model, anim) {
                                 let use_tol = if state.loop_tolerance_str.is_empty() { 30 } else { state.loop_tolerance_str.parse().unwrap_or(30) };
                                 let use_min = if state.loop_min_str.is_empty() { 15 } else { state.loop_min_str.parse().unwrap_or(15) };
@@ -377,7 +356,7 @@ fn render_content(
                                 state.is_loop_searching = true;
                                 
                                 state.loop_frames_searched = 0;
-                                state.loop_search_start_time = Some(ui.input(|i| i.time));
+                                state.loop_search_start_time = Some(search_ctx.input(|i| i.time));
                                 
                                 let abort = Arc::new(AtomicBool::new(false));
                                 state.loop_abort = Some(abort.clone());
@@ -393,11 +372,11 @@ fn render_content(
                         if is_loop_terminated {
                             let btn = egui::Button::new("Loop Terminated!").fill(egui::Color32::from_rgb(180, 50, 50));
                             if ui.add_sized(egui::vec2(ui.available_width(), 24.0), btn).clicked() {
-                                trigger_search(ui);
+                                trigger_search();
                             }
                         } else {
                             if ui.add_sized(egui::vec2(ui.available_width(), 24.0), egui::Button::new("Find Loop")).clicked() {
-                                trigger_search(ui);
+                                trigger_search();
                             }
                         }
                     });
@@ -788,7 +767,6 @@ fn render_content(
                 (ratio, format!("Encoding | {}f/{}f ({}%)", state.encoded_frames, count, percent))
             }
         } else {
-            // Check for termination messages to suppress "Done" if it was actually an abort
             let is_term_loop = state.loop_result_msg.as_ref().map(|m| m.contains("Terminated") || m.contains("Aborted")).unwrap_or(false);
             let is_term_export = state.export_result_msg.as_ref().map(|m| m.contains("Terminated") || m.contains("Aborted")).unwrap_or(false);
             
@@ -847,12 +825,10 @@ fn render_content(
         if state.is_processing {
              let btn = egui::Button::new("Abort Export").fill(egui::Color32::from_rgb(180, 50, 50));
              if ui.add_sized(egui::vec2(ui.available_width(), 30.0), btn).clicked() {
-                 // ACTIVATE THE SIGNAL
                  if let Some(abort) = &state.abort {
                      abort.store(true, Ordering::Relaxed);
                  }
                  
-                 // Set specific export termination message
                  state.export_result_msg = Some("Export Terminated!".to_string());
                  state.completion_time = Some(ui.input(|i| i.time));
 
@@ -864,7 +840,6 @@ fn render_content(
             let is_valid = state.region_w > 0.1 && state.region_h > 0.1;
             let enabled = !state.is_loop_searching && is_valid;
             
-            // CHECK FOR TERMINATION STATE (Separate Check for Export Button)
             let mut is_export_terminated = false;
              if let Some(msg) = &state.export_result_msg {
                 if msg.contains("Terminated") || msg.contains("Aborted") {
@@ -876,7 +851,6 @@ fn render_content(
                 }
             }
             
-            // ACTION TRIGGER (Shared logic for normal and terminated states)
             let mut trigger_export = || {
                 start_export(state);
                 state.export_result_msg = None;
@@ -884,10 +858,8 @@ fn render_content(
             };
 
             if is_export_terminated {
-                // RED BUTTON - Same Functionality
                 let btn = egui::Button::new("Export Terminated!").fill(egui::Color32::from_rgb(180, 50, 50));
                 
-                // We use add_enabled_ui based on validity just like the normal button
                 if ui.add_enabled_ui(enabled, |ui| {
                     ui.add_sized(egui::vec2(ui.available_width(), 30.0), btn)
                 }).inner.clicked() {

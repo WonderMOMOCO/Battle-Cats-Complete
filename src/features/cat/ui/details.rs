@@ -36,6 +36,7 @@ pub fn render_evolve(
     current_form: usize,
     texture_cache: &mut HashMap<i32, Option<egui::TextureHandle>>,
     cache_version: u64,
+    priority: &[String], 
 ) {
     ui.add_space(15.0);
     ui.separator(); 
@@ -90,7 +91,7 @@ pub fn render_evolve(
             
             for (item_id, amount) in materials {
                 let texture_handle_opt = texture_cache.entry(*item_id).or_insert_with(|| {
-                    load_material_icon_legacy(ctx, *item_id, cache_version)
+                    load_material_icon_legacy(ctx, *item_id, cache_version, priority)
                 });
 
                 let rect_size = egui::vec2(icon_size, icon_size);
@@ -153,7 +154,7 @@ pub fn render_evolve(
 
         let xp_icon_id = 6;
         let texture_handle_opt = texture_cache.entry(xp_icon_id).or_insert_with(|| {
-            load_xp_icon_trimmed(ctx, xp_icon_id, cache_version)
+            load_xp_icon_trimmed(ctx, xp_icon_id, cache_version, priority)
         });
 
         let display_width = if let Some(tex) = texture_handle_opt {
@@ -204,14 +205,19 @@ pub fn render_evolve(
     }
 }
 
-fn load_material_icon_legacy(ctx: &egui::Context, id: i32, version: u64) -> Option<egui::TextureHandle> {
-    let path_opt = paths::gatya_item_icon(Path::new(""), id);
+fn load_material_icon_legacy(ctx: &egui::Context, id: i32, version: u64, priority: &[String]) -> Option<egui::TextureHandle> {
+    let expected_path = paths::gatya_item_icon(Path::new(""), id)?;
+    
+    let file_name = expected_path.file_name()?.to_string_lossy().to_string();
+    let parent_dir = expected_path.parent().unwrap_or(Path::new(""));
+
+    let paths = crate::global::get(parent_dir, &file_name, priority);
 
     let mut final_image = egui::ColorImage::new([128, 128], egui::Color32::TRANSPARENT);
     let mut loaded = false;
 
-    if let Some(path) = path_opt {
-        if let Ok(mut img) = image::open(path) {
+    for path in paths {
+        if let Ok(mut img) = image::open(&path) {
             let (w, h) = img.dimensions();
             
             let mut min_x = w;
@@ -270,6 +276,7 @@ fn load_material_icon_legacy(ctx: &egui::Context, id: i32, version: u64) -> Opti
                     }
                 }
                 loaded = true;
+                break;
             }
         }
     }
@@ -281,14 +288,18 @@ fn load_material_icon_legacy(ctx: &egui::Context, id: i32, version: u64) -> Opti
     }
 }
 
-fn load_xp_icon_trimmed(ctx: &egui::Context, id: i32, version: u64) -> Option<egui::TextureHandle> {
-    let path_opt = paths::gatya_item_icon(Path::new(""), id);
+fn load_xp_icon_trimmed(ctx: &egui::Context, id: i32, version: u64, priority: &[String]) -> Option<egui::TextureHandle> {
+    let expected_path = paths::gatya_item_icon(Path::new(""), id)?;
+    let file_name = expected_path.file_name()?.to_string_lossy().to_string();
+    let parent_dir = expected_path.parent().unwrap_or(Path::new(""));
+
+    let paths = crate::global::get(parent_dir, &file_name, priority);
 
     let mut final_image = egui::ColorImage::new([1, 1], egui::Color32::TRANSPARENT);
     let mut loaded = false;
 
-    if let Some(path) = path_opt {
-         if let Ok(img) = image::open(path) {
+    for path in paths {
+         if let Ok(img) = image::open(&path) {
             let (w, h) = img.dimensions();
             let rgba = img.to_rgba8();
             
@@ -327,6 +338,7 @@ fn load_xp_icon_trimmed(ctx: &egui::Context, id: i32, version: u64) -> Option<eg
                     }
                 }
                 loaded = true;
+                break;
             }
         }
     }

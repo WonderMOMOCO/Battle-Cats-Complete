@@ -5,4 +5,5 @@ pub mod import;
 pub mod settings;
 pub mod statblock;
 pub mod addons;
-pub mod mainmenu;
+pub mod home;
+pub mod mods;

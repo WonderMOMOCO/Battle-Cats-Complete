@@ -3,9 +3,7 @@ use std::sync::mpsc::Receiver;
 use std::env;
 use eframe::egui;
 use std::path::Path;
-
-use crate::features::addons::adb::bridge::AdbEvent; 
-use crate::features::settings::logic::Settings;
+use crate::features::addons::adb::bridge::AdbEvent;
 
 #[derive(PartialEq, Clone, Copy, Debug, Deserialize, Serialize)]
 pub enum AdbImportType {
@@ -98,7 +96,7 @@ impl Default for ImportState {
 
 impl ImportState {
 
-    pub fn update(&mut self, ctx: &egui::Context, settings: &mut Settings) -> bool {
+    pub fn update(&mut self, ctx: &egui::Context) -> bool {
         let mut finished_just_now = false;
         
         self.import_censored = censor_path(&self.import_path);
@@ -153,16 +151,6 @@ impl ImportState {
                 self.adb_rx = None; 
             } else {
                 ctx.request_repaint();
-            }
-        }
-
-        if finished_just_now {
-            let msg_lower = self.status_message.to_lowercase();
-            let is_sort_done = msg_lower.contains("files sorted");
-            let is_adb_done = msg_lower.contains("success") && !msg_lower.contains("decryption");
-            
-            if is_sort_done || is_adb_done {
-                settings.runtime.rx_lang = Some(crate::features::settings::logic::lang::start_scan());
             }
         }
 

@@ -43,12 +43,17 @@ impl CatLevelCurve {
     }
 }
 
-pub fn load_level_curves(cats_directory: &Path) -> Vec<CatLevelCurve> {
+pub fn load_level_curves(cats_directory: &Path, priority: &[String]) -> Vec<CatLevelCurve> {
     let mut curves_list = Vec::new();
-    let level_file_path = cats_directory.join(paths::UNIT_LEVEL);
+    
+    let Some(level_file_path) = crate::global::resolver::get(cats_directory, paths::UNIT_LEVEL, priority).into_iter().next() else {
+        return curves_list;
+    };
+
     if let Ok(file_content) = fs::read_to_string(&level_file_path) {
         let delimiter = utils::detect_csv_separator(&file_content);
         for csv_line in file_content.lines() {
+            if csv_line.trim().is_empty() { continue; }
             curves_list.push(CatLevelCurve::from_csv_line(csv_line, delimiter));
         }
     }

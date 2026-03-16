@@ -19,7 +19,7 @@ pub struct CatRaw {
     pub hitbox_position: i32,
     pub hitbox_width: i32,
     pub target_red: i32,
-    pub unknown_11: i32,
+    pub unused: i32,
     pub area_attack: i32,
     pub pre_attack_animation: i32,
     pub minimum_z_layer: i32,
@@ -63,10 +63,10 @@ pub struct CatRaw {
     pub zombie_killer: i32,
     pub witch_killer: i32,
     pub target_witch: i32,
-    pub unknown_55: i32,        
+    pub attack_count_total: i32,        
     pub boss_wave_immune: i32,  
-    pub unknown_57: i32,        
-    pub kamikaze: i32,          
+    pub time_before_death: i32,     
+    pub attack_count_state: i32,          
     pub attack_2: i32,
     pub attack_3: i32,
     pub time_before_attack_2: i32,
@@ -74,10 +74,10 @@ pub struct CatRaw {
     pub attack_1_abilities: i32,
     pub attack_2_abilities: i32,
     pub attack_3_abilities: i32,
-    pub unknown_66: i32,        
-    pub soul_animation: i32,
-    pub spawn_animation: i32,
-    pub unknown_69: i32,
+    pub spawn_animation_type: i32,       
+    pub soul_animation_type: i32,
+    pub spawn_animation_flag: i32,
+    pub soul_animation_flag: i32,
     pub barrier_breaker_chance: i32,
     pub warp_chance: i32,
     pub warp_duration: i32,
@@ -147,7 +147,7 @@ impl CatRaw {
             hitbox_position: get_int(8),
             hitbox_width: get_int(9),
             target_red: get_int(10),
-            unknown_11: get_int(11),
+            unused: get_int(11),
             area_attack: get_int(12),
             pre_attack_animation: get_int(13),
             minimum_z_layer: get_int(14),
@@ -191,10 +191,10 @@ impl CatRaw {
             zombie_killer: get_int(52),
             witch_killer: get_int(53),
             target_witch: get_int(54),
-            unknown_55: get_int_neg(55),
+            attack_count_total: get_int_neg(55),
             boss_wave_immune: get_int_neg(56),
-            unknown_57: get_int_neg(57),
-            kamikaze: get_int(58),
+            time_before_death: get_int_neg(57),
+            attack_count_state: get_int(58),
             attack_2: get_int(59),
             attack_3: get_int(60),
             time_before_attack_2: get_int(61),
@@ -202,10 +202,10 @@ impl CatRaw {
             attack_1_abilities: get_int(63),
             attack_2_abilities: get_int(64),
             attack_3_abilities: get_int(65),
-            unknown_66: get_int_neg(66),
-            soul_animation: get_int(67),
-            spawn_animation: get_int(68),
-            unknown_69: get_int(69),
+            spawn_animation_type: get_int_neg(66),
+            soul_animation_type: get_int(67),
+            spawn_animation_flag: get_int(68),
+            soul_animation_flag: get_int(69),
             barrier_breaker_chance: get_int(70),
             warp_chance: get_int(71),
             warp_duration: get_int(72),
@@ -257,11 +257,16 @@ impl CatRaw {
     }
 }
 
-pub fn load_from_id(cat_id: i32) -> Option<Vec<CatRaw>> {
+pub fn load_from_id(cat_id: i32, priority: &[String]) -> Option<Vec<CatRaw>> {
     let path_object = paths::stats(Path::new(paths::DIR_CATS), cat_id as u32);
     
-    if path_object.exists() {
-        if let Ok(file_content) = fs::read_to_string(path_object) {
+    let base_dir = path_object.parent().unwrap_or(Path::new(""));
+    let file_name = path_object.file_name().unwrap().to_string_lossy();
+
+    if let Some(resolved_path) = crate::global::resolver::get(base_dir, &file_name, priority).into_iter().next() {
+        
+        if let Ok(bytes) = fs::read(resolved_path) {
+            let file_content = String::from_utf8_lossy(&bytes);
             let delimiter = utils::detect_csv_separator(&file_content);
 
             let mut entries = Vec::new();

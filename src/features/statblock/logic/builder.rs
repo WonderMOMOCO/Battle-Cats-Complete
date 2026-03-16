@@ -13,7 +13,6 @@ use crate::global::utils::autocrop;
 use crate::global::formats::imgcut::SpriteCut;
 use crate::global::game::abilities::{CustomIcon, AbilityItem, ABILITY_X, ABILITY_Y, TRAIT_Y};
 use crate::global::assets;
-
 use super::draw::*;
 
 #[derive(Clone)]
@@ -92,13 +91,12 @@ const CANVAS_BORDER_COLOR: Rgba<u8> = Rgba([31, 106, 165, 255]);
 const SPIRIT_PADDING_X: f32 = 8.0;
 
 fn build_statblock_image(
-    language: &str,
+    priority: &[String],
     data: StatblockData,
     cuts_map: HashMap<usize, SpriteCut>,
 ) -> RgbaImage {
     let scale: i32 = 2;
     let scale_f: f32 = 2.0;
-
     let padding = 8 * scale;
     let col_w = 66 * scale; 
     let gap = 4 * scale;
@@ -111,7 +109,8 @@ fn build_statblock_image(
     
     let base_grid_width: f32 = (8.0 * 2.0) + (66.0 * 5.0) + (4.0 * 4.0); 
 
-    let font_data: &[u8] = match language {
+    let lang_code = priority.first().map(|s| s.as_str()).unwrap_or("");
+    let font_data: &[u8] = match lang_code {
         "kr" => include_bytes!("../../../assets/NotoSansKR-Regular.ttf"),
         "tw" => include_bytes!("../../../assets/NotoSansTC-Regular.ttf"),
         "th" => include_bytes!("../../../assets/NotoSansThai-Regular.ttf"),
@@ -187,26 +186,11 @@ fn build_statblock_image(
     let data_bg = Rgba([60, 60, 60, 255]);
 
     let img015_folder = crate::global::io::paths::img015_folder(Path::new(""));
-    
-    let codes_to_try: Vec<String> = if language == "--" || language.is_empty() {
-        crate::global::utils::LANGUAGE_PRIORITY.iter().map(|s| s.to_string()).collect()
-    } else {
-        vec![language.to_string()]
-    };
+        let mut img015_base = RgbaImage::new(1024, 1024);
+        if let Some(p) = crate::global::resolver::get(&img015_folder, "img015.png", priority).into_iter().next() {
+            if let Ok(loaded) = image::open(&p) { img015_base = loaded.to_rgba8(); }
+        }    
 
-    let mut img015_base_opt = None;
-    for code in codes_to_try {
-        let png_filename = if code.is_empty() { "img015.png".to_string() } else { format!("img015_{}.png", code) };
-        let full_png_path = img015_folder.join(&png_filename);
-        if full_png_path.exists() {
-            if let Ok(loaded) = image::open(&full_png_path) {
-                img015_base_opt = Some(loaded.to_rgba8());
-                break;
-            }
-        }
-    }
-    let img015_base = img015_base_opt.unwrap_or_else(|| RgbaImage::new(1024, 1024));
-    
     // --- LOAD ALL CUSTOM ASSETS INTO A HASHMAP ---
     let mut custom_assets = HashMap::new();
     for (variant, bytes) in assets::CUSTOM_ICON_DATA {
@@ -640,15 +624,17 @@ fn build_statblock_image(
 
 pub fn generate_and_copy(
     ctx: egui::Context, 
-    language: String,
+    priority: Vec<String>,
     data: StatblockData,
     cuts_map: HashMap<usize, SpriteCut>,
 ) {
     let ctx_clone = ctx.clone();
 
+    ctx_clone.data_mut(|d| d.insert_temp(egui::Id::new("is_copying"), true));
+
     std::thread::spawn(move || {
         let img_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            build_statblock_image(&language, data, cuts_map)
+            build_statblock_image(&priority, data, cuts_map)
         }));
 
         let mut success = false;
@@ -686,11 +672,13 @@ pub fn generate_and_copy(
 
 pub fn generate_and_save(
     ctx: egui::Context, 
-    language: String,
+    priority: Vec<String>,
     data: StatblockData,
     cuts_map: HashMap<usize, SpriteCut>,
 ) {
     let ctx_clone = ctx.clone();
+
+    ctx_clone.data_mut(|d| d.insert_temp(egui::Id::new("is_exporting"), true));
 
     std::thread::spawn(move || {
         let id_str = data.id_str.clone();
@@ -698,25 +686,23 @@ pub fn generate_and_save(
         let is_cat = data.is_cat;
         
         let img_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            build_statblock_image(&language, data, cuts_map)
+            build_statblock_image(&priority, data, cuts_map)
         }));
 
         let mut success = false;
 
         if let Ok(img) = img_result {
             let export_dir = Path::new("exports");
-            success = true;
-
+            
             if !export_dir.exists() {
-                if fs::create_dir_all(export_dir).is_err() {
-                    success = false;
-                }
+                let _ = fs::create_dir_all(export_dir);
             }
 
-            if success {
+            if export_dir.exists() {
                 let safe_val_str = val_str.replace(|c: char| !c.is_alphanumeric() && c != '+', "");
                 let prefix = if is_cat { "Lv" } else { "Mag" };
                 let filename = export_dir.join(format!("{}.{}{}.statblock.png", id_str, prefix, safe_val_str));
+                
                 success = img.save(filename).is_ok();
             }
         }
@@ -724,9 +710,9 @@ pub fn generate_and_save(
         let current_time = ctx_clone.input(|i| i.time);
         
         ctx_clone.data_mut(|d| {
-            d.insert_temp(egui::Id::new("export_save_time"), current_time);
-            d.insert_temp(egui::Id::new("export_save_res"), success);
-            d.insert_temp(egui::Id::new("is_exporting"), false);
+             d.insert_temp(egui::Id::new("export_save_time"), current_time);
+             d.insert_temp(egui::Id::new("export_save_res"), success);
+             d.insert_temp(egui::Id::new("is_exporting"), false);
         });
         ctx_clone.request_repaint();
 

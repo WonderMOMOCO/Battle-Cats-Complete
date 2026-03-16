@@ -12,7 +12,7 @@ To use this app, you must provide game files for it to read. These files are not
 
 ## Current Features
 - **Importing Game Data**
-  - Direct import from emulator
+  - Direct import from emulator/android
   - Import from `.pack` / `.apk` files
   - Import from standard archives
 - **Displaying Cat Data**

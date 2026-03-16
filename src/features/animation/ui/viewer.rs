@@ -124,16 +124,26 @@ impl AnimViewer {
             if self.summoner_id.is_empty() { &self.loaded_id } else { &self.summoner_id }
         } else { &self.loaded_id };
 
-        let mut clean_id = raw_id.clone();
         let parts: Vec<&str> = raw_id.split('_').collect();
+        
+        let mut clean_id = parts[0].to_string(); 
+
         if parts.len() >= 2 {
             if parts[0].chars().all(char::is_numeric) {
                 let form_num = match parts[1].chars().next() {
-                    Some('f') => 1, Some('c') => 2, Some('s') => 3, Some('u') => 4, _ => 0
+                    Some('f') => 1, // First form
+                    Some('c') => 2, // Evolved form
+                    Some('s') => 3, // True form
+                    Some('u') => 4, // Ultra form
+                    _ => 0
                 };
-                if form_num > 0 { clean_id = format!("{}-{}", parts[0], form_num); }
+                
+                if form_num > 0 {
+                    clean_id = format!("{}-{}", parts[0], form_num);
+                }
             }
         }
+
         self.export_state.name_prefix = format!("{}.{}", clean_id, type_str);
     }
 

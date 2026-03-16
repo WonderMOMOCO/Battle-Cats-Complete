@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "Battle_Cats_Complete"
-version = "0.11.4"
+version = "0.12.0"
 dependencies = [
  "ab_glyph",
  "aes",
@@ -30,6 +30,7 @@ dependencies = [
  "rfd",
  "self_update",
  "serde",
+ "serde_json",
  "tar",
  "webp-animation",
  "winres",

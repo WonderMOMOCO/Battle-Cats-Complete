@@ -36,6 +36,11 @@ impl GlobalWatcher {
         if path.exists() {
             let _ = watcher.watch(path, RecursiveMode::Recursive);
         }
+        
+        let mods_path = Path::new("mods");
+        if mods_path.exists() {
+            let _ = watcher.watch(mods_path, RecursiveMode::Recursive);
+        }
 
         Some(Self {
             _watcher: watcher,

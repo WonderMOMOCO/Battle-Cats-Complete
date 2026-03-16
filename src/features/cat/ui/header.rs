@@ -6,7 +6,7 @@ use crate::features::cat::logic::DetailTab;
 use crate::features::settings::logic::Settings;
 use crate::global::utils::autocrop; 
 use crate::global::ui::name_box;
-use crate::features::cat::paths::{self, AssetType};
+use crate::features::cat::paths;
 use crate::features::cat::data::skilllevel::TalentCost;
 use crate::global::formats::imgcut::SpriteSheet;
 
@@ -33,7 +33,7 @@ pub fn render(
     level_input: &mut String,
     texture_cache: &mut Option<egui::TextureHandle>,
     current_key: &mut String,
-    settings: &Settings,
+    _settings: &Settings,
     talent_levels: &mut HashMap<u8, u8>,
     talent_costs: &HashMap<u8, TalentCost>,
     img022_sheet: &SpriteSheet,
@@ -53,13 +53,11 @@ pub fn render(
             if *current_tab == DetailTab::Talents {
                 if let Some(talent_data) = &cat.talent_data {
                     ui.add_space(15.0);
-                    
                     let separator_color = ui.visuals().widgets.noninteractive.bg_stroke.color;
                     let (rect, _) = ui.allocate_exact_size(egui::vec2(1.0, 85.0), egui::Sense::hover());
                     ui.painter().rect_filled(rect, 0.0, separator_color);
-                    
                     ui.add_space(15.0);
-                    render_talent_controls(ui, talent_data, talent_levels, talent_costs, img022_sheet, settings);
+                    render_talent_controls(ui, talent_data, talent_levels, talent_costs, img022_sheet);
                 }
             }
 
@@ -80,13 +78,11 @@ pub fn render(
                     
                     let current_time = ui.input(|i| i.time);
                     
-                    // Copy State Handling
                     let is_copying = ctx.data(|d| d.get_temp::<bool>(egui::Id::new("is_copying"))).unwrap_or(false);
                     let copy_time = ctx.data(|d| d.get_temp::<f64>(egui::Id::new("export_copy_time"))).unwrap_or(-10.0);
                     let copy_res = ctx.data(|d| d.get_temp::<bool>(egui::Id::new("export_copy_res"))).unwrap_or(false);
                     let in_copy_cooldown = (current_time - copy_time) < 2.0;
 
-                    // Export State Handling
                     let is_exporting = ctx.data(|d| d.get_temp::<bool>(egui::Id::new("is_exporting"))).unwrap_or(false);
                     let save_time = ctx.data(|d| d.get_temp::<f64>(egui::Id::new("export_save_time"))).unwrap_or(-10.0);
                     let save_res = ctx.data(|d| d.get_temp::<bool>(egui::Id::new("export_save_res"))).unwrap_or(false);
@@ -144,7 +140,6 @@ fn render_talent_controls(
     talent_levels: &mut HashMap<u8, u8>,
     talent_costs: &HashMap<u8, TalentCost>,
     img022_sheet: &SpriteSheet,
-    settings: &Settings,
 ) {
     ui.vertical(|ui| {
         let total_np = crate::features::cat::logic::talents::get_total_np_cost(talent_data, talent_levels, talent_costs);
@@ -153,14 +148,12 @@ fn render_talent_controls(
             ui.spacing_mut().item_spacing.x = 6.0;
             
             let mut drawn = false;
-            if settings.general.game_language != "--" {
-                if let Some(cut) = img022_sheet.cuts_map.get(&crate::global::game::img022::ICON_NP_COST) {
-                    if let Some(tex) = &img022_sheet.texture_handle {
-                        let aspect = cut.original_size.x / cut.original_size.y;
-                        let size = egui::vec2(HEADER_NP_ICON_SIZE * aspect, HEADER_NP_ICON_SIZE);
-                        ui.add(egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)).uv(cut.uv_coordinates));
-                        drawn = true;
-                    }
+            if let Some(cut) = img022_sheet.cuts_map.get(&crate::global::game::img022::ICON_NP_COST) {
+                if let Some(tex) = &img022_sheet.texture_handle {
+                    let aspect = cut.original_size.x / cut.original_size.y;
+                    let size = egui::vec2(HEADER_NP_ICON_SIZE * aspect, HEADER_NP_ICON_SIZE);
+                    ui.add(egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)).uv(cut.uv_coordinates));
+                    drawn = true;
                 }
             }
             
@@ -291,16 +284,10 @@ fn render_cat_icon(
     current_key: &mut String,
     texture_cache: &mut Option<egui::TextureHandle>
 ) {
-    let expected_path_str = if let Some(path) = paths::image(
-        Path::new(paths::DIR_CATS),
-        AssetType::Icon,
-        cat.id,
-        form,
-        cat.egg_ids
-    ) {
-        path.to_string_lossy().to_string()
+    let expected_path_str = if let Some(path) = &cat.deploy_icon_paths[form] {
+        path.to_string_lossy().into_owned()
     } else {
-        String::new() 
+        paths::FALLBACK_ICON.to_string() 
     };
 
     if *current_key != expected_path_str {

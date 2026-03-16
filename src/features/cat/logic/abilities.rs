@@ -11,7 +11,7 @@ pub fn collect_ability_data(
     base_stats: &CatRaw,
     current_level: i32,
     level_curve: Option<&stats::CatLevelCurve>,
-    settings: &Settings, 
+    _settings: &Settings, 
     is_conjure_unit: bool,
     talent_data: Option<&TalentRaw>,
     talent_levels: Option<&HashMap<u8, u8>>
@@ -57,7 +57,7 @@ pub fn collect_ability_data(
 
     let target_label = if is_conjure_unit { "Enemies" } else { "Target Traits" };
 
-    // --- 1. STANDARD ABILITIES LOOP ---
+    // --- STANDARD ABILITIES LOOP ---
     for def in registry::CAT_ABILITY_REGISTRY {
         if def.group == DisplayGroup::Hidden { continue; }
         
@@ -75,10 +75,7 @@ pub fn collect_ability_data(
             let text = (def.formatter)(val, final_stats, target_label, dur);
             let border = get_talent_border(def.talent_id);
 
-            let mut custom_icon = def.custom_icon;
-            if def.name == "Multi-Hit" && settings.general.game_language == "--" {
-                custom_icon = CustomIcon::None;
-            }
+            let custom_icon = def.custom_icon;
 
             let mut final_icon = def.icon_id;
             if def.name == "Wave Attack" && final_stats.mini_wave_flag > 0 { final_icon = img015::ICON_MINI_WAVE; }
@@ -98,7 +95,7 @@ pub fn collect_ability_data(
         }
     }
 
-    // --- 2. TALENT-ONLY STATS LOOP ---
+    // --- TALENT-ONLY STATS LOOP ---
     if let (Some(t_data), Some(levels)) = (talent_data, talent_levels) {
         let mut talent_headline = Vec::new();
 

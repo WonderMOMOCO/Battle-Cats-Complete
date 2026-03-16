@@ -25,9 +25,10 @@ pub fn cleanup_temp_files() {
 
     for file in temp_files {
         let path = Path::new(file);
-        if path.exists() {
-            let _ = fs::remove_file(path); 
+        if !path.exists() {
+            continue;
         }
+        let _ = fs::remove_file(path); 
     }
 }
 
@@ -55,22 +56,24 @@ pub enum UpdateStatus {
     UpdateFound(String, self_update::update::Release),
     Downloading(String),
     RestartPending(String),
-    Error(String),
+    CheckFailed,
     UpToDate,
 }
 
 pub enum UpdaterMsg {
     UpdateFound(self_update::update::Release),
     UpToDate,
-    Error(String),
+    CheckFailed,
     DownloadStarted(String),
     DownloadFinished(String),
+    SilentFail,
 }
 
 pub struct Updater {
     rx: Receiver<UpdaterMsg>,
     tx: Sender<UpdaterMsg>,
     pub status: UpdateStatus,
+    pub clear_time: Option<f64>,
 }
 
 impl Default for Updater {
@@ -80,13 +83,14 @@ impl Default for Updater {
             rx,
             tx,
             status: UpdateStatus::Idle,
+            clear_time: None,
         }
     }
 }
 
 impl Updater {
-    pub fn check_for_updates(&mut self) {
-        if !matches!(self.status, UpdateStatus::Idle | UpdateStatus::UpToDate | UpdateStatus::Error(_)) {
+    pub fn check_for_updates(&mut self, ctx: egui::Context, is_manual: bool) {
+        if !matches!(self.status, UpdateStatus::Idle | UpdateStatus::UpToDate | UpdateStatus::CheckFailed) {
             return;
         }
         
@@ -97,9 +101,13 @@ impl Updater {
             let result = check_remote();
             match result {
                 Ok(Some(release)) => { let _ = tx.send(UpdaterMsg::UpdateFound(release)); },
-                Ok(None) => { let _ = tx.send(UpdaterMsg::UpToDate); },
-                Err(e) => { let _ = tx.send(UpdaterMsg::Error(e.to_string())); }
+                Ok(None) if is_manual => { let _ = tx.send(UpdaterMsg::UpToDate); },
+                Ok(None) => { let _ = tx.send(UpdaterMsg::SilentFail); }, 
+                Err(_) if is_manual => { let _ = tx.send(UpdaterMsg::CheckFailed); }
+                Err(_) => { let _ = tx.send(UpdaterMsg::SilentFail); }
             }
+            
+            ctx.request_repaint();
         });
     }
 
@@ -110,7 +118,6 @@ impl Updater {
 
         thread::spawn(move || {
             cleanup_temp_files();
-
             let _ = tx.send(UpdaterMsg::DownloadStarted(version.clone()));
             
             let target_tag = if version.starts_with('v') { version.clone() } else { format!("v{}", version) };
@@ -123,7 +130,7 @@ impl Updater {
                 "bcc_linux" 
             };
             
-            let result = self_update::backends::github::Update::configure()
+            let update_box = match self_update::backends::github::Update::configure()
                 .repo_owner(REPO_OWNER)
                 .repo_name(REPO_NAME)
                 .bin_name(BIN_NAME)
@@ -133,30 +140,28 @@ impl Updater {
                 .current_version(cargo_crate_version!())
                 .target_version_tag(&target_tag)
                 .target(target_asset_name)     
-                .build();
-                
-            match result {
-                Ok(update_box) => {
-                     match update_box.update() {
-                         Ok(_) => { 
-                             cleanup_temp_files();
-                             let _ = tx.send(UpdaterMsg::DownloadFinished(version)); 
-                         },
-                         Err(e) => { 
-                             cleanup_temp_files();
-                             let _ = tx.send(UpdaterMsg::Error(format!("Update failed: {}", e))); 
-                         }
-                     }
-                }
-                Err(e) => { 
+                .build() 
+            {
+                Ok(b) => b,
+                Err(_) => {
                     cleanup_temp_files();
-                    let _ = tx.send(UpdaterMsg::Error(format!("Config failed: {}", e))); 
+                    let _ = tx.send(UpdaterMsg::CheckFailed); 
+                    return;
                 }
+            };
+                
+            if let Err(_) = update_box.update() {
+                cleanup_temp_files();
+                let _ = tx.send(UpdaterMsg::CheckFailed); 
+                return;
             }
+
+            cleanup_temp_files();
+            let _ = tx.send(UpdaterMsg::DownloadFinished(version)); 
         });
     }
 
-    pub fn update_state(&mut self) {
+    pub fn update_state(&mut self, ctx: &egui::Context) {
         while let Ok(msg) = self.rx.try_recv() {
             match msg {
                 UpdaterMsg::UpdateFound(release) => {
@@ -164,9 +169,11 @@ impl Updater {
                 },
                 UpdaterMsg::UpToDate => {
                     self.status = UpdateStatus::UpToDate;
+                    self.clear_time = Some(ctx.input(|i| i.time) + 2.0);
                 },
-                UpdaterMsg::Error(e) => {
-                    self.status = UpdateStatus::Error(e);
+                UpdaterMsg::CheckFailed => {
+                    self.status = UpdateStatus::CheckFailed;
+                    self.clear_time = Some(ctx.input(|i| i.time) + 2.0);
                 },
                 UpdaterMsg::DownloadStarted(ver) => {
                     self.status = UpdateStatus::Downloading(ver);
@@ -174,8 +181,23 @@ impl Updater {
                 UpdaterMsg::DownloadFinished(ver) => {
                     self.status = UpdateStatus::RestartPending(ver);
                 },
+                UpdaterMsg::SilentFail => {
+                    self.status = UpdateStatus::Idle;
+                }
             }
         }
+
+        let t = match self.clear_time {
+            Some(time) => time,
+            None => return,
+        };
+
+        if ctx.input(|i| i.time) >= t {
+            self.status = UpdateStatus::Idle;
+            self.clear_time = None;
+        }
+        
+        ctx.request_repaint();
     }
 
     pub fn show_ui(&mut self, ctx: &egui::Context, settings: &mut Settings, drag_guard: &mut DragGuard) {
@@ -189,9 +211,6 @@ impl Updater {
             }
             UpdateStatus::RestartPending(tag) => {
                 self.show_restart_pending_window(ctx, settings, drag_guard, tag);
-            }
-            UpdateStatus::Error(msg) => {
-                self.show_error_window(ctx, drag_guard, msg);
             }
             _ => {}
         }
@@ -362,34 +381,6 @@ impl Updater {
         }
         if close { self.status = UpdateStatus::Idle; }
     }
-
-    fn show_error_window(&mut self, ctx: &egui::Context, drag_guard: &mut DragGuard, error_msg: String) {
-        let mut close = false;
-        let screen_rect = ctx.screen_rect();
-
-        let window_id = egui::Id::new("Update Failed");
-        let (allow_drag, fixed_pos) = drag_guard.assign_bounds(ctx, window_id);
-
-        let mut window = egui::Window::new("Update Failed")
-            .id(window_id)
-            .collapsible(false).resizable(false).order(egui::Order::Tooltip)
-            .constrain(false).movable(allow_drag)
-            .default_pos(screen_rect.center() - egui::vec2(100.0, 50.0));
-            
-        if let Some(pos) = fixed_pos { window = window.current_pos(pos); }
-            
-        window.show(ctx, |ui| {
-                ui.vertical_centered(|ui| {
-                    ui.label("An error occurred during update:");
-                    ui.add_space(5.0);
-                    ui.label(error_msg);
-                });
-                ui.add_space(20.0);
-                if ui.button("Close").clicked() { close = true; }
-            });
-        
-        if close { self.status = UpdateStatus::Idle; }
-    }
 }
 
 fn check_remote() -> Result<Option<self_update::update::Release>, Box<dyn std::error::Error>> {
@@ -400,10 +391,14 @@ fn check_remote() -> Result<Option<self_update::update::Release>, Box<dyn std::e
         .build()?
         .fetch()?;
         
-    if let Some(latest) = releases.first() {
-        if self_update::version::bump_is_greater(current, &latest.version)? {
-            return Ok(Some(latest.clone()));
-        }
+    let latest = match releases.first() {
+        Some(l) => l,
+        None => return Ok(None),
+    };
+    
+    if self_update::version::bump_is_greater(current, &latest.version)? {
+        return Ok(Some(latest.clone()));
     }
+    
     Ok(None)
 }

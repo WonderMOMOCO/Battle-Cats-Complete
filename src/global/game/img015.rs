@@ -111,37 +111,19 @@ pub const ICON_MULTIHIT: usize = 9999;
 pub fn ensure_loaded(ctx: &egui::Context, sheet: &mut SpriteSheet, settings: &Settings) {
     sheet.update(ctx);
 
-    if settings.general.game_language == "--" {
-        return; 
-    }
-
     if sheet.texture_handle.is_some() || sheet.is_loading_active {
         return;
     }
 
     let base_dir = paths::img015_folder(std::path::Path::new(""));
-    let current_language = &settings.general.game_language;
     
-    let codes_to_try: Vec<String> = if current_language.is_empty() {
-        crate::global::utils::LANGUAGE_PRIORITY
-            .iter()
-            .map(|language_code| language_code.to_string())
-            .collect()
-    } else {
-        vec![current_language.clone()]
-    };
+    let png_paths = crate::global::resolver::get(&base_dir, "img015.png", &settings.general.language_priority);
+    let cut_paths = crate::global::resolver::get(&base_dir, "img015.imgcut", &settings.general.language_priority);
 
-    for code in codes_to_try {
-        let (png_filename, imgcut_filename) = if (*code).is_empty() {
-            ("img015.png".to_string(), "img015.imgcut".to_string())
-        } else {
-            (format!("img015_{}.png", code), format!("img015_{}.imgcut", code))
-        };
-
-        let (full_png_path, full_imgcut_path) = (base_dir.join(png_filename), base_dir.join(imgcut_filename));
-        if full_png_path.exists() && full_imgcut_path.exists() {
-            sheet.load(ctx, &full_png_path, &full_imgcut_path, "global_img015".to_string());
-            break;
-        }
+    if let (Some(png_path), Some(imgcut_path)) = (png_paths.into_iter().next(), cut_paths.into_iter().next()) {
+        
+        let key = png_path.file_stem().unwrap().to_string_lossy().into_owned();
+        
+        sheet.load(ctx, &png_path, &imgcut_path, key);
     }
 }

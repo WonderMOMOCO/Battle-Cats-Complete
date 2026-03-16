@@ -99,7 +99,7 @@ fn fmt_multihit(c: &CatRaw) -> String {
 
 pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
     // --- SPECIAL HIDDEN ---
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Single Attack",
         fallback: "Sngl",
         icon_id: img015::ICON_SINGLE_ATTACK,
@@ -111,7 +111,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |_,_,_,_| "".into(),
         apply_func: None,
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Area Attack",
         fallback: "Area",
         icon_id: img015::ICON_AREA_ATTACK,
@@ -125,7 +125,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
     },
 
     // --- TRAITS ---
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Target Red",
         fallback: "Red",
         icon_id: img015::ICON_TRAIT_RED,
@@ -137,7 +137,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |_,_,_,_| "Targets Red Enemies".into(),
         apply_func: Some(|c,_,_,_| c.target_red = 1),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Target Float",
         fallback: "Float",
         icon_id: img015::ICON_TRAIT_FLOATING,
@@ -149,7 +149,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |_,_,_,_| "Targets Floating Enemies".into(),
         apply_func: Some(|c,_,_,_| c.target_floating = 1),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Target Black",
         fallback: "Black",
         icon_id: img015::ICON_TRAIT_BLACK,
@@ -161,7 +161,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |_,_,_,_| "Targets Black Enemies".into(),
         apply_func: Some(|c,_,_,_| c.target_black = 1),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Target Metal",
         fallback: "Metal",
         icon_id: img015::ICON_TRAIT_METAL,
@@ -173,7 +173,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |_,_,_,_| "Targets Metal Enemies".into(),
         apply_func: Some(|c,_,_,_| c.target_metal = 1),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Target Angel",
         fallback: "Angel",
         icon_id: img015::ICON_TRAIT_ANGEL,
@@ -185,7 +185,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |_,_,_,_| "Targets Angel Enemies".into(),
         apply_func: Some(|c,_,_,_| c.target_angel = 1),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Target Alien",
         fallback: "Alien",
         icon_id: img015::ICON_TRAIT_ALIEN,
@@ -197,7 +197,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |_,_,_,_| "Targets Alien Enemies".into(),
         apply_func: Some(|c,_,_,_| c.target_alien = 1),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Target Zombie",
         fallback: "Zomb",
         icon_id: img015::ICON_TRAIT_ZOMBIE,
@@ -209,7 +209,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |_,_,_,_| "Targets Zombie Enemies".into(),
         apply_func: Some(|c,_,_,_| c.target_zombie = 1),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Target Relic",
         fallback: "Relic",
         icon_id: img015::ICON_TRAIT_RELIC,
@@ -221,7 +221,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |_,_,_,_| "Targets Relic Enemies".into(),
         apply_func: Some(|c,_,_,_| c.target_relic = 1),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Target Aku",
         fallback: "Aku",
         icon_id: img015::ICON_TRAIT_AKU,
@@ -233,7 +233,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |_,_,_,_| "Targets Aku Enemies".into(),
         apply_func: Some(|c,_,_,_| c.target_aku = 1),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Target White",
         fallback: "White",
         icon_id: img015::ICON_TRAIT_TRAITLESS,
@@ -247,7 +247,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
     },
 
     // --- HEADLINE 1 ---
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Attack Only",
         fallback: "AtkOnly",
         icon_id: img015::ICON_ATTACK_ONLY,
@@ -259,7 +259,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |_, _, target, _| format!("Only damages {}", target),
         apply_func: Some(|c, _, _, _| c.attack_only = 1),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Strong Against",
         fallback: "Strng",
         icon_id: img015::ICON_STRONG_AGAINST,
@@ -271,7 +271,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |_, _, target, _| format!("Deals 1.5×~1.8× Damage to and takes 0.5×~0.4× Damage from {}", target),
         apply_func: Some(|c, _, _, _| c.strong_against = 1),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Massive Damage",
         fallback: "Massv",
         icon_id: img015::ICON_MASSIVE_DAMAGE,
@@ -283,7 +283,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |_, _, target, _| format!("Deals 3×~4× Damage to {}", target),
         apply_func: Some(|c, _, _, _| c.massive_damage = 1),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Insane Damage",
         fallback: "InsDmg",
         icon_id: img015::ICON_INSANE_DAMAGE,
@@ -295,7 +295,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |_, _, target, _| format!("Deals 5×~6× Damage to {}", target),
         apply_func: None,
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Resist",
         fallback: "Resist",
         icon_id: img015::ICON_RESIST,
@@ -307,7 +307,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |_, _, target, _| format!("Takes 1/4×~1/5× Damage from {}", target),
         apply_func: Some(|c, _, _, _| c.resist = 1),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Insanely Tough",
         fallback: "InsRes",
         icon_id: img015::ICON_INSANELY_TOUGH,
@@ -321,7 +321,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
     },
 
     // --- HEADLINE 2 ---
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Metal",
         fallback: "Metal",
         icon_id: img015::ICON_METAL,
@@ -333,7 +333,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |_, _, _, _| "Damage taken is reduced to 1 for Non-Critical attacks".into(),
         apply_func: Some(|c,_,_,_| c.metal = 1),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Base Destroyer",
         fallback: "Base",
         icon_id: img015::ICON_BASE_DESTROYER,
@@ -345,7 +345,8 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |_,_,_,_| "Deals 4× Damage to the Enemy Base".into(),
         apply_func: Some(|c, _, _, _| c.base_destroyer = 1),
     },
-   CatAbilityDef {
+    
+    CatAbilityDef {
         name: "Double Bounty",
         fallback: "2×$",
         icon_id: img015::ICON_DOUBLE_BOUNTY,
@@ -357,7 +358,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |_,_,_,_| "Receives 2× Cash from Enemies".into(),
         apply_func: Some(|c, _, _, _| c.double_bounty = 1),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Zombie Killer",
         fallback: "Zkill",
         icon_id: img015::ICON_ZOMBIE_KILLER,
@@ -369,7 +370,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |_, _, _, _| "Prevents Zombies from reviving".into(),
         apply_func: Some(|c, _, _, _| c.zombie_killer = 1),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Soulstrike",
         fallback: "SolStk",
         icon_id: img015::ICON_SOULSTRIKE,
@@ -381,7 +382,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |_, _, _, _| "Will attack Zombie corpses".into(),
         apply_func: Some(|c, _, _, _| c.soulstrike = 2),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Colossus Slayer",
         fallback: "Colos",
         icon_id: img015::ICON_COLOSSUS_SLAYER,
@@ -393,7 +394,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |_, _, _, _| "Deals 1.6× Damage to and takes 0.7× Damage from Colossus Enemies".into(),
         apply_func: Some(|c, _, _, _| c.colossus_slayer = 1),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Sage Slayer",
         fallback: "Sage",
         icon_id: img015::ICON_SAGE_SLAYER,
@@ -405,7 +406,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |_, _, _, _| "Deals 1.2× Damage to and takes 0.5× Damage from Sage Enemies\nCrowd Control effects originating from Sage Enemies reduced by 70%".into(),
         apply_func: Some(|c, _, _, _| c.sage_slayer = 1),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Behemoth Slayer",
         fallback: "Behem",
         icon_id: img015::ICON_BEHEMOTH_SLAYER,
@@ -444,7 +445,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
             c.behemoth_dodge_duration = if v2 > 0 { v2 } else { 30 };
         }),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Eva Killer",
         fallback: "Eva",
         icon_id: img015::ICON_EVA_KILLER,
@@ -456,7 +457,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |_,_,_,_| "Deals 5× Damage to and takes 0.2× Damage from Eva Angels".into(),
         apply_func: Some(|c,_,_,_| c.eva_killer = 1),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Witch Killer",
         fallback: "Witch",
         icon_id: img015::ICON_WITCH_KILLER,
@@ -468,7 +469,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |_,_,_,_| "Deals 5× Damage to and takes 0.1× Damage from Witches".into(),
         apply_func: Some(|c,_,_,_| c.witch_killer = 1),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Wave Block",
         fallback: "W-Blk",
         icon_id: img015::ICON_WAVE_BLOCK,
@@ -480,7 +481,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |_, _, _, _| "When hit with a Wave Attack, nullifies its Damage and prevents its advancement".into(),
         apply_func: Some(|c, _, _, _| c.wave_block = 1),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Counter Surge",
         fallback: "C-Srg",
         icon_id: img015::ICON_COUNTER_SURGE,
@@ -492,21 +493,21 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |_,_,_,_| "When hit with a Surge Attack, create a Surge of equal Type, Level, and Range".into(),
         apply_func: Some(|c,_,_,_| c.counter_surge = 1),
     },
-   CatAbilityDef {
-        name: "Kamikaze",
-        fallback: "Kamik",
+    CatAbilityDef {
+        name: "Kamikaze",  // Actually "atttack count state"
+        fallback: "Kamik", // Just used for Kamikaze (2) only
         icon_id: img015::ICON_KAMIKAZE,
         talent_id: 0,
         group: DisplayGroup::Headline2,
         custom_icon: CustomIcon::Kamikaze, 
         schema: &[],
-        get_attributes: |c| if c.kamikaze == 2 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
+        get_attributes: |c| if c.attack_count_state == 2 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_,_,_,_| "Unit disappears after a single attack".into(),
         apply_func: None,
     },
 
     // --- BODY 1 ---
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Multi-Hit",
         fallback: "Multi",
         icon_id: img015::ICON_MULTIHIT,
@@ -518,7 +519,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |_, c, _, _| fmt_multihit(c),
         apply_func: None,
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Long Distance",
         fallback: "LD",
         icon_id: img015::ICON_LONG_DISTANCE,
@@ -548,7 +549,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |_, c, _, _| fmt_effective_range(c),
         apply_func: None,
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Omni Strike",
         fallback: "Omni",
         icon_id: img015::ICON_OMNI_STRIKE,
@@ -576,7 +577,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |_, c, _, _| fmt_effective_range(c),
         apply_func: None,
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Conjure / Spirit",
         fallback: "Spirit",
         icon_id: img015::ICON_CONJURE,
@@ -588,7 +589,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |_,_,_,_| "Conjures a Spirit to the battlefield when tapped\nThis Cat may only be deployed one at a time".into(),
         apply_func: None,
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Metal Killer",
         fallback: "MetKil",
         icon_id: img015::ICON_METAL_KILLER,
@@ -610,7 +611,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |val,_,_,_| format!("Reduces Metal enemies current HP by {}% upon hit", val),
         apply_func: Some(|c,v1,_,_| c.metal_killer_percent = v1),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Wave Attack",
         fallback: "Wave",
         icon_id: img015::ICON_WAVE,
@@ -639,7 +640,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         },
         apply_func: Some(|c, v1, v2, _| { c.wave_chance += v1; c.wave_level = v2; }),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Mini-Wave",
         fallback: "MiniW",
         icon_id: img015::ICON_MINI_WAVE,
@@ -668,7 +669,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         },
         apply_func: Some(|c, v1, v2, _| { c.mini_wave_flag = 1; c.wave_chance += v1; c.wave_level = v2; }),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Surge Attack",
         fallback: "Surge",
         icon_id: img015::ICON_SURGE,
@@ -698,7 +699,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
             let start = c.surge_spawn_anchor;
             let end = c.surge_spawn_anchor + c.surge_spawn_span;
             let (min, max) = if start < end { (start, end) } else { (end, start) };
-            format!("{}% Chance to create a Level {} Surge {} Range", val, c.surge_level, fmt_range(min, max))
+            format!("{}% Chance to create a Level {} Surge\n{} Range", val, c.surge_level, fmt_range(min, max))
         },
         apply_func: Some(|c, v1, v2, g| { 
             c.surge_chance += v1; c.surge_level = v2; 
@@ -706,7 +707,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
             c.surge_spawn_span = g.min_4 as i32 / 4;
         }),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Mini-Surge",
         fallback: "MiniS",
         icon_id: img015::ICON_MINI_SURGE,
@@ -736,7 +737,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
             let start = c.surge_spawn_anchor;
             let end = c.surge_spawn_anchor + c.surge_spawn_span;
             let (min, max) = if start < end { (start, end) } else { (end, start) };
-            format!("{}% Chance to create a Level {} Mini-Surge {} Range", val, c.surge_level, fmt_range(min, max))
+            format!("{}% Chance to create a Level {} Mini-Surge\n{} Range", val, c.surge_level, fmt_range(min, max))
         },
         apply_func: Some(|c, v1, v2, g| { 
             c.mini_surge_flag = 1; c.surge_chance += v1; c.surge_level = v2; 
@@ -744,7 +745,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
             c.surge_spawn_span = g.min_4 as i32 / 4;
         }),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Explosion",
         fallback: "Expl",
         icon_id: img015::ICON_EXPLOSION,
@@ -780,7 +781,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
             c.explosion_spawn_span = g.min_3 as i32 / 4;
         }),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Savage Blow",
         fallback: "Savge",
         icon_id: img015::ICON_SAVAGE_BLOW,
@@ -807,7 +808,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         },
         apply_func: Some(|c, v1, v2, _| { c.savage_blow_chance += v1; if v2 > 0 { c.savage_blow_boost = v2; } }),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Critical Hit",
         fallback: "Crit",
         icon_id: img015::ICON_CRITICAL_HIT,
@@ -829,7 +830,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |val, _, _, _| format!("{}% Chance to perform a Critical Hit dealing 2× Damage\nCritcal Hits bypass Metal resistance", val),
         apply_func: Some(|c, v1, _, _| c.critical_chance += v1),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Strengthen",
         fallback: "Str+",
         icon_id: img015::ICON_STRENGTHEN,
@@ -860,7 +861,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
              }
         }),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Survive",
         fallback: "Surv",
         icon_id: img015::ICON_SURVIVE,
@@ -882,7 +883,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |val, _, _, _| format!("{}% Chance to Survive a lethal strike", val),
         apply_func: Some(|c, v1, _, _| c.survive += v1),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Barrier Breaker",
         fallback: "Brkr",
         icon_id: img015::ICON_BARRIER_BREAKER,
@@ -904,7 +905,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |val, _, _, _| format!("{}% Chance to break enemy Barriers", val),
         apply_func: Some(|c, v1, _, _| c.barrier_breaker_chance += v1),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Shield Piercer",
         fallback: "Spierc",
         icon_id: img015::ICON_SHIELD_PIERCER,
@@ -928,7 +929,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
     },
     
     // --- BODY 2 ---
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Dodge",
         fallback: "Dodge",
         icon_id: img015::ICON_DODGE,
@@ -952,7 +953,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |val, _, target, dur| format!("{}% Chance to Dodge {} for {}", val, target, fmt_time(dur)),
         apply_func: Some(|c, v1, v2, _| { c.dodge_chance += v1; c.dodge_duration += v2; }),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Weaken",
         fallback: "Weak",
         icon_id: img015::ICON_WEAKEN,
@@ -975,7 +976,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |val, c, target, dur| format!("{}% Chance to weaken {} to {}% Attack Power for {}", val, target, c.weaken_to, fmt_time(dur)),
+        formatter: |val, c, target, dur| format!("{}% Chance to weaken {}\nto {}% Attack Power for {}", val, target, c.weaken_to, fmt_time(dur)),
         apply_func: Some(|c, v1, v2, group| {
             if c.weaken_chance == 0 {
                  c.weaken_chance = v1; c.weaken_duration = v2; c.weaken_to = (100 - group.min_3) as i32; 
@@ -983,7 +984,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
             else { c.weaken_chance += v1; c.weaken_duration += v2; }
         }),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Freeze",
         fallback: "Freez",
         icon_id: img015::ICON_FREEZE,
@@ -1011,7 +1012,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
             else { c.freeze_duration += get_dur_val(v1, v2); }
         }),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Slow",
         fallback: "Slow",
         icon_id: img015::ICON_SLOW,
@@ -1039,7 +1040,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
             else { c.slow_duration += get_dur_val(v1, v2); }
         }),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Knockback",
         fallback: "KB",
         icon_id: img015::ICON_KNOCKBACK,
@@ -1061,7 +1062,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |val, _, target, _| format!("{}% Chance to Knockback {}", val, target),
         apply_func: Some(|c, v1, _, _| c.knockback_chance += v1),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Curse",
         fallback: "Curse",
         icon_id: img015::ICON_CURSE,
@@ -1089,7 +1090,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
              else { c.curse_chance += v1; }
         }),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Warp",
         fallback: "Warp",
         icon_id: img015::ICON_WARP,
@@ -1119,7 +1120,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
     },
     
     // --- FOOTER ---
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Immune Wave",
         fallback: "NoWav",
         icon_id: img015::ICON_IMMUNE_WAVE,
@@ -1131,7 +1132,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |_,_,_,_| "Immune to Wave Attacks".into(),
         apply_func: Some(|c,_,_,_| c.wave_immune = 1),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Immune Surge",
         fallback: "NoSrg",
         icon_id: img015::ICON_IMMUNE_SURGE,
@@ -1143,7 +1144,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |_,_,_,_| "Immune to Surge Attacks".into(),
         apply_func: Some(|c,_,_,_| c.surge_immune = 1),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Immune Explosion",
         fallback: "NoExp",
         icon_id: img015::ICON_IMMUNE_EXPLOSION,
@@ -1155,7 +1156,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |_,_,_,_| "Immune to Explosions".into(),
         apply_func: Some(|c,_,_,_| c.explosion_immune = 1),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Immune Weaken",
         fallback: "NoWk",
         icon_id: img015::ICON_IMMUNE_WEAKEN,
@@ -1167,7 +1168,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |_,_,_,_| "Immune to Weaken".into(),
         apply_func: Some(|c,_,_,_| c.weaken_immune = 1),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Immune Freeze",
         fallback: "NoFrz",
         icon_id: img015::ICON_IMMUNE_FREEZE,
@@ -1179,7 +1180,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |_,_,_,_| "Immune to Freeze".into(),
         apply_func: Some(|c,_,_,_| c.freeze_immune = 1),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Immune Slow",
         fallback: "NoSlw",
         icon_id: img015::ICON_IMMUNE_SLOW,
@@ -1191,7 +1192,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |_,_,_,_| "Immune to Slow".into(),
         apply_func: Some(|c,_,_,_| c.slow_immune = 1),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Immune Knockback",
         fallback: "NoKB",
         icon_id: img015::ICON_IMMUNE_KNOCKBACK,
@@ -1203,7 +1204,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |_,_,_,_| "Immune to Knockback".into(),
         apply_func: Some(|c,_,_,_| c.knockback_immune = 1),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Immune Curse",
         fallback: "NoCur",
         icon_id: img015::ICON_IMMUNE_CURSE,
@@ -1215,7 +1216,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |_,_,_,_| "Immune to Curse".into(),
         apply_func: Some(|c,_,_,_| c.curse_immune = 1),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Immune Toxic",
         fallback: "NoTox",
         icon_id: img015::ICON_IMMUNE_TOXIC,
@@ -1227,7 +1228,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |_,_,_,_| "Immune to Toxic".into(),
         apply_func: Some(|c,_,_,_| c.toxic_immune = 1),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Immune Warp",
         fallback: "NoWrp",
         icon_id: img015::ICON_IMMUNE_WARP,
@@ -1239,7 +1240,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |_,_,_,_| "Immune to Warp".into(),
         apply_func: Some(|c,_,_,_| c.warp_immune = 1),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Immune Boss Wave",
         fallback: "NoBos",
         icon_id: img015::ICON_IMMUNE_BOSS_WAVE,
@@ -1253,7 +1254,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
     },
 
     // --- RESISTANCES ---
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Resist Weaken",
         fallback: "ReWkn",
         icon_id: img015::ICON_RESIST_WEAKEN,
@@ -1265,7 +1266,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |val,_,_,_| format!("Resist Weaken ({}%)", val),
         apply_func: Some(|_,_,_,_| {}),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Resist Freeze",
         fallback: "ReFrz",
         icon_id: img015::ICON_RESIST_FREEZE,
@@ -1277,7 +1278,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |val,_,_,_| format!("Resist Freeze ({}%)", val),
         apply_func: Some(|_,_,_,_| {}),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Resist Slow",
         fallback: "ReSlw",
         icon_id: img015::ICON_RESIST_SLOW,
@@ -1289,7 +1290,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |val,_,_,_| format!("Resist Slow ({}%)", val),
         apply_func: Some(|_,_,_,_| {}),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Resist Knockback",
         fallback: "ReKB",
         icon_id: img015::ICON_RESIST_KNOCKBACK,
@@ -1301,7 +1302,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |val,_,_,_| format!("Resist Knockback ({}%)", val),
         apply_func: Some(|_,_,_,_| {}),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Resist Wave",
         fallback: "ReWav",
         icon_id: img015::ICON_RESIST_WAVE,
@@ -1313,7 +1314,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |val,_,_,_| format!("Resist Wave ({}%)", val),
         apply_func: Some(|_,_,_,_| {}),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Resist Warp",
         fallback: "ReWrp",
         icon_id: img015::ICON_RESIST_WARP,
@@ -1325,7 +1326,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |val,_,_,_| format!("Resist Warp ({}%)", val),
         apply_func: Some(|_,_,_,_| {}),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Resist Curse",
         fallback: "ReCur",
         icon_id: img015::ICON_RESIST_CURSE,
@@ -1337,7 +1338,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |val,_,_,_| format!("Resist Curse ({}%)", val),
         apply_func: Some(|_,_,_,_| {}),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Resist Toxic",
         fallback: "ReTox",
         icon_id: img015::ICON_RESIST_TOXIC,
@@ -1349,7 +1350,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |val,_,_,_| format!("Resist Toxic ({}%)", val),
         apply_func: Some(|_,_,_,_| {}),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Resist Surge",
         fallback: "ReSrg",
         icon_id: img015::ICON_SURGE_RESIST,
@@ -1363,7 +1364,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
     },
 
     // --- STAT TALENTS ---
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Cost Down",
         fallback: "Cost-",
         icon_id: img015::ICON_COST_DOWN,
@@ -1375,7 +1376,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |_,_,_,_| "".into(),
         apply_func: Some(|c, v1, _, _| c.eoc1_cost = c.eoc1_cost.saturating_sub(v1)),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Recover Speed Up",
         fallback: "Rec+",
         icon_id: img015::ICON_RECOVER_SPEED_UP,
@@ -1387,7 +1388,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |_,_,_,_| "".into(),
         apply_func: Some(|c, v1, _, _| c.cooldown = c.cooldown.saturating_sub(v1)),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Move Speed Up",
         fallback: "Spd",
         icon_id: img015::ICON_MOVE_SPEED,
@@ -1399,7 +1400,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         formatter: |_,_,_,_| "".into(),
         apply_func: Some(|c, v1, _, _| c.speed += v1),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Attack Buff",
         fallback: "Atk+",
         icon_id: img015::ICON_ATTACK_BUFF,
@@ -1416,7 +1417,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
             c.attack_3 = (c.attack_3 as f32 * factor).round() as i32;
         }),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Health Buff",
         fallback: "HP+",
         icon_id: img015::ICON_HEALTH_BUFF,
@@ -1431,7 +1432,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
             c.hitpoints = (c.hitpoints as f32 * factor).round() as i32;
         }),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "TBA Down",
         fallback: "TBA-",
         icon_id: img015::ICON_TBA_DOWN,
@@ -1446,7 +1447,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
              c.time_before_attack_1 = c.time_before_attack_1.saturating_sub(reduction);
         }),
     },
-   CatAbilityDef {
+    CatAbilityDef {
         name: "Improve Knockbacks",
         fallback: "KB+",
         icon_id: img015::ICON_IMPROVE_KNOCKBACK_COUNT,

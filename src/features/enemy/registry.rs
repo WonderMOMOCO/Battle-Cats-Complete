@@ -324,13 +324,13 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
-        name: "Kamikaze",
-        fallback: "Kamik",
+        name: "Kamikaze",  // Actually "atttack count state"
+        fallback: "Kamik", // Just used for Kamikaze (2) only
         icon_id: img015::ICON_KAMIKAZE,
         group: DisplayGroup::Headline2,
         custom_icon: CustomIcon::Kamikaze, 
         schema: &[],
-        get_attributes: |e| if e.kamikaze > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
+        get_attributes: |e| if e.attack_count_state == 2 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_, _, _, _| "Unit disappears after a single attack".into(),
         minus_one_is_inf: false,
     },
@@ -345,6 +345,25 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
         schema: &[],
         get_attributes: |e| if e.base_destroyer > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_, _, _, _| "Deals 4× Damage to the Cat Base".into(),
+        minus_one_is_inf: false,
+    },
+    EnemyAbilityDef {
+        name: "Wave Block",
+        fallback: "W-Blk",
+        icon_id: img015::ICON_WAVE_BLOCK,
+        group: DisplayGroup::Headline2,
+        custom_icon: CustomIcon::None,
+        schema: &[],
+        get_attributes: |e| {
+            if e.wave_blocker > 0 {
+                vec![("Active", 1, AttrUnit::None)]
+            } else {
+                vec![]
+            }
+        },
+        formatter: |_, _, _, _| {
+            "When hit with a Wave Attack, nullifies its Damage and prevents its advancement".into()
+        },
         minus_one_is_inf: false,
     },
 
@@ -497,7 +516,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
             let start = e.surge_spawn_min;
             let end = e.surge_spawn_min + e.surge_spawn_max;
             let (min, max) = if start < end { (start, end) } else { (end, start) };
-            format!("{}% Chance to create a Level {} Surge {} Range", val, e.surge_level, fmt_range(min, max))
+            format!("{}% Chance to create a Level {} Surge\n{} Range", val, e.surge_level, fmt_range(min, max))
         },
         minus_one_is_inf: false,
     },
@@ -530,7 +549,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
             let start = e.surge_spawn_min;
             let end = e.surge_spawn_min + e.surge_spawn_max;
             let (min, max) = if start < end { (start, end) } else { (end, start) };
-            format!("{}% Chance to create a Level {} Mini-Surge {} Range", val, e.surge_level, fmt_range(min, max))
+            format!("{}% Chance to create a Level {} Mini-Surge\n{} Range", val, e.surge_level, fmt_range(min, max))
         },
         minus_one_is_inf: false,
     },
@@ -810,7 +829,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |val, e, _, _| format!("{}% Chance to deal {}% of a Cat's Max HP in additional damage", val, e.toxic_damage),
+        formatter: |val, e, _, _| format!("{}% Chance to deal {}% of a\nCat's Max HP in additional damage", val, e.toxic_damage),
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
@@ -858,7 +877,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |val, e, dur, _| format!("{}% Chance to weaken Cats to {}% Attack Power for {}", val, e.weaken_percent, fmt_time(dur)),
+        formatter: |val, e, dur, _| format!("{}% Chance to weaken Cats\nto {}% Attack Power for {}", val, e.weaken_percent, fmt_time(dur)),
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {

@@ -58,7 +58,7 @@ fn start_manual_sort(state: &mut ImportState) {
     let path = state.import_path.clone();
     let mode = state.import_mode;
 
-    thread::spawn(move || {
+thread::spawn(move || {
         let import_result = match mode {
             ImportMode::Folder => archive::import_standard_folder(&path, tx.clone()),
             ImportMode::Zip => archive::import_standard_archive(&path, tx.clone()),
@@ -78,5 +78,7 @@ fn start_manual_sort(state: &mut ImportState) {
                 let _ = tx.send(format!("Error Importing: {}", e));
             }
         }
+
+        let _ = tx.send("All operations complete!".to_string());
     });
 }
