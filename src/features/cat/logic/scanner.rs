@@ -137,6 +137,10 @@ pub fn process_cat_entry(
         }
     }
 
+    if !config.show_invalid && final_image_path_opt.is_none() {
+        return None;
+    }
+    
     // Resolve Deploy Icons
     let mut deploy_icon_paths: [Option<PathBuf>; 4] = Default::default();
     for form_idx in 0..4 {
