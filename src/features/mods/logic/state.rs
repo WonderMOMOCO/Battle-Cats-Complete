@@ -56,7 +56,7 @@ impl Default for ModImportState {
 pub struct ModState {
     pub search_query: String,
     pub selected_mod: Option<String>,
-    pub loaded_mods: Vec<ModData>,
+    #[serde(skip)] pub loaded_mods: Vec<ModData>,
     
     #[serde(skip)] pub rename_buffer: String,
     pub import: ModImportState,
