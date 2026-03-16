@@ -26,9 +26,13 @@ pub struct TalentGroupRaw {
     pub limit: u8, 
 }
 
-pub fn load(cats_directory: &Path) -> HashMap<u16, TalentRaw> {
+pub fn load(cats_directory: &Path, priority: &[String]) -> HashMap<u16, TalentRaw> {
     let mut map = HashMap::new();
-    let file_path = cats_directory.join(paths::SKILL_ACQUISITION);
+    
+    let Some(file_path) = crate::global::resolver::get(cats_directory, paths::SKILL_ACQUISITION, priority).into_iter().next() else {
+        return map;
+    };
+
     if let Ok(content) = fs::read_to_string(&file_path) {
         let delimiter = utils::detect_csv_separator(&content);
         for line in content.lines() {

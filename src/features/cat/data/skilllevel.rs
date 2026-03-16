@@ -10,9 +10,11 @@ pub struct TalentCost {
     pub costs: Vec<u16>,
 }
 
-pub fn load(cats_directory: &Path) -> HashMap<u8, TalentCost> {
+pub fn load(cats_directory: &Path, priority: &[String]) -> HashMap<u8, TalentCost> {
     let mut map = HashMap::new();
-    let file_path = cats_directory.join(paths::SKILL_LEVEL);
+    let Some(file_path) = crate::global::resolver::get(cats_directory, paths::SKILL_LEVEL, priority).into_iter().next() else {
+        return map;
+    };
     
     if let Ok(content) = fs::read_to_string(&file_path) {
         let delimiter = utils::detect_csv_separator(&content);

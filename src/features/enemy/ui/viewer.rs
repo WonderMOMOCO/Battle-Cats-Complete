@@ -1,5 +1,5 @@
 use eframe::egui;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::features::enemy::logic::scanner::EnemyEntry;
 use crate::global::formats::imgcut::SpriteSheet;
@@ -21,64 +21,34 @@ pub fn show(
     settings: &mut Settings,
 ) {
     let root = Path::new(paths::DIR_ENEMIES);
-    
+    let priority = &settings.general.language_priority;
     let mut available_anims = Vec::new();
-    
-    // Standard animations (00 = Walk, 01 = Idle, 02 = Attack, 03 = Knockback)
-    let standard_defs = [IDX_WALK, IDX_IDLE, IDX_ATTACK, IDX_KB];
-    for idx in standard_defs {
-        let path = paths::maanim(root, enemy_entry.id, idx);
-        if path.exists() {
-            available_anims.push((idx, path));
-        }
-    }
 
-    // zombie00 = Burrow Down (IDX_BURROW)
-    // zombie01 = Underground Idle (Dummy/Generic)
-    // zombie02 = Surface / Revive (IDX_SURFACE)
-
-    let z_burrow = paths::zombie_maanim(root, enemy_entry.id, 0);
-    if z_burrow.exists() {
-        available_anims.push((IDX_BURROW, z_burrow));
-    }
-
-    let z_underground = paths::zombie_maanim(root, enemy_entry.id, 1);
-    if z_underground.exists() {
-        // Map to 7 to prevent UI button overlap
-        available_anims.push((7, z_underground)); 
-    }
-
-    let z_surface = paths::zombie_maanim(root, enemy_entry.id, 2);
-    if z_surface.exists() {
-        available_anims.push((IDX_SURFACE, z_surface));
-    }
-
-    // Base Assets (Png, Imgcut, Mamodel)
-    let base_png = paths::anim(root, enemy_entry.id, AnimType::Png);
-    let base_cut = paths::anim(root, enemy_entry.id, AnimType::Imgcut);
-    let base_model = paths::anim(root, enemy_entry.id, AnimType::Mamodel);
-
-    let primary_assets = if base_png.exists() && base_cut.exists() && base_model.exists() {
-        Some((base_png, base_cut, base_model))
-    } else {
-        None
+    let resolve = |p: PathBuf| {
+        let parent = p.parent()?;
+        let name = p.file_name()?.to_str()?;
+        crate::global::get(parent, name, priority).into_iter().next()
     };
 
-    let secondary_assets = None;
-    let secondary_id = String::new();
-    
+    // Standard anims
+    for idx in [IDX_WALK, IDX_IDLE, IDX_ATTACK, IDX_KB] {
+        let Some(path) = resolve(paths::maanim(root, enemy_entry.id, idx)) else { continue; };
+        available_anims.push((idx, path));
+    }
+
+    // Zombie anims
+    if let Some(p) = resolve(paths::zombie_maanim(root, enemy_entry.id, 0)) { available_anims.push((IDX_BURROW, p)); }
+    if let Some(p) = resolve(paths::zombie_maanim(root, enemy_entry.id, 1)) { available_anims.push((7, p)); }
+    if let Some(p) = resolve(paths::zombie_maanim(root, enemy_entry.id, 2)) { available_anims.push((IDX_SURFACE, p)); }
+
+    // Primary Assets
+    let primary_assets = (|| {
+        let png = resolve(paths::anim(root, enemy_entry.id, AnimType::Png))?;
+        let cut = resolve(paths::anim(root, enemy_entry.id, AnimType::Imgcut))?;
+        let model = resolve(paths::anim(root, enemy_entry.id, AnimType::Mamodel))?;
+        Some((png, cut, model))
+    })();
+
     let primary_id = format!("{}_{}", enemy_entry.id_str(), anim_viewer.texture_version);
-    // Hand over to the AnimViewer
-    anim_viewer.show(
-        ui,
-        ctx,
-        &primary_id,
-        &secondary_id,
-        &available_anims,
-        primary_assets,
-        secondary_assets,
-        model_data,
-        anim_sheet,
-        settings
-    );
+    anim_viewer.show(ui, ctx, &primary_id, &String::new(), &available_anims, primary_assets, None, model_data, anim_sheet, settings);
 }

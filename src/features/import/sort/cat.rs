@@ -39,8 +39,13 @@ impl CatMatcher {
         }
     }
 
-    fn map_egg(code: &str) -> &str {
-        match code { "00" => "f", _ => "c" }
+    fn map_egg(code: &str) -> &'static str {
+        match code { 
+            "m00" => "f", 
+            "m01" => "c",
+            "m02" => "s",
+            _ => "c" 
+        }
     }
 
     pub fn get_dest(&self, name: &str, cats_dir: &Path) -> Option<PathBuf> {
@@ -56,16 +61,27 @@ impl CatMatcher {
                 if id > 0 { return Some(cats_dir.join(format!("{:03}", id - 1))); }
             }
         }
-        if let Some(caps) = self.icon.captures(name) { return Some(cats_dir.join(&caps[1]).join(&caps[2])); }
-        if let Some(caps) = self.upgrade.captures(name) { return Some(cats_dir.join(&caps[1]).join(&caps[2])); }
-        if let Some(caps) = self.gacha.captures(name) { return Some(cats_dir.join(&caps[1])); }
-        if let Some(caps) = self.anim.captures(name) { return Some(cats_dir.join(&caps[1]).join(&caps[2]).join("anim")); }
-        if let Some(caps) = self.maanim.captures(name) { return Some(cats_dir.join(&caps[1]).join(&caps[2]).join("anim")); }
+        if let Some(caps) = self.icon.captures(name) { 
+            return Some(cats_dir.join(&caps[1]).join(&caps[2])); 
+        }
+        if let Some(caps) = self.upgrade.captures(name) { 
+            return Some(cats_dir.join(&caps[1]).join(&caps[2])); 
+        }
+        if let Some(caps) = self.gacha.captures(name) { 
+            return Some(cats_dir.join(&caps[1])); 
+        }
+        if let Some(caps) = self.anim.captures(name) { 
+            return Some(cats_dir.join(&caps[1]).join(&caps[2]).join("anim")); 
+        }
+        if let Some(caps) = self.maanim.captures(name) { 
+            return Some(cats_dir.join(&caps[1]).join(&caps[2]).join("anim")); 
+        }
         if let Some(caps) = self.explain.captures(name) {
             if let Ok(id) = caps[1].parse::<u32>() {
                 if id > 0 { return Some(cats_dir.join(format!("{:03}", id - 1)).join("lang")); }
             }
         }
+        
         if let Some(caps) = self.egg_icon.captures(name) {
             return Some(cats_dir.join(format!("egg_{}", &caps[1])).join(Self::map_egg(&caps[2])));
         }

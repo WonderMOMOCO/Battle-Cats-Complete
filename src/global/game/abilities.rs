@@ -12,6 +12,7 @@ pub enum CustomIcon {
     StarredAlien,
     Burrow,
     Revive,
+    Stop,
 }
 
 impl CustomIcon {
@@ -24,6 +25,7 @@ impl CustomIcon {
             CustomIcon::StarredAlien => Some(&assets.starred_alien),
             CustomIcon::Burrow => Some(&assets.burrow),
             CustomIcon::Revive => Some(&assets.revive),
+            CustomIcon::Stop => Some(&assets.stop),
             CustomIcon::None => None,
         }
     }

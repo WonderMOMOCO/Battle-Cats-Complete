@@ -136,6 +136,7 @@ impl CatListState {
 }
 
 pub fn show(ctx: &egui::Context, state: &mut CatListState, settings: &mut Settings) {
+    let priority = &settings.general.language_priority;
     if state.custom_assets.is_none() {
         state.custom_assets = Some(CustomAssets::new(ctx));
     }
@@ -157,10 +158,10 @@ pub fn show(ctx: &egui::Context, state: &mut CatListState, settings: &mut Settin
 
     let path = std::path::Path::new("game/cats");
     if state.skill_descriptions.is_none() {
-        state.skill_descriptions = Some(skilldescriptions::load(path, &settings.general.game_language));
+        state.skill_descriptions = Some(skilldescriptions::load(path, priority));
     }
     if state.cached_talent_costs.is_none() {
-        state.cached_talent_costs = Some(skilllevel::load(path));
+        state.cached_talent_costs = Some(skilllevel::load(path, priority));
     }
 
     egui::SidePanel::left("cat_list_panel")

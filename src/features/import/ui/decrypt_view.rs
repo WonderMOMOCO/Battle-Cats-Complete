@@ -61,15 +61,19 @@ pub fn show(ui: &mut egui::Ui, state: &mut ImportState) {
         }.to_string();
 
         std::thread::spawn(move || {
+            // Run Decryption
             if let Err(e) = decrypt::run(&folder, &region_code, tx.clone()) {
                 let _ = tx.send(format!("Error: {}", e));
                 return; 
             }
             
+            // Run Sorter
             let _ = tx.send("Sorting extracted files...".to_string());
             if let Err(e) = sort::sort_game_files(tx.clone()) {
                 let _ = tx.send(format!("Error Sorting: {}", e));
             }
+
+            let _ = tx.send("All operations complete!".to_string());
         });
     }
 }

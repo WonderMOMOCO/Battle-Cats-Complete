@@ -1,8 +1,9 @@
 pub mod addons;
-pub mod anim_view;
-pub mod cat_data;
-pub mod game_data;
+pub mod animation;
+pub mod cats;
+pub mod data;
 pub mod general;
 pub mod tabs;
+pub mod exceptions;
 
 pub use tabs::{show, toggle_ui};

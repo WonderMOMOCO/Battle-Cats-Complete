@@ -3,10 +3,8 @@ use crate::features::settings::logic::Settings;
 use crate::global::ui::shared::DragGuard;
 
 pub fn show(ctx: &egui::Context, settings: &mut Settings, drag_guard: &mut DragGuard) -> bool {
-    settings.update_language_list();
-
     let mut refresh_needed = false;
-    let tabs = ["General", "Cat Data", "Game Data", "Anim View", "Add-Ons"];
+    let tabs = ["General", "Cats", "Data", "Animation", "Add-Ons"];
 
     egui::CentralPanel::default().show(ctx, |ui| {
         ui.heading("Settings");
@@ -48,9 +46,9 @@ pub fn show(ctx: &egui::Context, settings: &mut Settings, drag_guard: &mut DragG
             ui.push_id(&current_tab, |ui| {
                 let result = match current_tab.as_str() {
                     "General" => super::general::show(ui, &mut settings.general, &mut settings.runtime),
-                    "Cat Data" => super::cat_data::show(ui, &mut settings.cat_data),
-                    "Game Data" => super::game_data::show(ui, &mut settings.game_data, &mut settings.runtime, drag_guard),
-                    "Anim View" => super::anim_view::show(ui, &mut settings.animation),
+                    "Cats" => super::cats::show(ui, &mut settings.cat_data),
+                    "Data" => super::data::show(ui, &mut settings.game_data, &mut settings.runtime, drag_guard),
+                    "Animation" => super::animation::show(ui, &mut settings.animation),
                     "Add-Ons" => super::addons::show(ui, drag_guard), 
                     _ => {
                         ui.vertical_centered(|ui| {

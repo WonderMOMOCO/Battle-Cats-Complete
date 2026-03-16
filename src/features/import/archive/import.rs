@@ -2,90 +2,153 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::Sender;
 use std::sync::atomic::{AtomicI32, Ordering};
+use std::sync::Arc;
+use std::collections::HashMap;
 use rayon::prelude::*;
 use zip::ZipArchive;
+
+use crate::features::import::sort::{cat, global, enemy};
+use crate::features::cat::patterns as cat_patterns;
+use crate::global::io::patterns as global_patterns;
+struct FileValidator {
+    global_matcher: global::GlobalMatcher,
+    cat_matcher: cat::CatMatcher,
+    enemy_matcher: enemy::EnemyMatcher,
+}
+
+impl FileValidator {
+    fn new() -> Self {
+        Self {
+            global_matcher: global::GlobalMatcher::new(),
+            cat_matcher: cat::CatMatcher::new(),
+            enemy_matcher: enemy::EnemyMatcher::new(),
+        }
+    }
+
+    fn is_valid(&self, filename: &str) -> bool {
+        let path = Path::new(filename);
+        let stem = path.file_stem().unwrap_or_default().to_string_lossy().to_string();
+        let ext = path.extension().unwrap_or_default().to_string_lossy().to_string();
+        
+        let mut base_name = filename.to_string();
+        for &(code, _) in global_patterns::APP_LANGUAGES {
+            let suffix = format!("_{}", code);
+            if stem.len() > suffix.len() && stem.ends_with(&suffix) {
+                let clean_stem = &stem[..stem.len() - suffix.len()];
+                base_name = if ext.is_empty() { 
+                    clean_stem.to_string() 
+                } else { 
+                    format!("{}.{}", clean_stem, ext) 
+                };
+                break;
+            }
+        }
+
+        if cat_patterns::CAT_UNIVERSAL_FILES.contains(&base_name.as_str()) {
+            return true;
+        }
+
+        let dummy_dir = Path::new("");
+        if self.global_matcher.get_dest(&base_name, dummy_dir).is_some() { return true; }
+        if self.cat_matcher.get_dest(&base_name, dummy_dir).is_some() { return true; }
+        if self.enemy_matcher.get_dest(&base_name, dummy_dir).is_some() { return true; }
+
+        false
+    }
+}
 
 pub fn import_standard_folder(path_str: &str, tx: Sender<String>) -> Result<bool, String> {
     let source = Path::new(path_str);
     let game_root = Path::new("game");
     let raw_dir = game_root.join("raw");
-    
-    let mut detected_smart_root = None;
-    
-    if source.join("assets").join("img015").exists() {
-        detected_smart_root = Some(source.to_path_buf());
-    } else if let Ok(entries) = fs::read_dir(source) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() && path.join("assets").join("img015").exists() {
-                detected_smart_root = Some(path);
-                break;
-            }
-        }
-    }
-
-    if let Some(smart_root) = detected_smart_root {
-        let _ = tx.send("Smart Import: Valid game structure detected.".to_string());
-        let _ = tx.send("Restoring files directly...".to_string());
-
-        if !game_root.exists() { 
-            fs::create_dir_all(game_root).map_err(|e| e.to_string())?; 
-        }
-
-        let mut tasks = Vec::new();
-        if let Err(e) = scan_with_relative_paths(&smart_root, &smart_root, &mut tasks) {
-            return Err(format!("Scan error: {}", e));
-        }
-
-        let count = AtomicI32::new(0);
-        tasks.par_iter().for_each(|(abs_path, rel_path)| {
-            let dest = game_root.join(rel_path);
-            
-            if let Some(parent) = dest.parent() {
-                if !parent.exists() { let _ = fs::create_dir_all(parent); }
-            }
-
-            if fs::copy(abs_path, &dest).is_ok() {
-                let c = count.fetch_add(1, Ordering::Relaxed);
-                if c % 100 == 0 { 
-                    let name = abs_path.file_name().unwrap_or_default().to_string_lossy();
-                    let _ = tx.send(format!("Coppied {} files | Current: {}", c, name)); 
-                }
-            }
-        });
-
-        let _ = tx.send(format!("Success! Smart Import restored {} files.", count.load(Ordering::Relaxed)));
-        return Ok(false);
-    }
 
     if !raw_dir.exists() { 
         fs::create_dir_all(&raw_dir).map_err(|e| e.to_string())?; 
     }
+
+    // Direct game/raw targeting
+    if let (Ok(s), Ok(r)) = (source.canonicalize(), raw_dir.canonicalize()) {
+        if s == r {
+            let _ = tx.send("Targeted game/raw directly.\nBypassing indexer to run Sorter...".to_string());
+            
+            return Ok(true); 
+        }
+    }
     
-    let _ = tx.send("Standard Scan: No game structure found.".to_string());
-    
-    let mut tasks = Vec::new();
-    if let Err(e) = scan_dir(source, &mut tasks) {
-        return Err(format!("Failed to scan folder: {}", e));
+    // Smart Root Detection
+    let mut smart_root = None;
+    if source.join("assets").join("img015").exists() {
+        smart_root = Some(source.to_path_buf());
+    } else if let Ok(entries) = fs::read_dir(source) {
+        smart_root = entries.flatten()
+            .map(|e| e.path())
+            .find(|p| p.is_dir() && p.join("assets").join("img015").exists());
     }
 
-    let _ = tx.send(format!("Found {} files. Starting raw import...", tasks.len()));
-    let count = AtomicI32::new(0);
+    // Path for Smart Import (Existing backups)
+    if let Some(root) = smart_root {
+        let _ = tx.send("Smart Import: Valid game structure detected.".to_string());
+        let mut tasks = Vec::new();
+        scan_with_relative_paths(&root, &root, &mut tasks).map_err(|e| e.to_string())?;
 
-    tasks.par_iter().for_each(|path| {
-        if let Some(name_os) = path.file_name() {
-            let name = name_os.to_string_lossy();
-            let dest = raw_dir.join(name.as_ref());
-            
-            if fs::copy(path, &dest).is_ok() {
-                let c = count.fetch_add(1, Ordering::Relaxed);
-                if c % 100 == 0 { 
-                    let _ = tx.send(format!("Imported {} files | Current: {}", c, name)); 
-                }
+        let count = AtomicI32::new(0);
+        tasks.par_iter().for_each(|(abs_path, rel_path)| {
+            let dest = game_root.join(rel_path);
+            if let Some(p) = dest.parent() { if !p.exists() { let _ = fs::create_dir_all(p); } }
+            if fs::copy(abs_path, &dest).is_ok() {
+                let c = count.fetch_add(1, Ordering::Relaxed) + 1;
+                if c % 100 == 0 { let _ = tx.send(format!("Restored {} files...", c)); }
             }
+        });
+        
+        return Ok(true);
+    }
+    
+    // Standard Raw Import
+    let mut tasks = Vec::new();
+    scan_dir(source, &mut tasks).map_err(|e| e.to_string())?;
+
+    let _ = tx.send("Indexing existing workspace files...".to_string());
+    let shared_index = Arc::new(build_index(game_root));
+    let validator = FileValidator::new();
+
+    let filtered_tasks: Vec<PathBuf> = tasks.into_par_iter().filter(|path| {
+        let Some(name_os) = path.file_name() else { return false; };
+        let name = name_os.to_string_lossy();
+        if !validator.is_valid(&name) { return false; }
+
+        let name_lower = name.to_lowercase();
+        let src_len = fs::metadata(path).map(|m| m.len()).unwrap_or(0);
+
+        if let Some(existing_paths) = shared_index.get(&name_lower) {
+            for ep in existing_paths {
+                if fs::metadata(ep).map(|m| m.len()).unwrap_or(0) == src_len { return false; }
+            }
+        }
+        
+        let dest = raw_dir.join(name.as_ref());
+        if dest.exists() && fs::metadata(&dest).map(|m| m.len()).unwrap_or(0) == src_len { return false; }
+
+        true
+    }).collect();
+
+    if filtered_tasks.is_empty() {
+        let _ = tx.send("Workspace is already up to date.".to_string());
+        
+        return Ok(true);
+    }
+
+    let _ = tx.send(format!("Found {} new files. Importing...", filtered_tasks.len()));
+    let count = AtomicI32::new(0);
+    filtered_tasks.par_iter().for_each(|path| {
+        let name = path.file_name().unwrap().to_string_lossy();
+        if fs::copy(path, raw_dir.join(name.as_ref())).is_ok() {
+            let c = count.fetch_add(1, Ordering::Relaxed) + 1;
+            if c % 100 == 0 { let _ = tx.send(format!("Imported {} files...", c)); }
         }
     });
 
+    
     Ok(true)
 }
 
@@ -100,102 +163,94 @@ pub fn import_standard_archive(path_str: &str, tx: Sender<String>) -> Result<boo
 fn import_tar_zst(path_str: &str, tx: Sender<String>) -> Result<bool, String> {
     let game_root = Path::new("game");
     let raw_dir = game_root.join("raw");
-
-    // Scan
-    let _ = tx.send("Scanning archive structure...".to_string());
-    
-    let file = fs::File::open(path_str).map_err(|e| e.to_string())?;
-    let decoder = zstd::stream::read::Decoder::new(file).map_err(|e| e.to_string())?;
-    let mut archive = tar::Archive::new(decoder);
-
-    let mut smart_prefix = None;
-    
-    for entry_result in archive.entries().map_err(|e| e.to_string())? {
-        if let Ok(entry) = entry_result {
-            if let Ok(path) = entry.path() {
-                let path_str = path.to_string_lossy();
-                if let Some(idx) = path_str.find("assets/img015") {
-                    smart_prefix = Some(path_str[..idx].to_string());
-                    break; 
-                }
-            }
-        }
-    }
-
-    // Extract tar.zst
-    let file = fs::File::open(path_str).map_err(|e| e.to_string())?;
-    let decoder = zstd::stream::read::Decoder::new(file).map_err(|e| e.to_string())?;
-    let mut archive = tar::Archive::new(decoder);
-    
     let mut extracted = 0;
 
-    if let Some(prefix) = smart_prefix {
-        let _ = tx.send("Smart Import: Valid backup detected in Archive.".to_string());
-        
-        for entry_result in archive.entries().map_err(|e| e.to_string())? {
-            let mut entry = entry_result.map_err(|e| e.to_string())?;
-            if entry.header().entry_type().is_dir() { continue; }
-            
-            let path_buf = entry.path().map_err(|e| e.to_string())?.to_path_buf();
-            let name = path_buf.to_string_lossy().to_string();
+    let _ = tx.send("Scanning archive...".to_string());
+    
+    let mut smart_prefix = None;
+    {
+        let file = fs::File::open(path_str).map_err(|e| e.to_string())?;
+        let decoder = zstd::stream::read::Decoder::new(file).map_err(|e| e.to_string())?;
+        let mut archive = tar::Archive::new(decoder);
+        for entry in archive.entries().map_err(|e| e.to_string())?.flatten() {
+            let path = entry.path().map_err(|e| e.to_string())?;
+            let p_str = path.to_string_lossy();
+            if let Some(idx) = p_str.find("assets/img015") {
+                smart_prefix = Some(p_str[..idx].to_string());
+                break; 
+            }
+        }
+    }
 
+    // Re-open for actual extraction
+    let file = fs::File::open(path_str).map_err(|e| e.to_string())?;
+    let decoder = zstd::stream::read::Decoder::new(file).map_err(|e| e.to_string())?;
+    let mut archive = tar::Archive::new(decoder);
+
+    if let Some(prefix) = smart_prefix {
+        let _ = tx.send("Smart Import: Restoring backup...".to_string());
+        for entry_res in archive.entries().map_err(|e| e.to_string())? {
+            let mut entry = entry_res.map_err(|e| e.to_string())?;
+            if entry.header().entry_type().is_dir() { continue; }
+            let path = entry.path().map_err(|e| e.to_string())?;
+            let name = path.to_string_lossy().to_string();
             if !name.starts_with(&prefix) { continue; }
 
-            let rel_name = &name[prefix.len()..];
-            if rel_name.is_empty() { continue; }
-
-            let clean_rel = rel_name.trim_start_matches(|c| c == '/' || c == '\\');
-            let dest = game_root.join(clean_rel);
-
-            if let Some(parent) = dest.parent() {
-                if !parent.exists() { let _ = fs::create_dir_all(parent); }
-            }
-
+            let rel = name[prefix.len()..].trim_start_matches(|c| c == '/' || c == '\\');
+            let dest = game_root.join(rel);
+            if let Some(p) = dest.parent() { if !p.exists() { let _ = fs::create_dir_all(p); } }
             if entry.unpack(&dest).is_ok() {
                 extracted += 1;
-                if extracted % 100 == 0 {
-                    let simple_name = path_buf.file_name().unwrap_or_default().to_string_lossy();
-                    let _ = tx.send(format!("Extracted {} files | Current: {}", extracted, simple_name));
-                }
+                if extracted % 100 == 0 { let _ = tx.send(format!("Extracted {} files...", extracted)); }
             }
         }
-        let _ = tx.send("Success! Smart Import complete.".to_string());
-        return Ok(false);
+        
+        return Ok(true);
     }
 
-    if !raw_dir.exists() { 
-        fs::create_dir_all(&raw_dir).map_err(|e| e.to_string())?; 
-    }
-    
-    let _ = tx.send("Standard Scan: No structure found. Extracting to raw...".to_string());
+    // Standard raw archive path
+    let _ = tx.send("Indexing existing workspace...".to_string());
+    let shared_index = build_index(game_root);
+    let validator = FileValidator::new();
 
-    for entry_result in archive.entries().map_err(|e| e.to_string())? {
-        let mut entry = entry_result.map_err(|e| e.to_string())?;
+    for entry_res in archive.entries().map_err(|e| e.to_string())? {
+        let mut entry = entry_res.map_err(|e| e.to_string())?;
         if entry.header().entry_type().is_dir() { continue; }
+        let path = entry.path().map_err(|e| e.to_string())?;
+        let name = path.file_name().unwrap().to_string_lossy().to_string();
+        if !validator.is_valid(&name) { continue; }
         
-        let path_buf = entry.path().map_err(|e| e.to_string())?.to_path_buf();
-        let simple_name = path_buf.file_name().unwrap_or_default().to_string_lossy().to_string();
-        
-        let dest = raw_dir.join(&simple_name);
-        
-        if entry.unpack(&dest).is_ok() {
-            extracted += 1;
-            if extracted % 100 == 0 { 
-                let _ = tx.send(format!("Extracted {} files | Current: {}", extracted, simple_name)); 
+        let src_len = entry.size();
+        let mut skip = false;
+        if let Some(eps) = shared_index.get(&name.to_lowercase()) {
+            for ep in eps { if fs::metadata(ep).map(|m| m.len()).unwrap_or(0) == src_len { skip = true; break; } }
+        }
+
+        let dest = raw_dir.join(&name);
+        if !skip && dest.exists() && fs::metadata(&dest).map(|m| m.len()).unwrap_or(0) == src_len { skip = true; }
+
+        if !skip {
+            if !raw_dir.exists() { let _ = fs::create_dir_all(&raw_dir); }
+            if entry.unpack(&dest).is_ok() {
+                extracted += 1;
+                if extracted % 100 == 0 { let _ = tx.send(format!("Extracted {} files...", extracted)); }
             }
         }
     }
+
+    if extracted == 0 { let _ = tx.send("Workspace up to date.".to_string()); }
     
     Ok(true)
 }
 
-// Extract game.zip
 fn import_legacy_zip(path_str: &str, tx: Sender<String>) -> Result<bool, String> {
     let f = fs::File::open(path_str).map_err(|e| e.to_string())?;
     let mut archive = ZipArchive::new(f).map_err(|e| e.to_string())?;
     let game_root = Path::new("game");
     let raw_dir = game_root.join("raw");
-    
+    let mut extracted = 0;
+
+    // --- SMART PREFIX DETECTION ---
     let mut smart_prefix = None;
     for i in 0..archive.len() {
         if let Ok(file) = archive.by_index(i) {
@@ -206,12 +261,11 @@ fn import_legacy_zip(path_str: &str, tx: Sender<String>) -> Result<bool, String>
         }
     }
 
+    // --- SMART IMPORT PATH (Backups) ---
     if let Some(prefix) = smart_prefix {
         let _ = tx.send("Smart Import: Valid backup detected in ZIP.".to_string());
         
         let total = archive.len();
-        let mut extracted = 0;
-
         for i in 0..total {
             let mut file = archive.by_index(i).unwrap();
             if file.is_dir() { continue; }
@@ -239,31 +293,82 @@ fn import_legacy_zip(path_str: &str, tx: Sender<String>) -> Result<bool, String>
             }
         }
         let _ = tx.send("Success! Smart Import complete.".to_string());
-        return Ok(false);
+        
+        return Ok(true);
     }
 
+    // --- STANDARD RAW IMPORT PATH ---
     if !raw_dir.exists() { 
         fs::create_dir_all(&raw_dir).map_err(|e| e.to_string())?; 
     }
     
-    let total = archive.len();
-    let _ = tx.send(format!("Extracting {} files to raw...", total));
+    let _ = tx.send("Indexing existing workspace files...".to_string());
+    let shared_index = build_index(game_root);
+    let validator = FileValidator::new();
 
+    let total = archive.len();
+    let mut indices_to_extract = Vec::new();
+    
+    // Identify new/updated files
     for i in 0..total {
-        let mut file = archive.by_index(i).unwrap();
+        let file = archive.by_index(i).unwrap();
         if file.is_dir() { continue; }
         
+        let name = Path::new(file.name()).file_name().unwrap_or_default().to_string_lossy().to_string();
+        if !validator.is_valid(&name) { continue; }
+        
+        let name_lower = name.to_lowercase();
+        let src_len = file.size();
+
+        let mut should_extract = true;
+        
+        // Check workspace index
+        if let Some(existing_paths) = shared_index.get(&name_lower) {
+            for existing_path in existing_paths {
+                if fs::metadata(existing_path).map(|m| m.len()).unwrap_or(0) == src_len {
+                    should_extract = false;
+                    break;
+                }
+            }
+        }
+
+        // Check raw folder
+        let dest = raw_dir.join(&name);
+        if should_extract && dest.exists() && fs::metadata(&dest).map(|m| m.len()).unwrap_or(0) == src_len {
+            should_extract = false;
+        }
+        
+        if should_extract {
+            indices_to_extract.push(i);
+        }
+    }
+    
+    // Handle "Up to Date" case
+    if indices_to_extract.is_empty() {
+        let _ = tx.send("Workspace is already up to date.\nNo new files to extract.".to_string());
+        
+        return Ok(true);
+    }
+    
+    // Perform extraction
+    let _ = tx.send(format!("Found {} new or updated files.\nStarting extraction...", indices_to_extract.len()));
+
+    for i in indices_to_extract {
+        let mut file = archive.by_index(i).unwrap();
         let name = Path::new(file.name()).file_name().unwrap_or_default().to_string_lossy().to_string();
         let dest = raw_dir.join(&name);
         
         if let Ok(mut out) = fs::File::create(&dest) {
             let _ = std::io::copy(&mut file, &mut out);
-        }
-        
-        if i % 100 == 0 { 
-            let _ = tx.send(format!("Extracted {} files | Current: {}", i, name)); 
+            
+            extracted += 1;
+            if extracted % 100 == 0 { 
+                let _ = tx.send(format!("Extracted {} files | Current: {}", extracted, name)); 
+            }
         }
     }
+    
+    
     Ok(true)
 }
 
@@ -293,6 +398,30 @@ fn scan_with_relative_paths(root: &Path, current: &Path, list: &mut Vec<(PathBuf
                 let relative = path.strip_prefix(root).unwrap().to_path_buf();
                 list.push((path, relative));
             }
+        }
+    }
+    Ok(())
+}
+
+fn build_index(root_dir: &Path) -> HashMap<String, Vec<PathBuf>> {
+    let mut index = HashMap::new();
+    let _ = scan_for_index(root_dir, &mut index);
+    index
+}
+
+fn scan_for_index(dir: &Path, index: &mut HashMap<String, Vec<PathBuf>>) -> std::io::Result<()> {
+    if !dir.is_dir() { return Ok(()); }
+    for entry_result in fs::read_dir(dir)?.flatten() {
+        let path = entry_result.path();
+        if path.is_dir() {
+            let path_str = path.to_string_lossy().replace('\\', "/");
+            if path_str == "game/app" || path_str == "game/raw" {
+                continue;
+            }
+            let _ = scan_for_index(&path, index);
+        } else if let Some(name) = path.file_name() {
+            let key = name.to_string_lossy().to_lowercase();
+            index.entry(key).or_insert_with(Vec::new).push(path);
         }
     }
     Ok(())

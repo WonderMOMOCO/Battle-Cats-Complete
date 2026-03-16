@@ -1,12 +1,12 @@
 use crate::features::settings::logic::Settings;
 use crate::features::enemy::data::t_unit::EnemyRaw;
 use crate::features::enemy::registry::{self, DisplayGroup, AttrUnit};
-use crate::global::game::abilities::{AbilityItem, CustomIcon};
+use crate::global::game::abilities::AbilityItem;
 use crate::global::game::img015;
 
 pub fn collect_ability_data(
     stats: &EnemyRaw,
-    settings: &Settings,
+    _settings: &Settings,
     magnification: i32,
 ) -> (Vec<AbilityItem>, Vec<AbilityItem>, Vec<AbilityItem>, Vec<AbilityItem>, Vec<AbilityItem>, Vec<AbilityItem>) {
     
@@ -30,10 +30,7 @@ pub fn collect_ability_data(
             
             let text = (def.formatter)(val, stats, dur, magnification);
 
-            let mut custom_icon = def.custom_icon;
-            if def.name == "Multi-Hit" && settings.general.game_language == "--" {
-                custom_icon = CustomIcon::None;
-            }
+            let custom_icon = def.custom_icon;
 
             let mut final_icon = def.icon_id;
             if def.name == "Wave Attack" && stats.mini_wave > 0 { final_icon = img015::ICON_MINI_WAVE; }

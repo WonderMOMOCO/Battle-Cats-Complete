@@ -78,9 +78,11 @@ impl UnitBuyRow {
     }
 }
 
-pub fn load_unitbuy(cats_directory: &Path) -> HashMap<u32, UnitBuyRow> {
+pub fn load_unitbuy(cats_directory: &Path, priority: &[String]) -> HashMap<u32, UnitBuyRow> {
     let mut unit_buy_map = HashMap::new();
-    let file_path = cats_directory.join(paths::UNIT_BUY);
+    let Some(file_path) = crate::global::resolver::get(cats_directory, paths::UNIT_BUY, priority).into_iter().next() else {
+        return unit_buy_map;
+    };
     
     if let Ok(file_content) = fs::read_to_string(&file_path) {
         let delimiter = utils::detect_csv_separator(&file_content);

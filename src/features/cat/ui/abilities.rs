@@ -95,18 +95,17 @@ fn render_single_icon(
     ui: &mut egui::Ui, 
     item: &AbilityItem, 
     sheet: &SpriteSheet, 
-    settings: &Settings, 
+    _settings: &Settings, 
     border: egui::Color32,
     assets: &CustomAssets,
 ) -> egui::Response {
     let size = egui::vec2(stats::ICON_SIZE, stats::ICON_SIZE);
-    let force_fallback = settings.general.game_language == "--";
 
     let custom_texture = item.custom_icon.get_texture(assets);
 
-    let response = if !force_fallback && custom_texture.is_some() {
+    let response = if custom_texture.is_some() {
         ui.add(egui::Image::new(egui::load::SizedTexture::new(custom_texture.unwrap().id(), size)))
-    } else if !force_fallback && sheet.cuts_map.contains_key(&item.icon_id) {
+    } else if sheet.cuts_map.contains_key(&item.icon_id) {
         let cut = sheet.cuts_map.get(&item.icon_id).unwrap();
         if let Some(tex) = &sheet.texture_handle {
              ui.add(egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)).uv(cut.uv_coordinates))
@@ -118,12 +117,10 @@ fn render_single_icon(
         render_fallback_icon(ui, alt, border)
     };
 
-    if !force_fallback {
-        if let Some(border_id) = item.border_id {
-            if let Some(b_cut) = sheet.cuts_map.get(&border_id) {
-                if let Some(tex) = &sheet.texture_handle {
-                    ui.put(response.rect, egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)).uv(b_cut.uv_coordinates));
-                }
+    if let Some(border_id) = item.border_id {
+        if let Some(b_cut) = sheet.cuts_map.get(&border_id) {
+            if let Some(tex) = &sheet.texture_handle {
+                ui.put(response.rect, egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)).uv(b_cut.uv_coordinates));
             }
         }
     }
@@ -206,7 +203,7 @@ fn render_conjure_details(
             ui.spacing_mut().item_spacing.y = 0.0;
             let spirit_border = egui::Color32::WHITE;
             
-            let conjure_stats_vec = match stats::load_from_id(parent_stats.conjure_unit_id) {
+            let conjure_stats_vec = match stats::load_from_id(parent_stats.conjure_unit_id, &settings.general.language_priority) {
                 Some(s) => s,
                 None => {
                     ui.label(egui::RichText::new("Spirit data not found").weak());
@@ -229,9 +226,8 @@ fn render_conjure_details(
                 ui.spacing_mut().item_spacing.x = 8.0;
                 let icon = img015::ICON_AREA_ATTACK;
                 let size = egui::vec2(stats::ICON_SIZE, stats::ICON_SIZE);
-                let force_fallback = settings.general.game_language == "--";
                 
-                if !force_fallback && sheet.cuts_map.contains_key(&icon) {
+                if sheet.cuts_map.contains_key(&icon) {
                     let cut = sheet.cuts_map.get(&icon).unwrap();
                     if let Some(tex) = &sheet.texture_handle {
                          ui.add(egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)).uv(cut.uv_coordinates));

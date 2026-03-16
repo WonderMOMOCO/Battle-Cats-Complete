@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use crate::features::cat::data::skillacquisition::{TalentRaw, TalentGroupRaw};
 use crate::global::formats::imgcut::SpriteSheet;
-use crate::global::utils::{self, autocrop};
+use crate::global::utils::autocrop;
 use crate::features::settings::logic::Settings; 
 use crate::features::cat::data::unitid::CatRaw; 
 use crate::features::cat::data::unitlevel::CatLevelCurve;
@@ -145,15 +145,12 @@ fn render_header(
             if let Some(def) = crate::features::cat::registry::get_by_talent_id(group.ability_id) {
                 let size = egui::vec2(40.0, 40.0);
                 
-                let force_fallback = settings.general.game_language == "--";
                 let mut drawn = false;
                 
-                if !force_fallback {
-                    if let Some(cut) = sheet.cuts_map.get(&def.icon_id) {
-                        if let Some(tex) = &sheet.texture_handle {
-                            ui.add(egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)).uv(cut.uv_coordinates));
-                            drawn = true;
-                        }
+                if let Some(cut) = sheet.cuts_map.get(&def.icon_id) {
+                    if let Some(tex) = &sheet.texture_handle {
+                        ui.add(egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)).uv(cut.uv_coordinates));
+                        drawn = true;
                     }
                 }
 
@@ -164,11 +161,8 @@ fn render_header(
                 ui.label(egui::RichText::new("?").weak());
             }
 
-            let force_fallback = settings.general.game_language == "--";
-            if !force_fallback {
-                if let Some(texture) = get_or_load_skill_name(ui, group, settings, name_cache) {
-                    ui.image((texture.id(), texture.size_vec2()));
-                }
+            if let Some(texture) = get_or_load_skill_name(ui, group, settings, name_cache) {
+                ui.image((texture.id(), texture.size_vec2()));
             }
         });
 
@@ -201,7 +195,7 @@ fn render_body(
     unit_level: i32,
     talent_costs: &HashMap<u8, TalentCost>,
     img022_sheet: &SpriteSheet,
-    settings: &Settings,
+    _settings: &Settings,
 ) {
     ui.add_space(6.0);
 
@@ -213,7 +207,6 @@ fn render_body(
     };
     if !text_to_display.contains('\n') { text_to_display.push('\n'); }
 
-    // Section 1: Description
     egui::Frame::none()
         .fill(egui::Color32::from_black_alpha(100)) 
         .rounding(4.0)
@@ -228,7 +221,6 @@ fn render_body(
     let current_lvl_val = *talent_levels.get(&(index as u8)).unwrap_or(&0);
     let np_cost = crate::features::cat::logic::talents::get_talent_np_cost(group.cost_id, current_lvl_val, talent_costs);
 
-    // Section 2: NP Cost Isolated Section
     egui::Frame::none()
         .fill(egui::Color32::from_black_alpha(100))
         .rounding(4.0)
@@ -240,14 +232,12 @@ fn render_body(
                 ui.spacing_mut().item_spacing.x = 4.0;
                 
                 let mut drawn = false;
-                if settings.general.game_language != "--" {
-                    if let Some(cut) = img022_sheet.cuts_map.get(&crate::global::game::img022::ICON_NP_COST) {
-                        if let Some(tex) = &img022_sheet.texture_handle {
-                            let aspect = cut.original_size.x / cut.original_size.y;
-                            let size = egui::vec2(TALENT_NP_ICON_SIZE * aspect, TALENT_NP_ICON_SIZE);
-                            ui.add(egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)).uv(cut.uv_coordinates));
-                            drawn = true;
-                        }
+                if let Some(cut) = img022_sheet.cuts_map.get(&crate::global::game::img022::ICON_NP_COST) {
+                    if let Some(tex) = &img022_sheet.texture_handle {
+                        let aspect = cut.original_size.x / cut.original_size.y;
+                        let size = egui::vec2(TALENT_NP_ICON_SIZE * aspect, TALENT_NP_ICON_SIZE);
+                        ui.add(egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)).uv(cut.uv_coordinates));
+                        drawn = true;
                     }
                 }
 
@@ -261,7 +251,6 @@ fn render_body(
 
     ui.add_space(TALENT_SECTION_SPACING);
 
-    // Section 3: Level Slider & Affected Stats
     egui::Frame::none()
         .fill(egui::Color32::from_black_alpha(100))
         .rounding(4.0)
@@ -344,17 +333,7 @@ fn get_or_load_skill_name(
 }
 
 fn find_skill_image_path(image_id: i16, settings: &Settings) -> Option<PathBuf> {
-    let root = Path::new(""); 
-
-    if !settings.general.game_language.is_empty() {
-        let candidate = paths::skill_icon(root, image_id, &settings.general.game_language);
-        if candidate.exists() { return Some(candidate); }
-    }
-    
-    for code in utils::LANGUAGE_PRIORITY {
-        let candidate = paths::skill_icon(root, image_id, code);
-        if candidate.exists() { return Some(candidate); }
-    }
-
-    None
+    let dir = Path::new(paths::DIR_SKILL_NAME);
+    let base_filename = format!("Skill_name_{:03}.png", image_id);
+    crate::global::get(dir, &base_filename, &settings.general.language_priority).into_iter().next()
 }

@@ -90,12 +90,11 @@ fn render_single_icon(
     ui: &mut egui::Ui, 
     item: &AbilityItem, 
     sheet: &SpriteSheet, 
-    settings: &Settings, 
+    _settings: &Settings, 
     border: egui::Color32,
     assets: &CustomAssets,
 ) -> egui::Response {
     let size = egui::vec2(40.0, 40.0);
-    let force_fallback = settings.general.game_language == "--";
 
     let custom_texture = match item.icon_id {
         img015::ICON_DOJO => Some(&assets.dojo),
@@ -109,9 +108,9 @@ fn render_single_icon(
         }
     };
 
-    let response = if !force_fallback && custom_texture.is_some() {
+    let response = if custom_texture.is_some() {
         ui.add(egui::Image::new(egui::load::SizedTexture::new(custom_texture.unwrap().id(), size)))
-    } else if !force_fallback && sheet.cuts_map.contains_key(&item.icon_id) {
+    } else if sheet.cuts_map.contains_key(&item.icon_id) {
         let cut = sheet.cuts_map.get(&item.icon_id).unwrap();
         if let Some(tex) = &sheet.texture_handle {
              ui.add(egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)).uv(cut.uv_coordinates))
@@ -123,12 +122,10 @@ fn render_single_icon(
         render_fallback_icon(ui, alt, border)
     };
 
-    if !force_fallback {
-        if let Some(border_id) = item.border_id {
-            if let Some(b_cut) = sheet.cuts_map.get(&border_id) {
-                if let Some(tex) = &sheet.texture_handle {
-                    ui.put(response.rect, egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)).uv(b_cut.uv_coordinates));
-                }
+    if let Some(border_id) = item.border_id {
+        if let Some(b_cut) = sheet.cuts_map.get(&border_id) {
+            if let Some(tex) = &sheet.texture_handle {
+                ui.put(response.rect, egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)).uv(b_cut.uv_coordinates));
             }
         }
     }
