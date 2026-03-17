@@ -378,6 +378,10 @@ impl BattleCatsApp {
         let mut global_cat_refresh = false;
         let mut global_enemy_refresh = false;
         let mut mods_refresh = false;
+        let mut active_mod_file_changed = false;
+
+        // Isolate the currently active mod folder string
+        let active_mod = self.mod_state.loaded_mods.iter().find(|m| m.enabled).map(|m| m.folder_name.to_lowercase());
 
         for path in paths {
             let path_str = path.to_string_lossy().to_lowercase();
@@ -385,6 +389,18 @@ impl BattleCatsApp {
             
             if path_str.contains("mods") && !path_str.contains("packages") {
                 mods_refresh = true;
+
+                // Check if the modified path is explicitly within the active mod's directory
+                if let Some(active) = &active_mod {
+                    let components: Vec<_> = path.components().map(|c| c.as_os_str().to_string_lossy().to_lowercase()).collect();
+                    if let Some(mods_idx) = components.iter().position(|c| c == "mods") {
+                        if let Some(mod_folder) = components.get(mods_idx + 1) {
+                            if mod_folder == active {
+                                active_mod_file_changed = true;
+                            }
+                        }
+                    }
+                }
             }
 
             if path_str.contains("img015") || path_str.contains("img022") {
@@ -427,6 +443,13 @@ impl BattleCatsApp {
 
         if mods_refresh {
             self.mod_state.refresh_mods();
+        }
+
+        // If the active mod was modified, do a hard reload and exit out early to avoid redundancy
+        if active_mod_file_changed {
+            self.perform_full_data_reload();
+            ctx.request_repaint();
+            return; 
         }
 
         let mass_threshold = 5;

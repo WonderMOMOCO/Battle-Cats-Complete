@@ -101,6 +101,10 @@ impl CatList {
     pub fn reset_scroll(&mut self) {
         self.scroll_to_top_needed = true;
     }
+    
+    pub fn force_search_rebuild(&mut self) {
+        self.last_unit_count = usize::MAX;
+    }
 
     pub fn show(
         &mut self, 
@@ -156,7 +160,6 @@ impl CatList {
             self.scroll_to_top_needed = false;
         }
 
-        // Updated to use the ScrollArea instance directly to avoid static call errors
         let scroll_output = scroll_area.show_rows(ui, row_height, total_rows, |ui, row_range| {
             let mut hovered_this_frame = None;
 
@@ -221,7 +224,6 @@ impl CatList {
             let size = tex.size_vec2();
             let scale = 50.0 / size.y;
             let btn_size = size * scale;
-            // Updated to egui 0.29 syntax
             ui.add(egui::ImageButton::new(egui::load::SizedTexture::new(tex.id(), btn_size)).selected(is_selected))
         } else {
             let r = ui.allocate_response(egui::vec2(100.0, 50.0), egui::Sense::click());

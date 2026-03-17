@@ -13,6 +13,7 @@ pub enum CustomIcon {
     Burrow,
     Revive,
     Stop,
+    DeathTimer,
 }
 
 impl CustomIcon {
@@ -26,6 +27,7 @@ impl CustomIcon {
             CustomIcon::Burrow => Some(&assets.burrow),
             CustomIcon::Revive => Some(&assets.revive),
             CustomIcon::Stop => Some(&assets.stop),
+            CustomIcon::DeathTimer => Some(&assets.death_timer),
             CustomIcon::None => None,
         }
     }

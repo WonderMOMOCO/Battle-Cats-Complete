@@ -114,6 +114,7 @@ pub fn update_data(state: &mut CatListState) {
             }
         }
 
+        state.cat_list.force_search_rebuild();
         state.scan_receiver = None;
     }
 }
@@ -129,7 +130,6 @@ pub fn resync_scan(state: &mut CatListState, config: ScannerConfig) {
 }
 
 pub fn restart_scan(state: &mut CatListState, config: ScannerConfig) {
-    state.cats.clear();
     state.skill_descriptions = None; 
     
     let current_selection_id = state.selected_cat;
