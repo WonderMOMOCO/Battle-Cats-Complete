@@ -149,6 +149,10 @@ pub fn load_all(t_unit_path: &Path) -> Option<Vec<EnemyRaw>> {
         let get_int = |idx: usize| -> i32 {
             cols.get(idx).and_then(|s| s.trim().parse::<i32>().ok()).unwrap_or(0)
         };
+        
+        let get_int_neg = |idx: usize| -> i32 {
+            cols.get(idx).and_then(|s| s.trim().parse::<i32>().ok()).unwrap_or(-1)
+        };
 
         enemies.push(EnemyRaw {
             hitpoints: get_int(0),
@@ -201,8 +205,8 @@ pub fn load_all(t_unit_path: &Path) -> Option<Vec<EnemyRaw>> {
             revive_hp: get_int(47),
             type_witch: get_int(48),
             type_dojo: get_int(49),
-            attack_count_total: get_int(50),
-            time_before_death: get_int(51),
+            attack_count_total: get_int_neg(50),
+            time_before_death: get_int_neg(51),
             attack_count_state: get_int(52),
             spawn_animation: get_int(53),
             soul_animation: get_int(54),

@@ -100,6 +100,7 @@ pub const ICON_SUPERVILLIAN: usize = 384;
 pub const ICON_RESIST_EXPLOSION: usize = 386;
 
 // Mock IDs For Custom Assets
+pub const ICON_STOP: usize = 9992;
 pub const ICON_DOJO: usize = 9993;
 pub const ICON_STARRED_ALIEN: usize = 9994;
 pub const ICON_BURROW: usize = 9995;

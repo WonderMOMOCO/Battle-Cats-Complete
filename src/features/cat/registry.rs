@@ -494,15 +494,57 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         apply_func: Some(|c,_,_,_| c.counter_surge = 1),
     },
     CatAbilityDef {
-        name: "Kamikaze",  // Actually "atttack count state"
-        fallback: "Kamik", // Just used for Kamikaze (2) only
+        name: "Kamikaze", 
+        fallback: "Kamik", 
         icon_id: img015::ICON_KAMIKAZE,
         talent_id: 0,
         group: DisplayGroup::Headline2,
         custom_icon: CustomIcon::Kamikaze, 
-        schema: &[],
-        get_attributes: |c| if c.attack_count_state == 2 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
-        formatter: |_,_,_,_| "Unit disappears after a single attack".into(),
+        schema: &[
+            ("Attacks", AttrUnit::None)
+        ],
+        get_attributes: |c| {
+            if c.attack_count_total > -1 && c.attack_count_state == 2 { 
+                vec![("Attacks", c.attack_count_total, AttrUnit::None)] 
+            } else { 
+                vec![] 
+            }
+        },
+        formatter: |val, _, _, _| {
+            let suffix = match val {
+                0 => "immediately".to_string(),
+                1 => "after 1 attack".to_string(),
+                n => format!("after {} attacks", n),
+            };
+            format!("Unit disappears {}", suffix)
+        },
+        apply_func: None,
+    },
+    CatAbilityDef {
+        name: "Stop", 
+        fallback: "Stop", 
+        icon_id: img015::ICON_STOP,
+        talent_id: 0,
+        group: DisplayGroup::Headline2,
+        custom_icon: CustomIcon::Stop, 
+        schema: &[
+            ("Attacks", AttrUnit::None)
+        ],
+        get_attributes: |c| {
+            if c.attack_count_total > -1 && c.attack_count_state == 0 { 
+                vec![("Attacks", c.attack_count_total, AttrUnit::None)] 
+            } else { 
+                vec![] 
+            }
+        },
+        formatter: |val, _, _, _| {
+            let suffix = match val {
+                0 => "immediately".to_string(),
+                1 => "after 1 attack".to_string(),
+                n => format!("after {} attacks", n),
+            };
+            format!("Unit stops moving {}", suffix)
+        },
         apply_func: None,
     },
 

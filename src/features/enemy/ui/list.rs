@@ -77,6 +77,10 @@ impl EnemyList {
         self.scroll_to_top_needed = true;
     }
 
+    pub fn force_search_rebuild(&mut self) {
+        self.last_unit_count = usize::MAX;
+    }
+
     pub fn clear_cache(&mut self) {
         self.texture_cache.clear();
         self.pending_requests.clear();

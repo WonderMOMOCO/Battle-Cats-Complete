@@ -57,8 +57,6 @@ pub fn start_scan(config: ScannerConfig) -> Receiver<CatEntry> {
         let cats_directory = Path::new(paths::DIR_CATS);
         let priority = &config.language_priority;
         
-        // Note: For a truly perfect architecture, these loaders should also be updated 
-        // to use resolver::get internally. For now, we pass the priority down
         let level_curves_arc = Arc::new(unitlevel::load_level_curves(cats_directory, priority));
         let unit_buy_map_arc = Arc::new(unitbuy::load_unitbuy(cats_directory, priority));
         let talent_map_arc = Arc::new(skillacquisition::load(cats_directory, priority));
@@ -128,12 +126,22 @@ pub fn process_cat_entry(
     for form_idx in (0..=config.preferred_form).rev() {
         if form_idx >= 4 || !forms_existence[form_idx] { continue; }
         let dir = paths::folder(cats_root_dir, cat_id, form_idx, egg_ids);
-        let form_char = match form_idx { 0 => 'f', 1 => 'c', 2 => 's', _ => 'u' };
-        let filename = format!("udi{:03}_{}.png", cat_id, form_char);
+        
+        // --- FIX: Use image_stem to properly retrieve egg asset names! ---
+        let stem = paths::image_stem(paths::AssetType::Banner, cat_id, form_idx, egg_ids);
+        let filename = format!("{}.png", stem);
         
         if let Some(found) = crate::global::resolver::get(&dir, &filename, priority).into_iter().next() {
             final_image_path_opt = Some(found);
             break; 
+        } else if form_idx == 1 && egg_ids.1 != -1 {
+            // --- FIX: Add the missing egg m01 -> m00 fallback ---
+            let fallback_stem = format!("udi{:03}_m00", egg_ids.1);
+            let fallback_filename = format!("{}.png", fallback_stem);
+            if let Some(found) = crate::global::resolver::get(&dir, &fallback_filename, priority).into_iter().next() {
+                final_image_path_opt = Some(found);
+                break;
+            }
         }
     }
 
@@ -146,10 +154,21 @@ pub fn process_cat_entry(
     for form_idx in 0..4 {
         if !forms_existence[form_idx] { continue; }
         let dir = paths::folder(cats_root_dir, cat_id, form_idx, egg_ids);
-        let form_char = match form_idx { 0 => 'f', 1 => 'c', 2 => 's', _ => 'u' };
-        let filename = format!("uni{:03}_{}00.png", cat_id, form_char);
         
-        deploy_icon_paths[form_idx] = crate::global::resolver::get(&dir, &filename, priority).into_iter().next();
+        // --- FIX: Use image_stem here too! ---
+        let stem = paths::image_stem(paths::AssetType::Icon, cat_id, form_idx, egg_ids);
+        let filename = format!("{}.png", stem);
+        
+        if let Some(found) = crate::global::resolver::get(&dir, &filename, priority).into_iter().next() {
+            deploy_icon_paths[form_idx] = Some(found);
+        } else if form_idx == 1 && egg_ids.1 != -1 {
+            // --- FIX: Add the missing egg m01 -> m00 fallback ---
+            let fallback_stem = format!("uni{:03}_m00", egg_ids.1);
+            let fallback_filename = format!("{}.png", fallback_stem);
+            if let Some(found) = crate::global::resolver::get(&dir, &fallback_filename, priority).into_iter().next() {
+                deploy_icon_paths[form_idx] = Some(found);
+            }
+        }
     }
 
     // Resolve Attack Animations

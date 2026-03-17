@@ -324,14 +324,55 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
-        name: "Kamikaze",  // Actually "atttack count state"
-        fallback: "Kamik", // Just used for Kamikaze (2) only
+        name: "Kamikaze", 
+        fallback: "Kamik", 
         icon_id: img015::ICON_KAMIKAZE,
         group: DisplayGroup::Headline2,
         custom_icon: CustomIcon::Kamikaze, 
-        schema: &[],
-        get_attributes: |e| if e.attack_count_state == 2 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
-        formatter: |_, _, _, _| "Unit disappears after a single attack".into(),
+        schema: &[
+            ("Attacks", AttrUnit::None)
+        ],
+        get_attributes: |e| {
+            if e.attack_count_total > -1 && e.attack_count_state == 2 { 
+                vec![("Attacks", e.attack_count_total, AttrUnit::None)] 
+            } else { 
+                vec![] 
+            }
+        },
+        formatter: |val, _, _, _| {
+            let suffix = match val {
+                0 => "immediately".to_string(),
+                1 => "after 1 attack".to_string(),
+                n => format!("after {} attacks", n),
+            };
+            format!("Unit disappears {}", suffix)
+        },
+        minus_one_is_inf: false,
+    },
+    EnemyAbilityDef {
+        name: "Stop", 
+        fallback: "Stop", 
+        icon_id: img015::ICON_STOP,
+        group: DisplayGroup::Headline2,
+        custom_icon: CustomIcon::Stop, 
+        schema: &[
+            ("Attacks", AttrUnit::None)
+        ],
+        get_attributes: |e| {
+            if e.attack_count_total > -1 && e.attack_count_state == 0 { 
+                vec![("Attacks", e.attack_count_total, AttrUnit::None)] 
+            } else { 
+                vec![] 
+            }
+        },
+        formatter: |val, _, _, _| {
+            let suffix = match val {
+                0 => "immediately".to_string(),
+                1 => "after 1 attack".to_string(),
+                n => format!("after {} attacks", n),
+            };
+            format!("Unit stops moving {}", suffix)
+        },
         minus_one_is_inf: false,
     },
 

@@ -5,7 +5,6 @@ use super::scanner;
 use crate::features::settings::logic::state::ScannerConfig;
 
 pub fn restart_scan(state: &mut EnemyListState, config: ScannerConfig) {
-    state.enemies.clear();
     state.is_cold_scan = true;
     state.last_update_time = None;
     state.incoming_enemies.clear();
@@ -88,6 +87,7 @@ pub fn update_data(state: &mut EnemyListState) {
             }
         }
 
+        state.enemy_list.force_search_rebuild();
         state.scan_receiver = None;
     }
 }
