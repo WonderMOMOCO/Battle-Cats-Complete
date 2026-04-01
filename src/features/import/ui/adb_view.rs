@@ -6,7 +6,7 @@ use crate::features::settings::logic::Settings;
 use std::sync::mpsc;
 use std::path::PathBuf;
 
-pub fn show(ui: &mut egui::Ui, state: &mut ImportState, settings: &Settings) {
+pub fn show(ui: &mut egui::Ui, state: &mut ImportState, settings: &mut Settings) {
     let is_present = toolpaths::adb_status() == Presence::Installed;
     let busy = state.is_adb_busy;
     
@@ -28,14 +28,14 @@ pub fn show(ui: &mut egui::Ui, state: &mut ImportState, settings: &Settings) {
         ui.horizontal(|ui| {
             ui.label("Import Type:");
             egui::ComboBox::from_id_salt("adb_type_combo")
-                .selected_text(match state.adb_import_type {
-                    AdbImportType::All => "All Content",
-                    AdbImportType::Update => "Update Only",
+                .selected_text(match settings.game_data.adb_import_type_idx {
+                    1 => "Update Only",
+                    _ => "All Content",
                 })
                 .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut state.adb_import_type, AdbImportType::All, "All Content")
+                    ui.selectable_value(&mut settings.game_data.adb_import_type_idx, 0, "All Content")
                         .on_hover_text("Downloads all game content\nRecommended for first-time import\nRequires root access");
-                    ui.selectable_value(&mut state.adb_import_type, AdbImportType::Update, "Update Only")
+                    ui.selectable_value(&mut settings.game_data.adb_import_type_idx, 1, "Update Only")
                         .on_hover_text("Downloads content from the last 3-or-so game updates\nRecommended for database upkeep\nRoot access optional");
                 });
         });
@@ -44,21 +44,21 @@ pub fn show(ui: &mut egui::Ui, state: &mut ImportState, settings: &Settings) {
         ui.horizontal(|ui| {
             ui.label("Game Region:");
             egui::ComboBox::from_id_salt("adb_region_combo")
-                .selected_text(match state.adb_region {
-                    AdbRegion::English => "Global",
-                    AdbRegion::Japanese => "Japanese",
-                    AdbRegion::Taiwan => "Taiwan",
-                    AdbRegion::Korean => "Korean",
-                    AdbRegion::All => "All Regions",
+                .selected_text(match settings.game_data.adb_region_idx {
+                    0 => "Global",
+                    1 => "Japanese",
+                    2 => "Taiwan",
+                    3 => "Korean",
+                    _ => "All Regions",
                 })
                 .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut state.adb_region, AdbRegion::English, "Global");
-                    ui.selectable_value(&mut state.adb_region, AdbRegion::Japanese, "Japanese");
-                    ui.selectable_value(&mut state.adb_region, AdbRegion::Taiwan, "Taiwan");
-                    ui.selectable_value(&mut state.adb_region, AdbRegion::Korean, "Korean");
+                    ui.selectable_value(&mut settings.game_data.adb_region_idx, 0, "Global");
+                    ui.selectable_value(&mut settings.game_data.adb_region_idx, 1, "Japanese");
+                    ui.selectable_value(&mut settings.game_data.adb_region_idx, 2, "Taiwan");
+                    ui.selectable_value(&mut settings.game_data.adb_region_idx, 3, "Korean");
                     ui.separator(); 
-                    ui.selectable_value(&mut state.adb_region, AdbRegion::All, "All Regions")
-                       .on_hover_text("Attempts to download content for ALL 4 versions sequentially.");
+                    ui.selectable_value(&mut settings.game_data.adb_region_idx, 4, "All Regions")
+                        .on_hover_text("Attempts to download content for ALL 4 versions sequentially.");
                 });
         });
     });
@@ -68,11 +68,11 @@ pub fn show(ui: &mut egui::Ui, state: &mut ImportState, settings: &Settings) {
     let button_text = if is_present { "Start Import" } else { "ADB Missing" };
     if ui.add_enabled(controls_enabled, egui::Button::new(button_text)).clicked() {
         state.log_content.clear(); 
-        start_adb_import(state, settings.emulator_config());
+        start_adb_import(state, settings);
     }
 }
 
-fn start_adb_import(state: &mut ImportState, config: crate::features::settings::logic::state::EmulatorConfig) {
+fn start_adb_import(state: &mut ImportState, settings: &Settings) {
     state.is_adb_busy = true;
     state.status_message = "Initializing ADB...".to_string(); 
     
@@ -80,8 +80,22 @@ fn start_adb_import(state: &mut ImportState, config: crate::features::settings::
     state.adb_rx = Some(rx);
     
     let output = PathBuf::from("game/app");
-    let mode = state.adb_import_type;
-    let region = state.adb_region;
+    
+    // Map the saved indices to the actual Enums for processing
+    let mode = match settings.game_data.adb_import_type_idx {
+        1 => AdbImportType::Update,
+        _ => AdbImportType::All,
+    };
+    
+    let region = match settings.game_data.adb_region_idx {
+        0 => AdbRegion::English,
+        1 => AdbRegion::Japanese,
+        2 => AdbRegion::Taiwan,
+        3 => AdbRegion::Korean,
+        _ => AdbRegion::All,
+    };
+
+    let config = settings.emulator_config();
 
     bridge::spawn_full_import(tx, output, mode, region, config);
 }

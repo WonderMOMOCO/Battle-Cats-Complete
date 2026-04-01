@@ -52,21 +52,21 @@ impl GlowRenderer {
     pub fn new(gl_context: &glow::Context) -> Self {
         unsafe {
             let program = compile_program(gl_context, VERTEX_SHADER_SOURCE, FRAGMENT_SHADER_SOURCE);
-            let vertex_array = gl_context.create_vertex_array().expect("Failed to create VAO");
-            let vbo = gl_context.create_buffer().expect("Failed to create VBO");
-            let tbo = gl_context.create_buffer().expect("Failed to create TBO");
+            let vertex_array = gl_context.create_vertex_array().expect("Failed to create VAO - GL Context invalid");
+            let vbo = gl_context.create_buffer().expect("Failed to create VBO - GL Context invalid");
+            let tbo = gl_context.create_buffer().expect("Failed to create TBO - GL Context invalid");
 
             gl_context.bind_vertex_array(Some(vertex_array));
             
             gl_context.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
-            let pos_loc = gl_context.get_attrib_location(program, "a_position").unwrap_or(0);
-            gl_context.enable_vertex_attrib_array(pos_loc);
-            gl_context.vertex_attrib_pointer_f32(pos_loc, 2, glow::FLOAT, false, 0, 0);
+            let position_location = gl_context.get_attrib_location(program, "a_position").unwrap_or(0);
+            gl_context.enable_vertex_attrib_array(position_location);
+            gl_context.vertex_attrib_pointer_f32(position_location, 2, glow::FLOAT, false, 0, 0);
 
             gl_context.bind_buffer(glow::ARRAY_BUFFER, Some(tbo));
-            let tex_loc = gl_context.get_attrib_location(program, "a_texcoord").unwrap_or(1);
-            gl_context.enable_vertex_attrib_array(tex_loc);
-            gl_context.vertex_attrib_pointer_f32(tex_loc, 2, glow::FLOAT, false, 0, 0);
+            let texture_location = gl_context.get_attrib_location(program, "a_texcoord").unwrap_or(1);
+            gl_context.enable_vertex_attrib_array(texture_location);
+            gl_context.vertex_attrib_pointer_f32(texture_location, 2, glow::FLOAT, false, 0, 0);
 
             gl_context.bind_vertex_array(None);
 
@@ -89,28 +89,24 @@ impl GlowRenderer {
             }
 
             // Safety Lock
-            if !allow_update {
-                if self.texture.is_some() { return; }
+            if !allow_update && self.texture.is_some() { 
+                return; 
             }
 
             // Data Check
-            let img = match &sheet.image_data {
-                Some(data) => data,
-                None => {
-                    if self.texture.is_some() { return; }
-                    return; 
-                },
+            let Some(image) = &sheet.image_data else {
+                return; 
             };
 
             // Texture Recycling
-            let tex_id = if let Some(existing_tex) = self.texture {
+            let texture_id = if let Some(existing_texture) = self.texture {
                 // Bind the existing texture ID
-                gl_context.bind_texture(glow::TEXTURE_2D, Some(existing_tex));
-                existing_tex
+                gl_context.bind_texture(glow::TEXTURE_2D, Some(existing_texture));
+                existing_texture
             } else {
                 // First time only
-                let new_tex = gl_context.create_texture().expect("Failed to create texture");
-                gl_context.bind_texture(glow::TEXTURE_2D, Some(new_tex));
+                let new_texture = gl_context.create_texture().expect("Failed to allocate texture on GPU");
+                gl_context.bind_texture(glow::TEXTURE_2D, Some(new_texture));
                 
                 // Set parameters only on creation
                 gl_context.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_S, glow::CLAMP_TO_EDGE as i32);
@@ -118,46 +114,48 @@ impl GlowRenderer {
                 gl_context.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MIN_FILTER, glow::LINEAR as i32);
                 gl_context.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAG_FILTER, glow::LINEAR as i32);
                 
-                new_tex
+                new_texture
             };
 
             // Convert & Upload Pixels
-            let pixels = &img.pixels;
+            let pixels = &image.pixels;
             let mut data: Vec<u8> = Vec::with_capacity(pixels.len() * 4);
             
-            let gamma: f32 = 1.883;
-            let inv_gamma = 1.0 / gamma;
-            let to_linear = |byte_val: u8| -> f32 { (byte_val as f32 / 255.0).powf(gamma) };
-            let to_monitor = |val: f32| -> u8 { (val.powf(inv_gamma) * 255.0 + 0.5).clamp(0.0, 255.0) as u8 };
+            let gamma_value: f32 = 1.883;
+            let inverse_gamma = 1.0 / gamma_value;
+            let to_linear = |byte_value: u8| -> f32 { (byte_value as f32 / 255.0).powf(gamma_value) };
+            let to_monitor = |value: f32| -> u8 { (value.powf(inverse_gamma) * 255.0 + 0.5).clamp(0.0, 255.0) as u8 };
 
             for pixel in pixels {
-                let a_byte = pixel.a();
-                if a_byte == 0 {
+                let alpha_byte = pixel.a();
+                
+                if alpha_byte == 0 {
                     data.extend_from_slice(&[0, 0, 0, 0]);
-                } else {
-                    let r_lin = to_linear(pixel.r());
-                    let g_lin = to_linear(pixel.g());
-                    let b_lin = to_linear(pixel.b());
-                    let a_lin = a_byte as f32 / 255.0; 
-
-                    let r_pre = r_lin * a_lin;
-                    let g_pre = g_lin * a_lin;
-                    let b_pre = b_lin * a_lin;
-
-                    data.push(to_monitor(r_pre));
-                    data.push(to_monitor(g_pre));
-                    data.push(to_monitor(b_pre));
-                    data.push(a_byte);
+                    continue;
                 }
+                
+                let red_linear = to_linear(pixel.r());
+                let green_linear = to_linear(pixel.g());
+                let blue_linear = to_linear(pixel.b());
+                let alpha_linear = alpha_byte as f32 / 255.0; 
+
+                let red_premultiplied = red_linear * alpha_linear;
+                let green_premultiplied = green_linear * alpha_linear;
+                let blue_premultiplied = blue_linear * alpha_linear;
+
+                data.push(to_monitor(red_premultiplied));
+                data.push(to_monitor(green_premultiplied));
+                data.push(to_monitor(blue_premultiplied));
+                data.push(alpha_byte);
             }
 
             gl_context.tex_image_2d(
                 glow::TEXTURE_2D, 0, glow::RGBA as i32,
-                img.width() as i32, img.height() as i32, 0,
+                image.width() as i32, image.height() as i32, 0,
                 glow::RGBA, glow::UNSIGNED_BYTE, Some(&data),
             );
 
-            self.texture = Some(tex_id);
+            self.texture = Some(texture_id);
             self.last_sheet_name = sheet.sheet_name.clone();
         }
     }
@@ -229,46 +227,46 @@ impl GlowRenderer {
                     gl_context.blend_func(glow::ONE, glow::ONE_MINUS_SRC_ALPHA);
                 }
 
-                if let Some(cut) = sheet.cuts_map.get(&part.sprite_index) {
-                    let sprite_w = cut.original_size.x;
-                    let sprite_h = cut.original_size.y;
-                    let pivot_x = part.pivot.x;
-                    let pivot_y = part.pivot.y;
+                let Some(cut) = sheet.cuts_map.get(&part.sprite_index) else { continue; };
+                
+                let sprite_width = cut.original_size.x;
+                let sprite_height = cut.original_size.y;
+                let pivot_x = part.pivot.x;
+                let pivot_y = part.pivot.y;
 
-                    let final_matrix = multiply_mat3(&view_matrix, &part.matrix);
+                let final_matrix = multiply_mat3(&view_matrix, &part.matrix);
+                
+                gl_context.uniform_matrix_3_f32_slice(u_transform.as_ref(), false, &final_matrix);
+                gl_context.uniform_1_f32(u_opacity.as_ref(), part.opacity);
+
+                let vertices: [f32; 12] = [
+                    -pivot_x,               -pivot_y,          
+                    sprite_width - pivot_x, -pivot_y,          
+                    -pivot_x,               sprite_height - pivot_y,      
                     
-                    gl_context.uniform_matrix_3_f32_slice(u_transform.as_ref(), false, &final_matrix);
-                    gl_context.uniform_1_f32(u_opacity.as_ref(), part.opacity);
+                    -pivot_x,               sprite_height - pivot_y,      
+                    sprite_width - pivot_x, -pivot_y,          
+                    sprite_width - pivot_x, sprite_height - pivot_y,      
+                ];
+                
+                gl_context.bind_buffer(glow::ARRAY_BUFFER, Some(self.vbo));
+                gl_context.buffer_data_u8_slice(glow::ARRAY_BUFFER, bytemuck::cast_slice(&vertices), glow::DYNAMIC_DRAW);
 
-                    let vertices: [f32; 12] = [
-                        -pivot_x,            -pivot_y,          
-                        sprite_w - pivot_x,  -pivot_y,          
-                        -pivot_x,            sprite_h - pivot_y,      
-                        
-                        -pivot_x,            sprite_h - pivot_y,      
-                        sprite_w - pivot_x,  -pivot_y,          
-                        sprite_w - pivot_x,  sprite_h - pivot_y,      
-                    ];
+                let uv_coordinates = cut.uv_coordinates;
+                let texture_coordinates: [f32; 12] = [
+                    uv_coordinates.min.x, uv_coordinates.min.y, 
+                    uv_coordinates.max.x, uv_coordinates.min.y, 
+                    uv_coordinates.min.x, uv_coordinates.max.y, 
                     
-                    gl_context.bind_buffer(glow::ARRAY_BUFFER, Some(self.vbo));
-                    gl_context.buffer_data_u8_slice(glow::ARRAY_BUFFER, bytemuck::cast_slice(&vertices), glow::DYNAMIC_DRAW);
+                    uv_coordinates.min.x, uv_coordinates.max.y, 
+                    uv_coordinates.max.x, uv_coordinates.min.y, 
+                    uv_coordinates.max.x, uv_coordinates.max.y, 
+                ];
 
-                    let uv = cut.uv_coordinates;
-                    let tex_coords: [f32; 12] = [
-                        uv.min.x, uv.min.y, 
-                        uv.max.x, uv.min.y, 
-                        uv.min.x, uv.max.y, 
-                        
-                        uv.min.x, uv.max.y, 
-                        uv.max.x, uv.min.y, 
-                        uv.max.x, uv.max.y, 
-                    ];
+                gl_context.bind_buffer(glow::ARRAY_BUFFER, Some(self.tbo));
+                gl_context.buffer_data_u8_slice(glow::ARRAY_BUFFER, bytemuck::cast_slice(&texture_coordinates), glow::DYNAMIC_DRAW);
 
-                    gl_context.bind_buffer(glow::ARRAY_BUFFER, Some(self.tbo));
-                    gl_context.buffer_data_u8_slice(glow::ARRAY_BUFFER, bytemuck::cast_slice(&tex_coords), glow::DYNAMIC_DRAW);
-
-                    gl_context.draw_arrays(glow::TRIANGLES, 0, 6);
-                }
+                gl_context.draw_arrays(glow::TRIANGLES, 0, 6);
             }
             
             gl_context.blend_func(glow::ONE, glow::ONE_MINUS_SRC_ALPHA);
@@ -276,49 +274,49 @@ impl GlowRenderer {
     }
 }
 
-fn multiply_mat3(a: &[f32; 9], b: &[f32; 9]) -> [f32; 9] {
+fn multiply_mat3(matrix_a: &[f32; 9], matrix_b: &[f32; 9]) -> [f32; 9] {
     [
-        a[0]*b[0] + a[3]*b[1] + a[6]*b[2],
-        a[1]*b[0] + a[4]*b[1] + a[7]*b[2],
-        a[2]*b[0] + a[5]*b[1] + a[8]*b[2],
+        matrix_a[0]*matrix_b[0] + matrix_a[3]*matrix_b[1] + matrix_a[6]*matrix_b[2],
+        matrix_a[1]*matrix_b[0] + matrix_a[4]*matrix_b[1] + matrix_a[7]*matrix_b[2],
+        matrix_a[2]*matrix_b[0] + matrix_a[5]*matrix_b[1] + matrix_a[8]*matrix_b[2],
 
-        a[0]*b[3] + a[3]*b[4] + a[6]*b[5],
-        a[1]*b[3] + a[4]*b[4] + a[7]*b[5],
-        a[2]*b[3] + a[5]*b[4] + a[8]*b[5],
+        matrix_a[0]*matrix_b[3] + matrix_a[3]*matrix_b[4] + matrix_a[6]*matrix_b[5],
+        matrix_a[1]*matrix_b[3] + matrix_a[4]*matrix_b[4] + matrix_a[7]*matrix_b[5],
+        matrix_a[2]*matrix_b[3] + matrix_a[5]*matrix_b[4] + matrix_a[8]*matrix_b[5],
 
-        a[0]*b[6] + a[3]*b[7] + a[6]*b[8],
-        a[1]*b[6] + a[4]*b[7] + a[7]*b[8],
-        a[2]*b[6] + a[5]*b[7] + a[8]*b[8],
+        matrix_a[0]*matrix_b[6] + matrix_a[3]*matrix_b[7] + matrix_a[6]*matrix_b[8],
+        matrix_a[1]*matrix_b[6] + matrix_a[4]*matrix_b[7] + matrix_a[7]*matrix_b[8],
+        matrix_a[2]*matrix_b[6] + matrix_a[5]*matrix_b[7] + matrix_a[8]*matrix_b[8],
     ]
 }
 
-unsafe fn compile_program(gl_context: &glow::Context, vs_source: &str, fs_source: &str) -> glow::Program {
+unsafe fn compile_program(gl_context: &glow::Context, vertex_shader_source: &str, fragment_shader_source: &str) -> glow::Program {
     unsafe {
-        let program = gl_context.create_program().expect("Cannot create program");
+        let program = gl_context.create_program().expect("Cannot create OpenGL program");
         
-        let vert_shader = gl_context.create_shader(glow::VERTEX_SHADER).expect("cannot create vertex shader");
-        gl_context.shader_source(vert_shader, vs_source);
-        gl_context.compile_shader(vert_shader);
-        if !gl_context.get_shader_compile_status(vert_shader) {
-            panic!("{}", gl_context.get_shader_info_log(vert_shader));
+        let vertex_shader = gl_context.create_shader(glow::VERTEX_SHADER).expect("Cannot create vertex shader");
+        gl_context.shader_source(vertex_shader, vertex_shader_source);
+        gl_context.compile_shader(vertex_shader);
+        if !gl_context.get_shader_compile_status(vertex_shader) {
+            panic!("{}", gl_context.get_shader_info_log(vertex_shader));
         }
-        gl_context.attach_shader(program, vert_shader);
+        gl_context.attach_shader(program, vertex_shader);
 
-        let frag_shader = gl_context.create_shader(glow::FRAGMENT_SHADER).expect("cannot create fragment shader");
-        gl_context.shader_source(frag_shader, fs_source);
-        gl_context.compile_shader(frag_shader);
-        if !gl_context.get_shader_compile_status(frag_shader) {
-            panic!("{}", gl_context.get_shader_info_log(frag_shader));
+        let fragment_shader = gl_context.create_shader(glow::FRAGMENT_SHADER).expect("Cannot create fragment shader");
+        gl_context.shader_source(fragment_shader, fragment_shader_source);
+        gl_context.compile_shader(fragment_shader);
+        if !gl_context.get_shader_compile_status(fragment_shader) {
+            panic!("{}", gl_context.get_shader_info_log(fragment_shader));
         }
-        gl_context.attach_shader(program, frag_shader);
+        gl_context.attach_shader(program, fragment_shader);
 
         gl_context.link_program(program);
         if !gl_context.get_program_link_status(program) {
             panic!("{}", gl_context.get_program_info_log(program));
         }
         
-        gl_context.delete_shader(vert_shader);
-        gl_context.delete_shader(frag_shader);
+        gl_context.delete_shader(vertex_shader);
+        gl_context.delete_shader(fragment_shader);
 
         program
     }
@@ -337,15 +335,14 @@ pub fn paint(
     let callback = egui::PaintCallback {
         rect,
         callback: Arc::new(eframe::egui_glow::CallbackFn::new(move |info, painter| {
-            let mut renderer_lock = renderer_ref.lock().unwrap();
+            let Ok(mut renderer_lock) = renderer_ref.lock() else { return; };
             
             if renderer_lock.is_none() {
                 *renderer_lock = Some(GlowRenderer::new(painter.gl()));
             }
 
-            if let Some(renderer) = renderer_lock.as_mut() {
-                renderer.paint(painter.gl(), info.viewport, &parts, &sheet, pan, zoom, allow_update);
-            }
+            let Some(renderer) = renderer_lock.as_mut() else { return; };
+            renderer.paint(painter.gl(), info.viewport, &parts, &sheet, pan, zoom, allow_update);
         })),
     };
 

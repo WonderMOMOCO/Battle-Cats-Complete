@@ -43,6 +43,7 @@ pub struct ExceptionRule {
     pub extension: String,
     pub handling: RuleHandling,
     pub languages: BTreeMap<String, bool>,
+    pub locked: bool,
 }
 
 impl Default for ExceptionRule {
@@ -56,6 +57,7 @@ impl Default for ExceptionRule {
             extension: String::new(),
             handling: RuleHandling::Include,
             languages,
+            locked: false,
         }
     }
 }

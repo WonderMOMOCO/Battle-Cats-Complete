@@ -1,13 +1,13 @@
-use std::fs;
+use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::Sender;
 use std::sync::atomic::{AtomicI32, Ordering};
-use std::sync::Arc;
-use std::collections::HashMap;
-use std::io::{Read, Seek, SeekFrom};
+use std::collections::{HashMap, HashSet};
+use std::io::{Read, Seek, SeekFrom, BufReader, BufWriter};
 use rayon::prelude::*;
 use zip::ZipArchive;
 use regex::Regex;
+use serde::{Serialize, Deserialize};
 
 use crate::features::import::logic::keys; 
 use crate::global::io::patterns;
@@ -19,6 +19,26 @@ struct PackEntry {
     original_name: String,
     offset: u64,
     size: usize,
+    is_locked: bool,
+}
+
+impl PackEntry {
+    fn to_manifest_entry(&self, checksum: u64) -> ManifestEntry {
+        ManifestEntry {
+            pack: self.pack_path.file_name().unwrap_or_default().to_string_lossy().to_string(),
+            offset: self.offset,
+            size: self.size,
+            checksum,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+struct ManifestEntry {
+    pack: String,
+    offset: u64, 
+    size: usize,
+    checksum: u64,
 }
 
 fn is_potential_conflict(name: &str) -> bool {
@@ -31,15 +51,76 @@ fn is_potential_conflict(name: &str) -> bool {
     id <= 9
 }
 
+fn load_manifest(path: &Path) -> HashMap<String, ManifestEntry> {
+    if let Ok(file) = File::open(path) {
+        let reader = BufReader::new(file);
+        if let Ok(manifest) = serde_json::from_reader(reader) {
+            return manifest;
+        }
+    }
+    HashMap::new()
+}
+
+fn save_manifest(path: &Path, manifest: &HashMap<String, ManifestEntry>) {
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    if let Ok(file) = File::create(path) {
+        let writer = BufWriter::new(file);
+        let _ = serde_json::to_writer_pretty(writer, manifest);
+    }
+}
+
+// Deterministic FNV-1a hash (64-bit)
+fn deterministic_hash(data: &[u8]) -> u64 {
+    let mut hash: u64 = 0xcbf29ce484222325;
+    for &byte in data {
+        hash ^= byte as u64;
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    hash
+}
+
+// Scans the workspace to support self-healing regardless of where files were sorted
+fn build_index(root_dir: &Path) -> HashSet<String> {
+    let mut index = HashSet::new();
+    let _ = scan_for_index(root_dir, &mut index);
+    index
+}
+
+fn scan_for_index(dir: &Path, index: &mut HashSet<String>) -> std::io::Result<()> {
+    if !dir.is_dir() { return Ok(()); }
+    for entry_result in fs::read_dir(dir)?.flatten() {
+        let path = entry_result.path();
+        if path.is_dir() {
+            let path_str = path.to_string_lossy().replace('\\', "/");
+            if path_str == "game/app" || path_str == "game/metadata" || path_str == "game/manifest" { continue; }
+            let _ = scan_for_index(&path, index);
+            continue;
+        }
+        if let Some(name) = path.file_name() {
+            index.insert(name.to_string_lossy().to_lowercase());
+        }
+    }
+    Ok(())
+}
+
 pub fn run(folder_path: &str, region_code: &str, tx: Sender<String>) -> Result<(), String> {
     let source_dir = Path::new(folder_path);
-    let raw_dir = Path::new("game/raw");
     let game_dir = Path::new("game");
+    let raw_dir = Path::new("game/raw");
+    let base_dir = Path::new("game/cats/CatBase");
+    let metadata_dir = Path::new("game/metadata");
     
     if !raw_dir.exists() { let _ = fs::create_dir_all(raw_dir); }
+    if !metadata_dir.exists() { let _ = fs::create_dir_all(metadata_dir); }
 
     let _ = tx.send("Indexing existing workspace files...".to_string());
-    let shared_index = Arc::new(build_index(game_dir));
+    let shared_index = build_index(game_dir);
+
+    let manifest_path = metadata_dir.join(format!("{}_manifest.json", region_code));
+    let has_manifest = manifest_path.exists();
+    let mut current_manifest = load_manifest(&manifest_path);
 
     let _ = tx.send("Scanning for game files...".to_string());
     let mut list_paths = Vec::new();
@@ -50,34 +131,140 @@ pub fn run(folder_path: &str, region_code: &str, tx: Sender<String>) -> Result<(
     extract_apks(&apk_paths, &mut list_paths, &mut dynamic_temp_dirs, &tx);
 
     let _ = tx.send("Sorting patch history chronologically...".to_string());
-    list_paths.sort_by_key(|p| calculate_order(p, &dynamic_temp_dirs));
-
-    let compiled_rules = compile_rules();
-    let mut master_map = HashMap::new();
-    let mut conflict_list = Vec::new(); 
-    
-    parse_list_files(&list_paths, region_code, &compiled_rules, &mut master_map, &mut conflict_list);
-
-    let filtered_tasks = filter_existing_tasks(master_map, &shared_index, raw_dir);
-    
-    let cat_base_dir = Path::new("game/cats/CatBase");
-    conflict_list.retain(|(name, entry)| {
-        let name_lower = name.to_lowercase();
-        if shared_index.contains_key(&name_lower) { return false; } 
-        let target_raw = raw_dir.join(name);
-        let target_base = cat_base_dir.join(name);
-        for p in [&target_raw, &target_base] {
-            if p.exists() {
-                if let Ok(meta) = fs::metadata(p) {
-                    if meta.len() as usize + 128 >= entry.size { return false; }
-                }
-            }
-        }
-        true
+    list_paths.sort_by(|a, b| {
+        let score_a = calculate_order(a, &dynamic_temp_dirs);
+        let score_b = calculate_order(b, &dynamic_temp_dirs);
+        score_a.cmp(&score_b).then_with(|| a.cmp(b))
     });
 
+    let compiled_rules = compile_rules();
+    let mut master_map: HashMap<String, PackEntry> = HashMap::new();
+    let mut conflict_map: HashMap<String, PackEntry> = HashMap::new(); 
+    
+    parse_list_files(&list_paths, region_code, &compiled_rules, &mut master_map, &mut conflict_map);
+
+    if has_manifest && !current_manifest.is_empty() {
+        let _ = tx.send("Verifying file checksums...".to_string());
+    }
+
+    // --- GROUP BY PACK TO PREVENT OS FILE HANDLE EXHAUSTION ---
+    let mut pack_groups: HashMap<PathBuf, Vec<(String, PackEntry)>> = HashMap::new();
+    for (name, entry) in master_map {
+        pack_groups.entry(entry.pack_path.clone()).or_default().push((name, entry));
+    }
+
+    let verified_tasks: Vec<_> = pack_groups.into_par_iter().flat_map(|(pack_path, entries)| {
+        let mut results = Vec::new();
+        if let Ok(mut file) = fs::File::open(&pack_path) {
+            let current_pack = pack_path.file_name().unwrap_or_default().to_string_lossy().to_string();
+            let mut buffer: Vec<u8> = Vec::new(); 
+            
+            for (name, entry) in entries {
+                let aligned_size = if entry.size % 16 == 0 { entry.size } else { ((entry.size / 16) + 1) * 16 };
+                buffer.resize(aligned_size, 0); 
+                
+                let chk = if file.seek(SeekFrom::Start(entry.offset)).is_ok() && file.read_exact(&mut buffer).is_ok() {
+                    deterministic_hash(&buffer)
+                } else {
+                    0
+                };
+                
+                let is_placeholder = match current_manifest.get(&name) {
+                    Some(old) => old.size > entry.size + 32,
+                    None => false,
+                };
+
+                let is_changed = match current_manifest.get(&name) {
+                    Some(old) => {
+                        if is_placeholder {
+                            false
+                        } else {
+                            old.size != entry.size || old.pack != current_pack || old.checksum != chk
+                        }
+                    },
+                    None => true,
+                };
+
+                let is_missing = !shared_index.contains(&name.to_lowercase());
+
+                if is_changed || (is_missing && !is_placeholder) {
+                    results.push((name, entry, chk));
+                }
+            }
+        } else {
+            for (name, entry) in entries {
+                results.push((name, entry, 0));
+            }
+        }
+        results
+    }).collect();
+
+    // --- REPEAT SAFE GROUPING FOR CONFLICTS ---
+    let mut conflict_groups: HashMap<PathBuf, Vec<(String, PackEntry)>> = HashMap::new();
+    for (name, entry) in conflict_map {
+        conflict_groups.entry(entry.pack_path.clone()).or_default().push((name, entry));
+    }
+
+    let verified_conflicts: Vec<_> = conflict_groups.into_par_iter().flat_map(|(pack_path, entries)| {
+        let mut results = Vec::new();
+        if let Ok(mut file) = fs::File::open(&pack_path) {
+            let current_pack = pack_path.file_name().unwrap_or_default().to_string_lossy().to_string();
+            let mut buffer: Vec<u8> = Vec::new(); 
+            
+            for (name, entry) in entries {
+                let aligned_size = if entry.size % 16 == 0 { entry.size } else { ((entry.size / 16) + 1) * 16 };
+                buffer.resize(aligned_size, 0); 
+                
+                let chk = if file.seek(SeekFrom::Start(entry.offset)).is_ok() && file.read_exact(&mut buffer).is_ok() {
+                    deterministic_hash(&buffer)
+                } else {
+                    0
+                };
+                
+                let is_placeholder = match current_manifest.get(&name) {
+                    Some(old) => old.size > entry.size + 32,
+                    None => false,
+                };
+
+                let is_changed = match current_manifest.get(&name) {
+                    Some(old) => {
+                        if is_placeholder {
+                            false 
+                        } else {
+                            old.size != entry.size || old.pack != current_pack || old.checksum != chk
+                        }
+                    },
+                    None => true,
+                };
+
+                let is_missing = !shared_index.contains(&name.to_lowercase());
+
+                if is_changed || (is_missing && !is_placeholder) {
+                    results.push((name, entry, chk));
+                }
+            }
+        } else {
+            for (name, entry) in entries {
+                results.push((name, entry, 0));
+            }
+        }
+        results
+    }).collect();
+
+    let mut filtered_tasks = Vec::new();
+    for (name, entry, checksum) in verified_tasks {
+        current_manifest.insert(name.clone(), entry.to_manifest_entry(checksum));
+        filtered_tasks.push((name, entry));
+    }
+
+    let mut filtered_conflicts = Vec::new();
+    for (name, entry, checksum) in verified_conflicts {
+        current_manifest.insert(name.clone(), entry.to_manifest_entry(checksum));
+        filtered_conflicts.push((name, entry));
+    }
+
     let to_extract_count = filtered_tasks.len();
-    if to_extract_count == 0 && conflict_list.is_empty() {
+    if to_extract_count == 0 && filtered_conflicts.is_empty() {
         let _ = tx.send("Workspace is already up to date.".to_string());
         cleanup_temp_dirs(&dynamic_temp_dirs);
         return Ok(());
@@ -88,11 +275,13 @@ pub fn run(folder_path: &str, region_code: &str, tx: Sender<String>) -> Result<(
         extract_standard_packs(filtered_tasks, raw_dir, &count, to_extract_count, &tx);
     }
 
-    if !conflict_list.is_empty() {
-        resolve_conflicts(conflict_list, raw_dir, &count, &tx);
+    if !filtered_conflicts.is_empty() {
+        resolve_conflicts(filtered_conflicts, raw_dir, base_dir, &count, &tx);
     }
 
+    save_manifest(&manifest_path, &current_manifest);
     cleanup_temp_dirs(&dynamic_temp_dirs);
+    
     let _ = tx.send(format!("Decryption complete. Extracted {} files.", count.load(Ordering::Relaxed)));
     Ok(())
 }
@@ -134,7 +323,7 @@ fn compile_rules() -> Vec<(Regex, ExceptionRule)> {
 
 fn parse_list_files(
     list_paths: &[PathBuf], region_code: &str, compiled_rules: &[(Regex, ExceptionRule)], 
-    master_map: &mut HashMap<String, PackEntry>, conflict_list: &mut Vec<(String, PackEntry)>
+    master_map: &mut HashMap<String, PackEntry>, conflict_map: &mut HashMap<String, PackEntry>
 ) {
     for list_path in list_paths {
         let pack_path = list_path.with_extension("pack");
@@ -147,14 +336,14 @@ fn parse_list_files(
         let current_code = determine_code(&pack_name, region_code);
 
         for line in content.lines() {
-            process_list_line(line, &pack_path, current_code.as_str(), compiled_rules, master_map, conflict_list);
+            process_list_line(line, &pack_path, current_code.as_str(), compiled_rules, master_map, conflict_map);
         }
     }
 }
 
 fn process_list_line(
     line: &str, pack_path: &Path, current_code: &str, compiled_rules: &[(Regex, ExceptionRule)], 
-    master_map: &mut HashMap<String, PackEntry>, conflict_list: &mut Vec<(String, PackEntry)>
+    master_map: &mut HashMap<String, PackEntry>, conflict_map: &mut HashMap<String, PackEntry>
 ) {
     let parts: Vec<&str> = line.split(',').collect();
     if parts.len() < 3 { return; }
@@ -165,6 +354,10 @@ fn process_list_line(
 
     let matched_rule = compiled_rules.iter().find(|(re, _)| re.is_match(asset_name)).map(|(_, r)| r);
 
+    let is_rule_active = if let Some(rule) = matched_rule {
+        rule.languages.values().any(|&v| v)
+    } else { false };
+
     if let Some(rule) = matched_rule {
         if rule.handling == RuleHandling::Ignore { return; }
     }
@@ -174,21 +367,20 @@ fn process_list_line(
         original_name: asset_name.to_string(),
         offset,
         size,
+        is_locked: matched_rule.map(|r| r.locked).unwrap_or(false),
     };
 
-    if matched_rule.is_none() {
+    if matched_rule.is_none() || !is_rule_active {
         if is_potential_conflict(asset_name) {
-            if let Some(pos) = conflict_list.iter().position(|(n, _)| n == asset_name) {
-                if conflict_list[pos].1.size > entry.size + 128 { return; }
-                conflict_list[pos] = (asset_name.to_string(), entry);
-            } else {
-                conflict_list.push((asset_name.to_string(), entry));
+            if let Some(existing) = conflict_map.get(asset_name) {
+                if !entry.is_locked && existing.size > entry.size + 32 { return; }
             }
+            conflict_map.insert(asset_name.to_string(), entry); 
         } else {
             if let Some(existing) = master_map.get(asset_name) {
-                if existing.size > entry.size + 128 { return; }
+                if !entry.is_locked && existing.size > entry.size + 32 { return; }
             }
-            master_map.insert(asset_name.to_string(), entry);
+            master_map.insert(asset_name.to_string(), entry); 
         }
         return;
     }
@@ -218,41 +410,21 @@ fn process_list_line(
     }
 
     if is_potential_conflict(asset_name) {
-        if let Some(pos) = conflict_list.iter().position(|(n, _)| n == &final_filename) {
-            if conflict_list[pos].1.size > entry.size + 128 { return; }
-            conflict_list[pos] = (final_filename, entry);
-        } else {
-            conflict_list.push((final_filename, entry));
+        if let Some(existing) = conflict_map.get(&final_filename) {
+            if !entry.is_locked && existing.size > entry.size + 32 { return; }
         }
+        conflict_map.insert(final_filename, entry);
     } else {
         if let Some(existing) = master_map.get(&final_filename) {
-            if existing.size > entry.size + 128 { return; }
+            if !entry.is_locked && existing.size > entry.size + 32 { return; }
         }
         master_map.insert(final_filename, entry);
     }
 }
 
-fn filter_existing_tasks(master_map: HashMap<String, PackEntry>, shared_index: &HashMap<String, Vec<PathBuf>>, raw_dir: &Path) -> Vec<(String, PackEntry)> {
-    let size_tolerance = 128;
-    master_map.into_iter().filter(|(final_name, entry)| {
-        let name_lower = final_name.to_lowercase();
-        if let Some(existing_paths) = shared_index.get(&name_lower) {
-            for path in existing_paths {
-                let Ok(meta) = fs::metadata(path) else { continue; };
-                if meta.len() as usize + size_tolerance >= entry.size { return false; }
-            }
-        }
-        let target_path = raw_dir.join(final_name);
-        if target_path.exists() {
-            let Ok(meta) = fs::metadata(&target_path) else { return true; };
-            if meta.len() as usize + size_tolerance >= entry.size { return false; }
-        }
-        true
-    }).collect()
-}
-
 fn extract_standard_packs(filtered_tasks: Vec<(String, PackEntry)>, raw_dir: &Path, count: &AtomicI32, total: usize, tx: &Sender<String>) {
-    let _ = tx.send(format!("Found {} new or updated files. Starting extraction...", total));
+    let _ = tx.send(format!("Found {} new or updated files.", total));
+    let _ = tx.send(format!("Starting extraction..."));
     let update_interval = (total / 100).max(10) as i32;
 
     let mut pack_tasks: HashMap<PathBuf, Vec<(String, PackEntry)>> = HashMap::new();
@@ -262,12 +434,14 @@ fn extract_standard_packs(filtered_tasks: Vec<(String, PackEntry)>, raw_dir: &Pa
 
     pack_tasks.into_par_iter().for_each(|(pack_path, entries)| {
         let Ok(mut file) = fs::File::open(&pack_path) else { return; };
+        let mut buffer: Vec<u8> = Vec::new(); 
+        
         for (final_name, entry) in entries {
             let target_path = raw_dir.join(&final_name);
             let aligned_size = if entry.size % 16 == 0 { entry.size } else { ((entry.size / 16) + 1) * 16 };
             
             if file.seek(SeekFrom::Start(entry.offset)).is_err() { continue; }
-            let mut buffer = vec![0u8; aligned_size];
+            buffer.resize(aligned_size, 0);
             if file.read_exact(&mut buffer).is_err() { continue; }
             
             let Ok((decrypted_bytes, _)) = keys::decrypt_pack_chunk(&buffer, &entry.original_name) else { continue; };
@@ -282,9 +456,8 @@ fn extract_standard_packs(filtered_tasks: Vec<(String, PackEntry)>, raw_dir: &Pa
     });
 }
 
-fn resolve_conflicts(list: Vec<(String, PackEntry)>, raw: &Path, count: &AtomicI32, tx: &Sender<String>) {
+fn resolve_conflicts(list: Vec<(String, PackEntry)>, raw: &Path, base_dir: &Path, count: &AtomicI32, tx: &Sender<String>) {
     let _ = tx.send(format!("Resolving {} Basic Cat Banner overlaps...", list.len()));
-    let base_dir = Path::new("game/cats/CatBase");
     if !base_dir.exists() { let _ = fs::create_dir_all(base_dir); }
 
     for (name, entry) in list {
@@ -339,33 +512,6 @@ fn calculate_order(path: &Path, temp_apk_dirs: &[PathBuf]) -> u64 {
     if score == 5_000 && (name == "DataLocal" || name == "UpdateLocal" || name.ends_with("Local")) { score = 0; }
     if temp_apk_dirs.iter().any(|dir| path.starts_with(dir)) { score += 500_000_000; }
     score
-}
-
-fn build_index(root_dir: &Path) -> HashMap<String, Vec<PathBuf>> {
-    let mut index = HashMap::new();
-    let _ = scan_for_index(root_dir, &mut index);
-    index
-}
-
-fn scan_for_index(dir: &Path, index: &mut HashMap<String, Vec<PathBuf>>) -> std::io::Result<()> {
-    if !dir.is_dir() { return Ok(()); }
-    
-    for entry_result in fs::read_dir(dir)?.flatten() {
-        let path = entry_result.path();
-        
-        if path.is_dir() {
-            let path_str = path.to_string_lossy().replace('\\', "/");
-            if path_str == "game/app" { continue; }
-            let _ = scan_for_index(&path, index);
-            continue;
-        }
-        
-        if let Some(name) = path.file_name() {
-            let key = name.to_string_lossy().to_lowercase();
-            index.entry(key).or_default().push(path);
-        }
-    }
-    Ok(())
 }
 
 fn decrypt_list_content(data: &[u8]) -> Result<String, String> {

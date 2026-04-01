@@ -2,10 +2,9 @@ use std::fs;
 use std::io::{self, BufRead};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::Sender;
-
 use crate::features::cat::patterns as cat_patterns; 
 use crate::global::io::patterns as global_patterns;
-use super::{cat, global, enemy};
+use super::{cat, global, enemy, stage}; 
 
 pub fn count_lines(path: &Path) -> usize {
     if let Some(ext) = path.extension() {
@@ -43,7 +42,6 @@ pub fn move_if_bigger(src: &Path, dest: &Path) -> std::io::Result<bool> {
     }
 }
 
-// --- FIX: The Binary Byte-Size Gatekeeper ---
 pub fn move_if_heavier(src: &Path, dest: &Path) -> std::io::Result<bool> {
     ensure_parent_dir(dest);
 
@@ -55,7 +53,6 @@ pub fn move_if_heavier(src: &Path, dest: &Path) -> std::io::Result<bool> {
     let src_size = fs::metadata(src).map(|m| m.len()).unwrap_or(0);
     let dest_size = fs::metadata(dest).map(|m| m.len()).unwrap_or(0);
     
-    // Check byte size instead of line counts
     if src_size >= dest_size {
         let _ = fs::remove_file(dest);
         fs::rename(src, dest)?;
@@ -67,14 +64,11 @@ pub fn move_if_heavier(src: &Path, dest: &Path) -> std::io::Result<bool> {
 }
 
 fn is_cat_base_banner(name: &str, clean_name: &str) -> bool {
-    // Only target udi files for the 10 basic cats
     if !name.starts_with("udi") || name.len() < 6 { return false; }
     
     let Ok(id) = name[3..6].parse::<u32>() else { return false; };
     if id > 9 { return false; }
 
-    // If the physical name has a region code (udi001_s_tw.png != udi001_s.png)
-    // then it's a Cat Base Upgrade asset
     name != clean_name
 }
 
@@ -94,12 +88,14 @@ pub fn sort_game_files(tx: Sender<String>) -> Result<(), String> {
     let cats_dir = Path::new("game/cats");
     let assets_dir = Path::new("game/assets");
     let enemy_dir = Path::new("game/enemies");
+    let stages_dir = Path::new("game/stages"); 
 
     if !raw_dir.exists() { return Err("Raw directory not found.".to_string()); }
 
     let cat_matcher = cat::CatMatcher::new();
     let global_matcher = global::GlobalMatcher::new();
     let enemy_matcher = enemy::EnemyMatcher::new();
+    let stage_matcher = stage::StageMatcher::new(); 
 
     let mut valid_tasks: Vec<(PathBuf, String, String, PathBuf)> = Vec::new();
 
@@ -121,6 +117,7 @@ pub fn sort_game_files(tx: Sender<String>) -> Result<(), String> {
             global_matcher.get_dest(&base_name, assets_dir)
                 .or_else(|| cat_matcher.get_dest(&base_name, cats_dir))
                 .or_else(|| enemy_matcher.get_dest(&base_name, enemy_dir))
+                .or_else(|| stage_matcher.get_dest(&base_name, stages_dir))
         };
 
         if let Some(folder) = dest_folder {

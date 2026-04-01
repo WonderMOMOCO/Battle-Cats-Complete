@@ -25,8 +25,8 @@ pub fn show(
     current_level: &mut i32,    
     texture_cache: &mut Option<egui::TextureHandle>,
     current_key: &mut String,
-    icon_sheet: &mut SpriteSheet,   
-    img022_sheet: &mut SpriteSheet, 
+    img015_sheets: &mut Vec<SpriteSheet>,   
+    img022_sheets: &mut Vec<SpriteSheet>, 
     anim_sheet: &mut SpriteSheet,   
     model_data: &mut Option<Model>,
     anim_viewer: &mut AnimViewer,
@@ -39,11 +39,11 @@ pub fn show(
     talent_costs: &HashMap<u8, TalentCost>,
     cache_version: u64,
 ) {
-    img015::ensure_loaded(ctx, icon_sheet, settings);
-    img022::ensure_loaded(ctx, img022_sheet, settings);
+    img015::ensure_loaded(ctx, img015_sheets, settings);
+    img022::ensure_loaded(ctx, img022_sheets, settings);
 
     let export_action = header::render(
-        ctx, ui, cat_entry, current_form, current_tab, current_level, level_input, texture_cache, current_key, settings, talent_levels, talent_costs, img022_sheet
+        ctx, ui, cat_entry, current_form, current_tab, current_level, level_input, texture_cache, current_key, settings, talent_levels, talent_costs, img022_sheets
     );
 
     // --- VFS SYNC: Bypass scanner cache and fetch modded stats dynamically ---
@@ -125,7 +125,10 @@ pub fn show(
                 };
 
                 let priority_clone = settings.general.language_priority.clone();
-                let cuts_clone = icon_sheet.cuts_map.clone(); 
+                let mut cuts_clone = std::collections::HashMap::new();
+                for sheet in img015_sheets.iter().rev() {
+                    cuts_clone.extend(sheet.cuts_map.clone());
+                }
 
                 if export_action == ExportAction::Copy {
                     generate_and_copy(ctx.clone(), priority_clone, data, cuts_clone);
@@ -161,7 +164,7 @@ pub fn show(
                     .auto_shrink([false, false]) 
                     .show(ui, |ui| {
                         abilities::render(
-                            ui, final_s, base_s, cat_entry, *current_level, icon_sheet, 
+                            ui, final_s, base_s, cat_entry, *current_level, img015_sheets, 
                             assets,
                             settings, 
                             if form_allows_talents { cat_entry.talent_data.as_ref() } else { None },
@@ -172,7 +175,7 @@ pub fn show(
         },
         DetailTab::Talents => {
              if let Some(raw) = &cat_entry.talent_data {
-                talents::render(ui, raw, icon_sheet, img022_sheet, talent_name_cache, skill_descriptions, settings, base_stats, cat_entry.curve.as_ref(), *current_level, talent_levels, cat_entry.id, talent_costs);
+                talents::render(ui, raw, img015_sheets, img022_sheets, talent_name_cache, skill_descriptions, settings, base_stats, cat_entry.curve.as_ref(), *current_level, talent_levels, cat_entry.id, talent_costs);
              }
         },
         DetailTab::Details => {

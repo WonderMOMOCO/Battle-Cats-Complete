@@ -25,28 +25,25 @@ pub fn cleanup_temp_files() {
 
     for file in temp_files {
         let path = Path::new(file);
-        if !path.exists() {
-            continue;
+        if path.exists() {
+            let _ = fs::remove_file(path); 
         }
-        let _ = fs::remove_file(path); 
     }
 }
 
+#[cfg(unix)]
 fn restart_app() {
-    let exe = std::env::current_exe().unwrap_or_default();
+    use std::os::unix::process::CommandExt;
+    let Ok(exe) = std::env::current_exe() else { return; };
+    let _ = Command::new(exe).exec(); 
+    std::process::exit(1); 
+}
 
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::CommandExt;
-        let _ = Command::new(exe).exec(); 
-        std::process::exit(1); 
-    }
-
-    #[cfg(not(unix))]
-    {
-        let _ = Command::new(exe).spawn();
-        std::process::exit(0);
-    }
+#[cfg(not(unix))]
+fn restart_app() {
+    let Ok(exe) = std::env::current_exe() else { return; };
+    let _ = Command::new(exe).spawn();
+    std::process::exit(0);
 }
 
 #[derive(Clone)]
@@ -90,9 +87,8 @@ impl Default for Updater {
 
 impl Updater {
     pub fn check_for_updates(&mut self, ctx: egui::Context, is_manual: bool) {
-        if !matches!(self.status, UpdateStatus::Idle | UpdateStatus::UpToDate | UpdateStatus::CheckFailed) {
-            return;
-        }
+        let is_valid_state = matches!(self.status, UpdateStatus::Idle | UpdateStatus::UpToDate | UpdateStatus::CheckFailed);
+        if !is_valid_state { return; }
         
         let tx = self.tx.clone();
         self.status = UpdateStatus::Checking;
@@ -123,14 +119,14 @@ impl Updater {
             let target_tag = if version.starts_with('v') { version.clone() } else { format!("v{}", version) };
             
             let target_asset_name = if cfg!(target_os = "windows") { 
-                "bcc_windows" 
+                "bcc_windows.zip" 
             } else if cfg!(target_os = "macos") {
-                "bcc_mac"
+                "bcc_mac.zip"
             } else { 
-                "bcc_linux" 
+                "bcc_linux.zip" 
             };
             
-            let update_box = match self_update::backends::github::Update::configure()
+            let Ok(update_box) = self_update::backends::github::Update::configure()
                 .repo_owner(REPO_OWNER)
                 .repo_name(REPO_NAME)
                 .bin_name(BIN_NAME)
@@ -140,17 +136,13 @@ impl Updater {
                 .current_version(cargo_crate_version!())
                 .target_version_tag(&target_tag)
                 .target(target_asset_name)     
-                .build() 
-            {
-                Ok(b) => b,
-                Err(_) => {
+                .build() else {
                     cleanup_temp_files();
                     let _ = tx.send(UpdaterMsg::CheckFailed); 
                     return;
-                }
-            };
+                };
                 
-            if let Err(_) = update_box.update() {
+            if update_box.update().is_err() {
                 cleanup_temp_files();
                 let _ = tx.send(UpdaterMsg::CheckFailed); 
                 return;
@@ -187,10 +179,7 @@ impl Updater {
             }
         }
 
-        let t = match self.clear_time {
-            Some(time) => time,
-            None => return,
-        };
+        let Some(t) = self.clear_time else { return; };
 
         if ctx.input(|i| i.time) >= t {
             self.status = UpdateStatus::Idle;
@@ -241,41 +230,41 @@ impl Updater {
         if let Some(pos) = fixed_pos { window = window.current_pos(pos); }
             
         window.show(ctx, |ui| {
-                ui.vertical_centered(|ui| {
-                    ui.label(format!("New Battle Cats Complete update found: {}", display_ver));
-                    ui.add_space(10.0);
-                    ui.label("Would you like to download the update now?");
-                });
-                ui.add_space(20.0);
-
-                let mut style: egui::Style = (**ui.style()).clone();
-                style.visuals.widgets.inactive.rounding = egui::Rounding::same(4.0);
-                style.visuals.widgets.active.rounding = egui::Rounding::same(4.0);
-                style.visuals.widgets.hovered.rounding = egui::Rounding::same(4.0);
-                ui.set_style(style);
-
-                ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x = 10.0; 
-
-                    let btn_w = PROMPT_BUTTON_SIZE[0];
-                    let count = 3.0; 
-                    let spacing = 10.0;
-                    let total_w = (btn_w * count) + (spacing * (count - 1.0)); 
-                    
-                    let available_w = ui.available_width();
-                    let margin_left = (available_w - total_w) / 2.0;
-                    if margin_left > 0.0 {
-                        ui.add_space(margin_left);
-                    }
-
-                    if ui.add_sized(PROMPT_BUTTON_SIZE, egui::Button::new("Yes")).clicked() { start_download = true; }
-                    if ui.add_sized(PROMPT_BUTTON_SIZE, egui::Button::new("No")).clicked() { close_modal = true; }
-                    if ui.add_sized(PROMPT_BUTTON_SIZE, egui::Button::new("Never")).clicked() {
-                        close_modal = true;
-                        disable_future = true;
-                    }
-                });
+            ui.vertical_centered(|ui| {
+                ui.label(format!("New Battle Cats Complete update found: {}", display_ver));
+                ui.add_space(10.0);
+                ui.label("Would you like to download the update now?");
             });
+            ui.add_space(20.0);
+
+            let mut style: egui::Style = (**ui.style()).clone();
+            style.visuals.widgets.inactive.rounding = egui::Rounding::same(4.0);
+            style.visuals.widgets.active.rounding = egui::Rounding::same(4.0);
+            style.visuals.widgets.hovered.rounding = egui::Rounding::same(4.0);
+            ui.set_style(style);
+
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 10.0; 
+
+                let btn_w = PROMPT_BUTTON_SIZE[0];
+                let count = 3.0; 
+                let spacing = 10.0;
+                let total_w = (btn_w * count) + (spacing * (count - 1.0)); 
+                
+                let available_w = ui.available_width();
+                let margin_left = (available_w - total_w) / 2.0;
+                if margin_left > 0.0 {
+                    ui.add_space(margin_left);
+                }
+
+                if ui.add_sized(PROMPT_BUTTON_SIZE, egui::Button::new("Yes")).clicked() { start_download = true; }
+                if ui.add_sized(PROMPT_BUTTON_SIZE, egui::Button::new("No")).clicked() { close_modal = true; }
+                if ui.add_sized(PROMPT_BUTTON_SIZE, egui::Button::new("Never")).clicked() {
+                    close_modal = true;
+                    disable_future = true;
+                }
+            });
+        });
 
         if start_download {
             self.download_and_install(release);
@@ -305,15 +294,15 @@ impl Updater {
         if let Some(pos) = fixed_pos { window = window.current_pos(pos); }
             
         window.show(ctx, |ui| {
+            ui.add_space(10.0);
+            ui.vertical_centered(|ui| {
+                let display_tag = if tag.starts_with('v') { tag.clone() } else { format!("v{}", tag) };
+                ui.label(format!("Downloading {}...", display_tag));
                 ui.add_space(10.0);
-                ui.vertical_centered(|ui| {
-                    let display_tag = if tag.starts_with('v') { tag.clone() } else { format!("v{}", tag) };
-                    ui.label(format!("Downloading {}...", display_tag));
-                    ui.add_space(10.0);
-                    let progress = (ctx.input(|i| i.time) % 1.0) as f32;
-                    ui.add(egui::ProgressBar::new(progress).animate(false)); 
-                });
+                let progress = (ctx.input(|i| i.time) % 1.0) as f32;
+                ui.add(egui::ProgressBar::new(progress).animate(false)); 
             });
+        });
     }
 
     fn show_restart_pending_window(&mut self, ctx: &egui::Context, settings: &Settings, drag_guard: &mut DragGuard, tag: String) {
@@ -344,37 +333,37 @@ impl Updater {
         if let Some(pos) = fixed_pos { window = window.current_pos(pos); }
             
         window.show(ctx, |ui| {
-                ui.vertical_centered(|ui| {
-                    ui.label(format!("{} update complete!", display_tag));
-                    ui.add_space(5.0);
-                    ui.label("Would you like to restart and apply the update now?");
-                });
-                ui.add_space(20.0);
-
-                let mut style: egui::Style = (**ui.style()).clone();
-                style.visuals.widgets.inactive.rounding = egui::Rounding::same(4.0);
-                style.visuals.widgets.active.rounding = egui::Rounding::same(4.0);
-                style.visuals.widgets.hovered.rounding = egui::Rounding::same(4.0);
-                ui.set_style(style);
-
-                ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x = 10.0; 
-
-                    let btn_w = RESTART_BUTTON_SIZE[0];
-                    let count = 2.0; 
-                    let spacing = 10.0;
-                    let total_w = (btn_w * count) + (spacing * (count - 1.0)); 
-                    
-                    let available_w = ui.available_width();
-                    let margin_left = (available_w - total_w) / 2.0;
-                    if margin_left > 0.0 {
-                        ui.add_space(margin_left);
-                    }
-
-                    if ui.add_sized(RESTART_BUTTON_SIZE, egui::Button::new("Yes")).clicked() { should_restart = true; }
-                    if ui.add_sized(RESTART_BUTTON_SIZE, egui::Button::new("No")).clicked() { close = true; }
-                });
+            ui.vertical_centered(|ui| {
+                ui.label(format!("{} update complete!", display_tag));
+                ui.add_space(5.0);
+                ui.label("Would you like to restart and apply the update now?");
             });
+            ui.add_space(20.0);
+
+            let mut style: egui::Style = (**ui.style()).clone();
+            style.visuals.widgets.inactive.rounding = egui::Rounding::same(4.0);
+            style.visuals.widgets.active.rounding = egui::Rounding::same(4.0);
+            style.visuals.widgets.hovered.rounding = egui::Rounding::same(4.0);
+            ui.set_style(style);
+
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 10.0; 
+
+                let btn_w = RESTART_BUTTON_SIZE[0];
+                let count = 2.0; 
+                let spacing = 10.0;
+                let total_w = (btn_w * count) + (spacing * (count - 1.0)); 
+                
+                let available_w = ui.available_width();
+                let margin_left = (available_w - total_w) / 2.0;
+                if margin_left > 0.0 {
+                    ui.add_space(margin_left);
+                }
+
+                if ui.add_sized(RESTART_BUTTON_SIZE, egui::Button::new("Yes")).clicked() { should_restart = true; }
+                if ui.add_sized(RESTART_BUTTON_SIZE, egui::Button::new("No")).clicked() { close = true; }
+            });
+        });
         
         if should_restart {
             restart_app();
@@ -391,14 +380,11 @@ fn check_remote() -> Result<Option<self_update::update::Release>, Box<dyn std::e
         .build()?
         .fetch()?;
         
-    let latest = match releases.first() {
-        Some(l) => l,
-        None => return Ok(None),
-    };
+    let Some(latest) = releases.first() else { return Ok(None); };
     
-    if self_update::version::bump_is_greater(current, &latest.version)? {
-        return Ok(Some(latest.clone()));
+    if !self_update::version::bump_is_greater(current, &latest.version)? {
+        return Ok(None);
     }
     
-    Ok(None)
+    Ok(Some(latest.clone()))
 }

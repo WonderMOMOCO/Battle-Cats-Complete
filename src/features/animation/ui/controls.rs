@@ -54,7 +54,7 @@ pub fn render_controls_overlay(
         .max_rect(clip_rect)
         .layout(egui::Layout::bottom_up(egui::Align::Min));
     
-    let res = ui.allocate_new_ui(builder, |ui| {
+    let overlay_response = ui.allocate_new_ui(builder, |ui| {
         egui::Frame::window(ui.style())
             .fill(egui::Color32::from_black_alpha(160)) 
             .stroke(egui::Stroke::new(1.0, egui::Color32::from_gray(60)))
@@ -67,20 +67,17 @@ pub fn render_controls_overlay(
                     let width_to_use = if anim_viewer.cached_controls_width > 1.0 { anim_viewer.cached_controls_width } else { ui.available_width() };
                     ui.add_sized(egui::vec2(width_to_use, 1.0), egui::Separator::default().horizontal());
                     
-                    let icon = if settings.animation.controls_expanded { "▼" } else { "▲" };
-                    let btn = egui::Button::new(egui::RichText::new(icon).strong().size(14.0)).fill(egui::Color32::TRANSPARENT).stroke(egui::Stroke::NONE);
-                    if ui.add_sized(egui::vec2(width_to_use, 18.0), btn).clicked() { 
+                    let icon_text = if settings.animation.controls_expanded { "▼" } else { "▲" };
+                    let expand_button = egui::Button::new(egui::RichText::new(icon_text).strong().size(14.0)).fill(egui::Color32::TRANSPARENT).stroke(egui::Stroke::NONE);
+                    if ui.add_sized(egui::vec2(width_to_use, 18.0), expand_button).clicked() { 
                         settings.animation.controls_expanded = !settings.animation.controls_expanded; 
                     }
                 });
             })
     });
 
-    if let Some(pointer_pos) = ui.ctx().pointer_latest_pos() {
-        if res.inner.response.rect.contains(pointer_pos) { return true; }
-    }
-    
-    false
+    let Some(pointer_position) = ui.ctx().pointer_latest_pos() else { return false; };
+    overlay_response.inner.response.rect.contains(pointer_position)
 }
 
 fn render_internal_ui(
@@ -100,43 +97,43 @@ fn render_internal_ui(
     let active_color = egui::Color32::from_rgb(31, 106, 165);
     let inactive_color = egui::Color32::from_gray(60);
     
-    let btn_w = 70.0;
+    let button_width = 70.0;
     let grid_gap = 5.0;
-    let btn_size = egui::vec2(btn_w, 25.0);
+    let button_size = egui::vec2(button_width, 25.0);
     let is_locked = anim_viewer.export_state.is_processing || anim_viewer.export_state.is_loop_searching;
     let display_multiplier = if interpolation { native_fps / 30.0 } else { 1.0 };
 
-    let (lcm_result, max_frame_val) = if let Some(anim) = &anim_viewer.current_anim {
+    let (loop_lcm_result, max_frame_value) = if let Some(animation) = &anim_viewer.current_anim {
         if anim_viewer.loaded_anim_index <= 1 { 
-            let res = anim.calculate_true_loop();
-            (res, res.unwrap_or(0)) 
+            let true_loop = animation.calculate_true_loop();
+            (true_loop, true_loop.unwrap_or(0)) 
         } else { 
-            (Some(anim.max_frame), anim.max_frame) 
+            (Some(animation.max_frame), animation.max_frame) 
         }
     } else { 
         (Some(0), 0) 
     };
     
-    let display_max_str = match lcm_result {
-        Some(v) if v > 999_999 => "???".to_string(), 
-        Some(v) => ((v as f32 * display_multiplier).round() as i32).to_string(),
+    let display_max_string = match loop_lcm_result {
+        Some(value) if value > 999_999 => "???".to_string(), 
+        Some(value) => ((value as f32 * display_multiplier).round() as i32).to_string(),
         None => "???".to_string()
     };
 
-    let cur_frame_val = anim_viewer.current_frame;
-    let loop_range_0 = anim_viewer.loop_range.0;
-    let loop_range_1 = anim_viewer.loop_range.1;
+    let current_frame_value = anim_viewer.current_frame;
+    let loop_range_start = anim_viewer.loop_range.0;
+    let loop_range_end = anim_viewer.loop_range.1;
     let is_playing = anim_viewer.is_playing;
     let is_model_mode = anim_viewer.loaded_anim_index == IDX_MODEL;
     
-    let cur_display_val = (cur_frame_val * display_multiplier).round() as i32;
+    let current_display_value = (current_frame_value * display_multiplier).round() as i32;
     
     let effective_display_max = if is_model_mode {
         "0".to_string()
-    } else if let Some(override_end) = loop_range_1 {
+    } else if let Some(override_end) = loop_range_end {
         ((override_end as f32 * display_multiplier).round() as i32).to_string()
     } else {
-        display_max_str.clone()
+        display_max_string.clone()
     };
     
     let tile_frame = egui::Frame::none()
@@ -151,9 +148,9 @@ fn render_internal_ui(
         // Column 1
         ui.vertical(|ui| {
             let play_icon = if is_playing { "⏸" } else { "▶" };
-            let enabled = anim_viewer.loaded_anim_index != IDX_NONE && base_assets_available && !is_locked;
+            let is_enabled = anim_viewer.loaded_anim_index != IDX_NONE && base_assets_available && !is_locked;
             
-            if ui.add_enabled_ui(enabled, |ui| {
+            if ui.add_enabled_ui(is_enabled, |ui| {
                 ui.add_sized(egui::vec2(ICON_W, TILE_HEIGHT), egui::Button::new(egui::RichText::new(play_icon).size(16.0)))
             }).inner.clicked() {
                 anim_viewer.is_playing = !anim_viewer.is_playing;
@@ -177,10 +174,10 @@ fn render_internal_ui(
                     ui.horizontal(|ui| {
                         ui.spacing_mut().item_spacing.x = GAP;
                         
-                        let enabled = anim_viewer.loaded_anim_index != IDX_NONE && base_assets_available;
+                        let is_enabled = anim_viewer.loaded_anim_index != IDX_NONE && base_assets_available;
     
                         if !is_playing {
-                            let left = ui.add_enabled_ui(enabled, |ui| {
+                            let left_button = ui.add_enabled_ui(is_enabled, |ui| {
                                 ui.add_sized(egui::vec2(NAV_W, TILE_HEIGHT), egui::Button::new("◀").sense(egui::Sense::click().union(egui::Sense::drag())))
                             }).inner;
                             
@@ -190,38 +187,38 @@ fn render_internal_ui(
                                     ui.style_mut().visuals.widgets.inactive.bg_fill = egui::Color32::TRANSPARENT;
                                     ui.style_mut().visuals.widgets.active.bg_fill = egui::Color32::TRANSPARENT;
                                     ui.style_mut().visuals.widgets.hovered.bg_fill = egui::Color32::TRANSPARENT;
-                                    let re = ui.add_enabled(enabled, egui::TextEdit::singleline(&mut anim_viewer.single_frame_str)
+                                    let text_response = ui.add_enabled(is_enabled, egui::TextEdit::singleline(&mut anim_viewer.single_frame_str)
                                         .frame(false).desired_width(INPUT_W).vertical_align(egui::Align::Center).horizontal_align(egui::Align::Center));
-                                    if re.changed() {
-                                        if let Ok(val) = anim_viewer.single_frame_str.parse::<i32>() {
-                                            anim_viewer.current_frame = val as f32 / display_multiplier;
+                                    if text_response.changed() {
+                                        if let Ok(parsed_value) = anim_viewer.single_frame_str.parse::<i32>() {
+                                            anim_viewer.current_frame = parsed_value as f32 / display_multiplier;
                                         }
                                     }
-                                    if !re.has_focus() {
-                                        anim_viewer.single_frame_str = format!("{}", cur_display_val);
+                                    if !text_response.has_focus() {
+                                        anim_viewer.single_frame_str = format!("{}", current_display_value);
                                     }
                                 });
                             });
     
-                            let right = ui.add_enabled_ui(enabled, |ui| {
+                            let right_button = ui.add_enabled_ui(is_enabled, |ui| {
                                 ui.add_sized(egui::vec2(NAV_W, TILE_HEIGHT), egui::Button::new("▶").sense(egui::Sense::click().union(egui::Sense::drag())))
                             }).inner;
     
-                            if left.is_pointer_button_down_on() { anim_viewer.hold_dir = -1; } 
-                            else if right.is_pointer_button_down_on() { anim_viewer.hold_dir = 1; } 
+                            if left_button.is_pointer_button_down_on() { anim_viewer.hold_dir = -1; } 
+                            else if right_button.is_pointer_button_down_on() { anim_viewer.hold_dir = 1; } 
                             else { anim_viewer.hold_dir = 0; }
                             
-                            if left.clicked() {
-                                let f = cur_frame_val - 1.0;
-                                let wrap = if lcm_result.is_some() { max_frame_val as f32 } else { 0.0 }; 
-                                anim_viewer.current_frame = if f < 0.0 { wrap } else { f };
+                            if left_button.clicked() {
+                                let previous_frame = current_frame_value - 1.0;
+                                let wrap_value = if loop_lcm_result.is_some() { max_frame_value as f32 } else { 0.0 }; 
+                                anim_viewer.current_frame = if previous_frame < 0.0 { wrap_value } else { previous_frame };
                             }
-                            if right.clicked() {
-                                let f = cur_frame_val + 1.0;
-                                if let Some(mx) = lcm_result {
-                                    anim_viewer.current_frame = if f > mx as f32 { 0.0 } else { f };
+                            if right_button.clicked() {
+                                let next_frame = current_frame_value + 1.0;
+                                if let Some(max_limit) = loop_lcm_result {
+                                    anim_viewer.current_frame = if next_frame > max_limit as f32 { 0.0 } else { next_frame };
                                 } else {
-                                    anim_viewer.current_frame = f;
+                                    anim_viewer.current_frame = next_frame;
                                 }
                             }
                         } else {
@@ -230,19 +227,21 @@ fn render_internal_ui(
                                 ui.set_width(60.0); ui.set_height(TILE_HEIGHT);
                                 ui.with_layout(egui::Layout::centered_and_justified(egui::Direction::LeftToRight), |ui| {
                                     ui.style_mut().visuals.widgets.inactive.bg_fill = egui::Color32::TRANSPARENT;
-                                    if loop_range_0.is_some() && anim_viewer.range_str_cache.0.is_empty() {
-                                        let v = (loop_range_0.unwrap() as f32 * display_multiplier).round() as i32;
-                                        anim_viewer.range_str_cache.0 = v.to_string();
-                                    }
-                                    let re = ui.add_enabled(enabled, egui::TextEdit::singleline(&mut anim_viewer.range_str_cache.0)
-                                        .hint_text(egui::RichText::new("0").color(egui::Color32::GRAY)).frame(false).desired_width(60.0).vertical_align(egui::Align::Center).horizontal_align(egui::Align::Center));
-                                    if re.changed() {
-                                        if anim_viewer.range_str_cache.0.is_empty() { anim_viewer.loop_range.0 = None; } 
-                                        else if let Ok(val) = anim_viewer.range_str_cache.0.parse::<i32>() {
-                                            anim_viewer.loop_range.0 = Some((val as f32 / display_multiplier).round() as i32);
+                                    if let Some(range_start) = loop_range_start {
+                                        if anim_viewer.range_str_cache.0.is_empty() {
+                                            let display_value = (range_start as f32 * display_multiplier).round() as i32;
+                                            anim_viewer.range_str_cache.0 = display_value.to_string();
                                         }
                                     }
-                                    if re.secondary_clicked() { anim_viewer.loop_range.0 = None; anim_viewer.range_str_cache.0.clear(); }
+                                    let text_response = ui.add_enabled(is_enabled, egui::TextEdit::singleline(&mut anim_viewer.range_str_cache.0)
+                                        .hint_text(egui::RichText::new("0").color(egui::Color32::GRAY)).frame(false).desired_width(60.0).vertical_align(egui::Align::Center).horizontal_align(egui::Align::Center));
+                                    if text_response.changed() {
+                                        if anim_viewer.range_str_cache.0.is_empty() { anim_viewer.loop_range.0 = None; } 
+                                        else if let Ok(parsed_value) = anim_viewer.range_str_cache.0.parse::<i32>() {
+                                            anim_viewer.loop_range.0 = Some((parsed_value as f32 / display_multiplier).round() as i32);
+                                        }
+                                    }
+                                    if text_response.secondary_clicked() { anim_viewer.loop_range.0 = None; anim_viewer.range_str_cache.0.clear(); }
                                 });
                             });
                             tile_frame.show(ui, |ui| { ui.set_width(20.0); ui.set_height(TILE_HEIGHT); ui.with_layout(egui::Layout::centered_and_justified(egui::Direction::LeftToRight), |ui| { ui.label("~"); }); });
@@ -250,19 +249,21 @@ fn render_internal_ui(
                                 ui.set_width(60.0); ui.set_height(TILE_HEIGHT);
                                 ui.with_layout(egui::Layout::centered_and_justified(egui::Direction::LeftToRight), |ui| {
                                     ui.style_mut().visuals.widgets.inactive.bg_fill = egui::Color32::TRANSPARENT;
-                                    if loop_range_1.is_some() && anim_viewer.range_str_cache.1.is_empty() {
-                                        let v = (loop_range_1.unwrap() as f32 * display_multiplier).round() as i32;
-                                        anim_viewer.range_str_cache.1 = v.to_string();
-                                    }
-                                    let re = ui.add_enabled(enabled, egui::TextEdit::singleline(&mut anim_viewer.range_str_cache.1)
-                                        .hint_text(egui::RichText::new(&display_max_str).color(egui::Color32::GRAY)).frame(false).desired_width(60.0).vertical_align(egui::Align::Center).horizontal_align(egui::Align::Center));
-                                    if re.changed() {
-                                        if anim_viewer.range_str_cache.1.is_empty() { anim_viewer.loop_range.1 = None; } 
-                                        else if let Ok(val) = anim_viewer.range_str_cache.1.parse::<i32>() {
-                                            anim_viewer.loop_range.1 = Some((val as f32 / display_multiplier).round() as i32);
+                                    if let Some(range_end) = loop_range_end {
+                                        if anim_viewer.range_str_cache.1.is_empty() {
+                                            let display_value = (range_end as f32 * display_multiplier).round() as i32;
+                                            anim_viewer.range_str_cache.1 = display_value.to_string();
                                         }
                                     }
-                                    if re.secondary_clicked() { anim_viewer.loop_range.1 = None; anim_viewer.range_str_cache.1.clear(); }
+                                    let text_response = ui.add_enabled(is_enabled, egui::TextEdit::singleline(&mut anim_viewer.range_str_cache.1)
+                                        .hint_text(egui::RichText::new(&display_max_string).color(egui::Color32::GRAY)).frame(false).desired_width(60.0).vertical_align(egui::Align::Center).horizontal_align(egui::Align::Center));
+                                    if text_response.changed() {
+                                        if anim_viewer.range_str_cache.1.is_empty() { anim_viewer.loop_range.1 = None; } 
+                                        else if let Ok(parsed_value) = anim_viewer.range_str_cache.1.parse::<i32>() {
+                                            anim_viewer.loop_range.1 = Some((parsed_value as f32 / display_multiplier).round() as i32);
+                                        }
+                                    }
+                                    if text_response.secondary_clicked() { anim_viewer.loop_range.1 = None; anim_viewer.range_str_cache.1.clear(); }
                                 });
                             });
                         }
@@ -276,7 +277,7 @@ fn render_internal_ui(
             ui.allocate_ui(egui::vec2(COL2_W, TILE_HEIGHT), |ui| {
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = GAP;
-                    tile_frame.show(ui, |ui| { ui.set_width(60.0); ui.set_height(TILE_HEIGHT); ui.with_layout(egui::Layout::centered_and_justified(egui::Direction::LeftToRight), |ui| { ui.label(egui::RichText::new(format!("{}", cur_display_val)).color(egui::Color32::WHITE)); }); });
+                    tile_frame.show(ui, |ui| { ui.set_width(60.0); ui.set_height(TILE_HEIGHT); ui.with_layout(egui::Layout::centered_and_justified(egui::Direction::LeftToRight), |ui| { ui.label(egui::RichText::new(format!("{}", current_display_value)).color(egui::Color32::WHITE)); }); });
                     tile_frame.show(ui, |ui| { ui.set_width(20.0); ui.set_height(TILE_HEIGHT); ui.with_layout(egui::Layout::centered_and_justified(egui::Direction::LeftToRight), |ui| { ui.label("/"); }); });
                     tile_frame.show(ui, |ui| { ui.set_width(60.0); ui.set_height(TILE_HEIGHT); ui.with_layout(egui::Layout::centered_and_justified(egui::Direction::LeftToRight), |ui| { ui.label(egui::RichText::new(&effective_display_max).color(egui::Color32::WHITE)); }); });
                 });
@@ -288,11 +289,11 @@ fn render_internal_ui(
         // Column 3
         ui.vertical(|ui| {
             // EXPORT BUTTON LOGIC
-            let btn_resp = ui.add_enabled_ui(base_assets_available, |ui| {
+            let button_response = ui.add_enabled_ui(base_assets_available, |ui| {
                 ui.add_sized(egui::vec2(COL3_W, TILE_HEIGHT), egui::Button::new("Export"))
             }).inner;
             
-            if btn_resp.clicked() { 
+            if button_response.clicked() { 
                 // Write directly to settings!
                 settings.animation.export_popup_open = true;
             }
@@ -309,18 +310,18 @@ fn render_internal_ui(
                         ui.style_mut().visuals.widgets.active.bg_fill = egui::Color32::TRANSPARENT;
                         ui.style_mut().visuals.widgets.hovered.bg_fill = egui::Color32::TRANSPARENT;
                         
-                        let re = ui.add_enabled(base_assets_available, egui::TextEdit::singleline(&mut anim_viewer.speed_str)
+                        let text_response = ui.add_enabled(base_assets_available, egui::TextEdit::singleline(&mut anim_viewer.speed_str)
                             .hint_text(egui::RichText::new("1.0").color(egui::Color32::GRAY))
                             .frame(false)
                             .desired_width(40.0)
                             .vertical_align(egui::Align::Center)
                             .horizontal_align(egui::Align::Center));
                         
-                        if re.changed() {
+                        if text_response.changed() {
                             if anim_viewer.speed_str.is_empty() {
                                 anim_viewer.playback_speed = 1.0;
-                            } else if let Ok(val) = anim_viewer.speed_str.parse::<f32>() {
-                                anim_viewer.playback_speed = val;
+                            } else if let Ok(parsed_value) = anim_viewer.speed_str.parse::<f32>() {
+                                anim_viewer.playback_speed = parsed_value;
                             }
                         }
                     });
@@ -337,78 +338,80 @@ fn render_internal_ui(
 
     ui.add_sized(egui::vec2(actual_width, 1.0), egui::Separator::default().horizontal());
 
-    let top_row_w = (btn_w * 4.0) + (grid_gap * 3.0);
-    let left_pad = if actual_width > top_row_w { (actual_width - top_row_w) / 2.0 } else { 0.0 };
+    let top_row_width = (button_width * 4.0) + (grid_gap * 3.0);
+    let left_padding = if actual_width > top_row_width { (actual_width - top_row_width) / 2.0 } else { 0.0 };
 
-    let grid_alloc = ui.allocate_ui(egui::vec2(ui.available_width(), anim_viewer.cached_grid_height), |ui| {
+    let grid_allocation = ui.allocate_ui(egui::vec2(ui.available_width(), anim_viewer.cached_grid_height), |ui| {
         ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
             ui.horizontal(|ui| {
-                ui.add_space(left_pad);
+                ui.add_space(left_padding);
                 egui::Grid::new("anim_controls_grid").spacing(egui::vec2(grid_gap, grid_gap)).show(ui, |ui| {
                     
-                    let mut draw_anim_btn = |ui: &mut egui::Ui, label: &str, idx: usize, anim_exists: bool| {
+                    let mut draw_anim_button = |ui: &mut egui::Ui, label: &str, index: usize, anim_exists: bool| {
                         let effective_enabled = base_assets_available && anim_exists && !is_locked;
-                        let is_active = anim_viewer.loaded_anim_index == idx && anim_viewer.loaded_anim_index != IDX_NONE;
+                        let is_active = anim_viewer.loaded_anim_index == index && anim_viewer.loaded_anim_index != IDX_NONE;
                         
-                        let fill = if is_active { active_color } else { inactive_color };
-                        let btn = egui::Button::new(egui::RichText::new(label).color(egui::Color32::WHITE).size(13.0)).fill(fill);
+                        let background_fill = if is_active { active_color } else { inactive_color };
+                        let animation_button = egui::Button::new(egui::RichText::new(label).color(egui::Color32::WHITE).size(13.0)).fill(background_fill);
                         
-                        if ui.add_enabled_ui(effective_enabled, |ui| { ui.add_sized(btn_size, btn) }).inner.clicked() { 
-                            clicked_index = Some(idx); 
+                        if ui.add_enabled_ui(effective_enabled, |ui| { ui.add_sized(button_size, animation_button) }).inner.clicked() { 
+                            clicked_index = Some(index); 
                         }
                     };
 
                     // ALL animations are checked against the generic path list supplied by the caller
-                    let has_walk = available_anims.iter().any(|(i, _)| *i == IDX_WALK); draw_anim_btn(ui, "Walk", IDX_WALK, has_walk);
-                    let has_idle = available_anims.iter().any(|(i, _)| *i == IDX_IDLE); draw_anim_btn(ui, "Idle", IDX_IDLE, has_idle);
-                    let has_atk = available_anims.iter().any(|(i, _)| *i == IDX_ATTACK); draw_anim_btn(ui, "Attack", IDX_ATTACK, has_atk);
-                    let has_kb = available_anims.iter().any(|(i, _)| *i == IDX_KB); draw_anim_btn(ui, "Knockback", IDX_KB, has_kb);
+                    let has_walk = available_anims.iter().any(|(index, _)| *index == IDX_WALK); draw_anim_button(ui, "Walk", IDX_WALK, has_walk);
+                    let has_idle = available_anims.iter().any(|(index, _)| *index == IDX_IDLE); draw_anim_button(ui, "Idle", IDX_IDLE, has_idle);
+                    let has_atk = available_anims.iter().any(|(index, _)| *index == IDX_ATTACK); draw_anim_button(ui, "Attack", IDX_ATTACK, has_atk);
+                    let has_kb = available_anims.iter().any(|(index, _)| *index == IDX_KB); draw_anim_button(ui, "Knockback", IDX_KB, has_kb);
                     ui.end_row();
 
-                    let has_burrow = available_anims.iter().any(|(i, _)| *i == IDX_BURROW); draw_anim_btn(ui, "Burrow", IDX_BURROW, has_burrow);
-                    let has_surface = available_anims.iter().any(|(i, _)| *i == IDX_SURFACE); draw_anim_btn(ui, "Surface", IDX_SURFACE, has_surface);
+                    let has_burrow = available_anims.iter().any(|(index, _)| *index == IDX_BURROW); draw_anim_button(ui, "Burrow", IDX_BURROW, has_burrow);
+                    let has_surface = available_anims.iter().any(|(index, _)| *index == IDX_SURFACE); draw_anim_button(ui, "Surface", IDX_SURFACE, has_surface);
                     
                     // Spirit / Secondary Pack validation
                     let secondary_available = secondary_pack.is_some();
-                    draw_anim_btn(ui, "Spirit", IDX_SPIRIT, secondary_available);
+                    draw_anim_button(ui, "Spirit", IDX_SPIRIT, secondary_available);
                     
-                    draw_anim_btn(ui, "Model", IDX_MODEL, base_assets_available);
+                    draw_anim_button(ui, "Model", IDX_MODEL, base_assets_available);
                     ui.end_row();
                 });
             });
         });
     });
 
-    let actual_grid_height = grid_alloc.response.rect.height();
+    let actual_grid_height = grid_allocation.response.rect.height();
     if (anim_viewer.cached_grid_height - actual_grid_height).abs() > 0.1 {
         anim_viewer.cached_grid_height = actual_grid_height;
         ui.ctx().request_repaint();
     }
 
-    if let Some(target_idx) = clicked_index {
-        if !is_loading_new {
-            anim_viewer.loaded_anim_index = target_idx;
-            let intended_target_id = if target_idx == IDX_SPIRIT { secondary_id.to_string() } else { primary_id.to_string() };
-            if anim_viewer.loaded_id == intended_target_id {
-                let anim_path = if target_idx == IDX_SPIRIT { secondary_pack.as_ref().map(|(_, _, _, a)| a) }
-                else { available_anims.iter().find(|(i, _)| *i == target_idx).map(|(_, p)| p) };
-                
-                if let Some(a_path) = anim_path { 
-                    anim_viewer.load_anim(a_path, settings);
-                } else if target_idx == IDX_MODEL { 
-                    anim_viewer.current_anim = None; 
-                    anim_viewer.current_frame = 0.0;
-                    anim_viewer.single_frame_str = "0".to_string();
+    let Some(target_index) = clicked_index else { return; };
+    if is_loading_new { return; }
 
-                    anim_viewer.export_state.name_prefix = format!("{}.model", primary_id);
-                    anim_viewer.export_state.anim_name = "Model".to_string();
-                    anim_viewer.export_state.max_frame = 0;
-                    anim_viewer.export_state.frame_start = 0;
-                    anim_viewer.export_state.frame_start_str = String::new(); 
-                    anim_viewer.export_state.frame_end = 0;
-                    anim_viewer.export_state.frame_end_str = String::new(); 
-                }
-            }
-        }
+    anim_viewer.loaded_anim_index = target_index;
+    let intended_target_id = if target_index == IDX_SPIRIT { secondary_id.to_string() } else { primary_id.to_string() };
+    if anim_viewer.loaded_id != intended_target_id { return; }
+
+    let animation_path = if target_index == IDX_SPIRIT { 
+        secondary_pack.as_ref().map(|(_, _, _, anim_path)| anim_path) 
+    } else { 
+        available_anims.iter().find(|(index, _)| *index == target_index).map(|(_, path)| path) 
+    };
+    
+    if let Some(valid_path) = animation_path { 
+        anim_viewer.load_anim(valid_path, settings);
+    } else if target_index == IDX_MODEL { 
+        anim_viewer.current_anim = None; 
+        anim_viewer.current_frame = 0.0;
+        anim_viewer.single_frame_str = "0".to_string();
+
+        anim_viewer.export_state.name_prefix = format!("{}.model", primary_id);
+        anim_viewer.export_state.anim_name = "Model".to_string();
+        anim_viewer.export_state.max_frame = 0;
+        anim_viewer.export_state.frame_start = 0;
+        anim_viewer.export_state.frame_start_str = String::new(); 
+        anim_viewer.export_state.frame_end = 0;
+        anim_viewer.export_state.frame_end_str = String::new(); 
     }
 }

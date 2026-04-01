@@ -4,73 +4,258 @@
       "pattern": "img(015|022)",
       "extension": "png|imgcut",
       "handling": "Only",
-      "languages": { "de": true, "en": true, "es": true, "fr": true, "it": true, "ja": true, "ko": true, "th": true, "tw": true }
+      "languages": {
+        "de": true,
+        "en": true,
+        "es": true,
+        "fr": true,
+        "it": true,
+        "ja": true,
+        "ko": true,
+        "th": true,
+        "tw": true
+      },
+      "locked": false
     },
     {
-      "pattern": "SkillDescriptions|GatyaitemName",
+      "pattern": "SkillDescriptions|GatyaitemName|MapStageLimitMessage|Map_Name",
       "extension": "csv",
       "handling": "Only",
-      "languages": { "de": true, "en": true, "es": true, "fr": true, "it": true, "ja": true, "ko": true, "th": true, "tw": true }
+      "languages": {
+        "de": true,
+        "en": true,
+        "es": true,
+        "fr": true,
+        "it": true,
+        "ja": true,
+        "ko": true,
+        "th": true,
+        "tw": true
+      },
+      "locked": false
     },
     {
       "pattern": "Skill_name_[0-9]{3}",
       "extension": "png",
       "handling": "Only",
-      "languages": { "de": true, "en": true, "es": true, "fr": true, "it": true, "ja": true, "ko": true, "th": true, "tw": true }
+      "languages": {
+        "de": true,
+        "en": true,
+        "es": true,
+        "fr": true,
+        "it": true,
+        "ja": true,
+        "ko": true,
+        "th": true,
+        "tw": true
+      },
+      "locked": false
     },
     {
       "pattern": "Enemyname",
       "extension": "tsv",
       "handling": "Only",
-      "languages": { "de": true, "en": true, "es": true, "fr": true, "it": true, "ja": true, "ko": true, "th": true, "tw": true }
+      "languages": {
+        "de": true,
+        "en": true,
+        "es": true,
+        "fr": true,
+        "it": true,
+        "ja": true,
+        "ko": true,
+        "th": true,
+        "tw": true
+      },
+      "locked": false
+    },
+    {
+      "pattern": "enemy_icon_55[5789]",
+      "extension": "png",
+      "handling": "Include",
+      "languages": {
+        "de": false,
+        "en": false,
+        "es": false,
+        "fr": false,
+        "it": false,
+        "ja": false,
+        "ko": false,
+        "th": false,
+        "tw": false
+      },
+      "locked": true
+    },
+    {
+      "pattern": "(057|549)_e",
+      "extension": "png|imgcut|mamodel|maanim",
+      "handling": "Include",
+      "languages": {
+        "de": false,
+        "en": false,
+        "es": false,
+        "fr": false,
+        "it": false,
+        "ja": false,
+        "ko": false,
+        "th": false,
+        "tw": false
+      },
+      "locked": true
+    },
+    {
+      "pattern": "497_[fc](0[0-3])?",
+      "extension": "png|imgcut|mamodel|maanim",
+      "handling": "Only",
+      "languages": {
+        "de": false,
+        "en": true,
+        "es": false,
+        "fr": false,
+        "it": false,
+        "ja": false,
+        "ko": false,
+        "th": false,
+        "tw": false
+      },
+      "locked": false
+    },
+    {
+      "pattern": "(udi|uni|gatyachara_)?281_[fcz](00)?",
+      "extension": "png|imgcut|mamodel|maanim",
+      "handling": "Only",
+      "languages": {
+        "de": false,
+        "en": false,
+        "es": false,
+        "fr": false,
+        "it": false,
+        "ja": true,
+        "ko": false,
+        "th": false,
+        "tw": false
+      },
+      "locked": false
     },
     {
       "pattern": "(udi|uni)?(435|484)_c(0[0-3])?",
       "extension": "png|imgcut|mamodel|maanim",
       "handling": "Only",
-      "languages": { "de": false, "en": true, "es": false, "fr": false, "it": false, "ja": true, "ko": true, "th": false, "tw": true }
+      "languages": {
+        "de": false,
+        "en": true,
+        "es": false,
+        "fr": false,
+        "it": false,
+        "ja": true,
+        "ko": true,
+        "th": false,
+        "tw": true
+      },
+      "locked": false
     },
     {
       "pattern": "(001|092)_s",
       "extension": "png",
       "handling": "Include",
-      "languages": { "de": false, "en": false, "es": false, "fr": false, "it": false, "ja": false, "ko": true, "th": false, "tw": true }
+      "languages": {
+        "de": false,
+        "en": false,
+        "es": false,
+        "fr": false,
+        "it": false,
+        "ja": false,
+        "ko": true,
+        "th": false,
+        "tw": true
+      },
+      "locked": false
     },
     {
       "pattern": "391_e|399_[fc]",
       "extension": "png|imgcut|mamodel",
       "handling": "Only",
-      "languages": { "en": true, "ja": true, "ko": true, "tw": true }
+      "languages": {
+        "en": true,
+        "ja": true,
+        "ko": true,
+        "tw": true
+      },
+      "locked": false
     },
     {
       "pattern": "400_[fc](02)?",
       "extension": "png|imgcut|mamodel|maanim",
       "handling": "Only",
-      "languages": { "en": true, "ja": true, "ko": true, "tw": true }
+      "languages": {
+        "en": true,
+        "ja": true,
+        "ko": true,
+        "tw": true
+      },
+      "locked": false
     },
     {
       "pattern": "016_s",
       "extension": "png|imgcut",
       "handling": "Include",
-      "languages": { "ja": true }
+      "languages": {
+        "ja": true
+      },
+      "locked": false
     },
     {
-      "pattern": "021_e",
-      "extension": "png|imgcut|mamodel",
-      "handling": "Include",
-      "languages": { "de": true, "en": true, "es": true, "fr": true, "it": true, "ja": true, "ko": true, "th": true, "tw": true }
+      "pattern": "021_e(_[a-z]{2})?",
+      "extension": "png|imgcut",
+      "handling": "Only",
+      "languages": {
+        "de": false,
+        "en": false,
+        "es": false,
+        "fr": false,
+        "it": false,
+        "ja": true,
+        "ko": false,
+        "th": false,
+        "tw": false
+      },
+      "locked": false
+    },
+    {
+      "pattern": "116_e|enemy_icon_116",
+      "extension": "png|imgcut",
+      "handling": "Only",
+      "languages": {
+        "de": false,
+        "en": true,
+        "es": false,
+        "fr": false,
+        "it": false,
+        "ja": true,
+        "ko": true,
+        "th": false,
+        "tw": true
+      },
+      "locked": false
     },
     {
       "pattern": "(08[89]|09[0-6]|098|16[3-6]|278|34[6-9]|350)_e(0[0-3])?",
       "extension": "png|imgcut|mamodel|maanim",
       "handling": "Include",
-      "languages": { "ja": true, "tw": true }
+      "languages": {
+        "ja": true,
+        "tw": true
+      },
+      "locked": false
     },
     {
       "pattern": "enemy_icon_(08[89]|09[0-6]|098|16[3-6]|278|34[6-9]|350)",
       "extension": "png",
       "handling": "Include",
-      "languages": { "ja": true, "tw": true }
+      "languages": {
+        "ja": true,
+        "tw": true
+      },
+      "locked": false
     }
   ]
 }

@@ -21,14 +21,14 @@ pub const BTN_SIZE_FORM: [f32; 2] = [118.0, 24.0];
 pub fn show_popup(
     ctx: &egui::Context,
     state: &mut CatFilterState,
-    sheet: &mut SpriteSheet,
+    sheets: &mut Vec<SpriteSheet>,
     assets: &CustomAssets,
     settings: &Settings,
     drag_guard: &mut DragGuard,
 ) {
     if !state.is_open { return; }
     
-    img015::ensure_loaded(ctx, sheet, settings);
+    img015::ensure_loaded(ctx, sheets, settings);
 
     let window_id = egui::Id::new("Cat Filter");
     let (allow_drag, fixed_pos) = drag_guard.assign_bounds(ctx, window_id);
@@ -203,7 +203,7 @@ pub fn show_popup(
             ui.horizontal_wrapped(|ui| {
                 ui.spacing_mut().item_spacing = egui::vec2(4.0, 4.0);
                 for &icon_id in UI_TRAIT_ORDER {
-                    render_filter_icon(ui, icon_id, &mut state.active_icons, sheet, assets);
+                    render_filter_icon(ui, icon_id, &mut state.active_icons, sheets, assets);
                 }
             });
             ui.add_space(15.0);
@@ -213,7 +213,7 @@ pub fn show_popup(
             ui.horizontal_wrapped(|ui| {
                 ui.spacing_mut().item_spacing = egui::vec2(4.0, 4.0);
                 for &icon_id in ATTACK_TYPE_ICONS {
-                    render_filter_icon(ui, icon_id, &mut state.active_icons, sheet, assets);
+                    render_filter_icon(ui, icon_id, &mut state.active_icons, sheets, assets);
                 }
             });
             ui.add_space(15.0);
@@ -223,11 +223,11 @@ pub fn show_popup(
 
             let mut rendered_icons = HashSet::new();
 
-            render_display_group(ui, state, &mut rendered_icons, DisplayGroup::Headline1, false, true, sheet, assets);
-            render_display_group(ui, state, &mut rendered_icons, DisplayGroup::Headline2, false, true, sheet, assets);
-            render_display_group(ui, state, &mut rendered_icons, DisplayGroup::Body1, true, true, sheet, assets); 
-            render_display_group(ui, state, &mut rendered_icons, DisplayGroup::Body2, true, true, sheet, assets); 
-            render_display_group(ui, state, &mut rendered_icons, DisplayGroup::Footer, false, true, sheet, assets);
+            render_display_group(ui, state, &mut rendered_icons, DisplayGroup::Headline1, false, true, sheets, assets);
+            render_display_group(ui, state, &mut rendered_icons, DisplayGroup::Headline2, false, true, sheets, assets);
+            render_display_group(ui, state, &mut rendered_icons, DisplayGroup::Body1, true, true, sheets, assets); 
+            render_display_group(ui, state, &mut rendered_icons, DisplayGroup::Body2, true, true, sheets, assets); 
+            render_display_group(ui, state, &mut rendered_icons, DisplayGroup::Footer, false, true, sheets, assets);
 
             let check_talents = state.talent_mode != TalentFilterMode::Ignore || state.ultra_talent_mode != TalentFilterMode::Ignore;
             if check_talents {
@@ -247,7 +247,7 @@ pub fn show_popup(
                     ui.horizontal_wrapped(|ui| {
                         ui.spacing_mut().item_spacing = egui::vec2(4.0, 4.0);
                         for icon_id in talent_icons {
-                            render_filter_icon(ui, icon_id, &mut state.active_icons, sheet, assets);
+                            render_filter_icon(ui, icon_id, &mut state.active_icons, sheets, assets);
                         }
                     });
                 }
@@ -287,7 +287,7 @@ fn render_display_group(
     target_group: DisplayGroup,
     is_vertical: bool,
     draw_labels: bool,
-    sheet: &SpriteSheet,
+    sheets: &[SpriteSheet],
     assets: &CustomAssets,
 ) {
     let mut icons_in_group = Vec::new();
@@ -317,14 +317,14 @@ fn render_display_group(
             ui.vertical(|ui| {
                 ui.spacing_mut().item_spacing = egui::vec2(0.0, 4.0);
                 for icon_id in icons_in_group {
-                    render_filter_icon_row(ui, state, icon_id, draw_labels, sheet, assets);
+                    render_filter_icon_row(ui, state, icon_id, draw_labels, sheets, assets);
                 }
             });
         } else {
             ui.horizontal_wrapped(|ui| {
                 ui.spacing_mut().item_spacing = egui::vec2(4.0, 4.0);
                 for icon_id in icons_in_group {
-                    render_filter_icon(ui, icon_id, &mut state.active_icons, sheet, assets);
+                    render_filter_icon(ui, icon_id, &mut state.active_icons, sheets, assets);
                 }
             });
         }
@@ -349,13 +349,12 @@ fn render_filter_icon_row(
     state: &mut CatFilterState,
     icon_id: usize, 
     draw_labels: bool,
-    sheet: &SpriteSheet,
+    sheets: &[SpriteSheet],
     assets: &CustomAssets,
 ) {
     let is_active = state.active_icons.contains(&icon_id);
     let name = get_icon_name(icon_id);
     
-    // Look up the static schema directly from the registry
     let ability_def = CAT_ABILITY_REGISTRY.iter().find(|d| d.icon_id == icon_id);
     let schema = ability_def.map(|d| d.schema).unwrap_or(&[]);
     let has_adv = !schema.is_empty();
@@ -370,7 +369,7 @@ fn render_filter_icon_row(
         .show(ui, |ui| {
             ui.vertical(|ui| {
                 ui.horizontal(|ui| {
-                    render_filter_icon(ui, icon_id, &mut state.active_icons, sheet, assets);
+                    render_filter_icon(ui, icon_id, &mut state.active_icons, sheets, assets);
                     
                     if draw_labels {
                         ui.add_space(10.0); 
@@ -429,7 +428,7 @@ fn render_filter_icon(
     ui: &mut egui::Ui, 
     icon_id: usize, 
     active_icons: &mut HashSet<usize>,
-    sheet: &crate::global::formats::imgcut::SpriteSheet,
+    sheets: &[SpriteSheet],
     assets: &crate::global::assets::CustomAssets,
 ) {
     let is_active = active_icons.contains(&icon_id);
@@ -453,18 +452,23 @@ fn render_filter_icon(
         }
         response.on_hover_text(get_icon_name(icon_id));
         drawn = true;
-    } else if let Some(cut) = sheet.cuts_map.get(&icon_id) {
-        if let Some(tex) = &sheet.texture_handle {
-            let img = egui::Image::new(egui::load::SizedTexture::new(tex.id(), egui::vec2(32.0, 32.0)))
-                .uv(cut.uv_coordinates)
-                .tint(tint);
-            let response = ui.add(egui::ImageButton::new(img).frame(false));
-            if response.clicked() {
-                if is_active { active_icons.remove(&icon_id); } 
-                else { active_icons.insert(icon_id); }
+    } else {
+        for sheet in sheets {
+            if let Some(cut) = sheet.cuts_map.get(&icon_id) {
+                if let Some(tex) = &sheet.texture_handle {
+                    let img = egui::Image::new(egui::load::SizedTexture::new(tex.id(), egui::vec2(32.0, 32.0)))
+                        .uv(cut.uv_coordinates)
+                        .tint(tint);
+                    let response = ui.add(egui::ImageButton::new(img).frame(false));
+                    if response.clicked() {
+                        if is_active { active_icons.remove(&icon_id); } 
+                        else { active_icons.insert(icon_id); }
+                    }
+                    response.on_hover_text(get_icon_name(icon_id));
+                    drawn = true;
+                    break;
+                }
             }
-            response.on_hover_text(get_icon_name(icon_id));
-            drawn = true;
         }
     }
 

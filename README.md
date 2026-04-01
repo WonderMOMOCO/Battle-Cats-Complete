@@ -2,7 +2,7 @@
 
 [![Discord](https://img.shields.io/badge/Discord-Join%20Community-7289DA?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/SNSE8HNhmP)
 
-An all-in-one toolkit for The Battle Cats that allows Users to sort, read, and modify files that are imported into it.
+An all-in-one desktop toolkit for The Battle Cats. Load raw game data, load modded data, accurately render in-game animations, and export animations to formats like MP4, AVIF, WebP, and GIF.
 
 ## In Development
 Battle Cats Complete is still far from its fully functional state. This app is a hobby and passion project. Join the [Discord Server](https://discord.gg/SNSE8HNhmP) if you have any questions, suggestions, or if you found any bugs!
@@ -15,6 +15,10 @@ To use this app, you must provide game files for it to read. These files are not
   - Direct import from emulator/android
   - Import from `.pack` / `.apk` files
   - Import from standard archives
+- **Import & View Mods**
+  - Import from Android, Packs, or Files
+  - Add custom icons and metadata
+  - Patch mods into the live database
 - **Displaying Cat Data**
   - Icons and Banners
   - Forms, Stats, and Abilities
@@ -23,7 +27,7 @@ To use this app, you must provide game files for it to read. These files are not
 - **Displaying Enemy Data**
   - Icons, Stats, and Abilities
   - In-game Descriptions
-- **Entity Animations**
+- **EUnit Animations**
   - View Walk, Idle, Attack, and Knockback
   - View Burrow, Surface, and Spirit animations
   - Raw Model viewing

@@ -36,7 +36,7 @@ pub fn render(
     _settings: &Settings,
     talent_levels: &mut HashMap<u8, u8>,
     talent_costs: &HashMap<u8, TalentCost>,
-    img022_sheet: &SpriteSheet,
+    img022_sheets: &[SpriteSheet],
 ) -> ExportAction {
     let mut export_action = ExportAction::None;
 
@@ -57,7 +57,7 @@ pub fn render(
                     let (rect, _) = ui.allocate_exact_size(egui::vec2(1.0, 85.0), egui::Sense::hover());
                     ui.painter().rect_filled(rect, 0.0, separator_color);
                     ui.add_space(15.0);
-                    render_talent_controls(ui, talent_data, talent_levels, talent_costs, img022_sheet);
+                    render_talent_controls(ui, talent_data, talent_levels, talent_costs, img022_sheets);
                 }
             }
 
@@ -139,7 +139,7 @@ fn render_talent_controls(
     talent_data: &crate::features::cat::data::skillacquisition::TalentRaw,
     talent_levels: &mut HashMap<u8, u8>,
     talent_costs: &HashMap<u8, TalentCost>,
-    img022_sheet: &SpriteSheet,
+    img022_sheets: &[SpriteSheet],
 ) {
     ui.vertical(|ui| {
         let total_np = crate::features::cat::logic::talents::get_total_np_cost(talent_data, talent_levels, talent_costs);
@@ -148,12 +148,15 @@ fn render_talent_controls(
             ui.spacing_mut().item_spacing.x = 6.0;
             
             let mut drawn = false;
-            if let Some(cut) = img022_sheet.cuts_map.get(&crate::global::game::img022::ICON_NP_COST) {
-                if let Some(tex) = &img022_sheet.texture_handle {
-                    let aspect = cut.original_size.x / cut.original_size.y;
-                    let size = egui::vec2(HEADER_NP_ICON_SIZE * aspect, HEADER_NP_ICON_SIZE);
-                    ui.add(egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)).uv(cut.uv_coordinates));
-                    drawn = true;
+            for sheet in img022_sheets {
+                if let Some(cut) = sheet.cuts_map.get(&crate::global::game::img022::ICON_NP_COST) {
+                    if let Some(tex) = &sheet.texture_handle {
+                        let aspect = cut.original_size.x / cut.original_size.y;
+                        let size = egui::vec2(HEADER_NP_ICON_SIZE * aspect, HEADER_NP_ICON_SIZE);
+                        ui.add(egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)).uv(cut.uv_coordinates));
+                        drawn = true;
+                        break;
+                    }
                 }
             }
             

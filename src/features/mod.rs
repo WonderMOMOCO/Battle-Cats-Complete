@@ -7,3 +7,4 @@ pub mod statblock;
 pub mod addons;
 pub mod home;
 pub mod mods;
+pub mod stage;

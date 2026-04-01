@@ -2,6 +2,7 @@ use std::fs;
 use std::sync::mpsc::{self, Sender, Receiver};
 use std::thread;
 use std::io::Cursor;
+use std::path::Path;
 use zip::ZipArchive;
 
 use crate::features::addons::toolpaths::{get_tools_dir, AddonStatus};
@@ -57,36 +58,45 @@ fn download_thread(tx: Sender<AddonStatus>, config: DownloadConfig) -> Result<()
     let reader = Cursor::new(bytes);
     let mut archive = ZipArchive::new(reader).map_err(|e| format!("Zip error: {}", e))?;
     
-    let dest_dir = get_tools_dir().join(config.folder_name);
+    let dest_dir = get_tools_dir().join(&config.folder_name);
     if !dest_dir.exists() {
         fs::create_dir_all(&dest_dir).map_err(|e| e.to_string())?;
     }
 
     for i in 0..archive.len() {
         let mut file = archive.by_index(i).map_err(|e| e.to_string())?;
-        if let Some(name) = file.enclosed_name() {
-            let out_path = dest_dir.join(name);
-            
-            if file.is_dir() {
-                fs::create_dir_all(&out_path).unwrap_or(());
-            } else {
-                if let Some(p) = out_path.parent() { fs::create_dir_all(p).unwrap_or(()); }
-                let mut outfile = fs::File::create(&out_path).map_err(|e| format!("File creation error: {}", e))?;
-                std::io::copy(&mut file, &mut outfile).map_err(|e| format!("Write error: {}", e))?;
-            }
-            
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::PermissionsExt;
-                if let Some(fname) = out_path.file_name() {
-                    if fname == config.binary_name.as_str() {
-                        let _ = fs::set_permissions(&out_path, fs::Permissions::from_mode(0o755));
-                    }
-                }
-            }
+        
+        let Some(name) = file.enclosed_name() else { continue; };
+        let out_path = dest_dir.join(name);
+        
+        if file.is_dir() {
+            let _ = fs::create_dir_all(&out_path);
+            continue;
         }
+        
+        if let Some(p) = out_path.parent() { 
+            let _ = fs::create_dir_all(p); 
+        }
+        
+        let mut outfile = fs::File::create(&out_path).map_err(|e| format!("File creation error: {}", e))?;
+        std::io::copy(&mut file, &mut outfile).map_err(|e| format!("Write error: {}", e))?;
+        
+        set_executable_permissions(&out_path, &config.binary_name);
     }
 
     let _ = tx.send(AddonStatus::Installed);
     Ok(())
 }
+
+#[cfg(unix)]
+fn set_executable_permissions(out_path: &Path, binary_name: &str) {
+    use std::os::unix::fs::PermissionsExt;
+    
+    let Some(fname) = out_path.file_name() else { return; };
+    if fname != binary_name { return; }
+    
+    let _ = fs::set_permissions(out_path, fs::Permissions::from_mode(0o755));
+}
+
+#[cfg(not(unix))]
+fn set_executable_permissions(_out_path: &Path, _binary_name: &str) {}

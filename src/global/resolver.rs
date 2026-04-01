@@ -10,8 +10,7 @@ pub fn set_active_mod(mod_name: Option<String>) {
     }
 }
 
-/// Finds every valid version of a file in priority order.
-
+// Finds every valid version of a file in priority order.
 pub fn get(dir: &Path, filename: &str, priority: &[String]) -> Vec<PathBuf> {
     let mut targets = Vec::new();
     for code in priority {

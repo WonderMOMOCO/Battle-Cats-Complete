@@ -10,6 +10,7 @@ const COL_PATTERN_WIDTH: f32 = 210.0;
 const COL_EXT_WIDTH: f32 = 100.0;
 const COL_HANDLING_WIDTH: f32 = 110.0;
 const COL_LANG_WIDTH: f32 = 85.0;
+const COL_LOCK_WIDTH: f32 = 40.0;
 const COL_ACTION_WIDTH: f32 = 45.0;
 const WINDOW_MAX_HEIGHT: f32 = 600.0;
 
@@ -129,7 +130,7 @@ pub fn show(ctx: &egui::Context, drag_guard: &mut DragGuard) {
 
         ui.vertical_centered(|ui| {
             ui.horizontal(|ui| {
-                let table_width = COL_PATTERN_WIDTH + COL_EXT_WIDTH + COL_HANDLING_WIDTH + COL_LANG_WIDTH + COL_ACTION_WIDTH + (15.0 * 4.0);
+                let table_width = COL_PATTERN_WIDTH + COL_EXT_WIDTH + COL_HANDLING_WIDTH + COL_LANG_WIDTH + COL_LOCK_WIDTH + COL_ACTION_WIDTH + (15.0 * 5.0);
                 let spacing = ui.spacing().item_spacing.x;
                 let total_btn_width = (btn_w * 4.0) + (spacing * 3.0); 
                 
@@ -195,7 +196,8 @@ pub fn show(ctx: &egui::Context, drag_guard: &mut DragGuard) {
                 ui.vertical_centered(|ui| { ui.set_min_width(COL_EXT_WIDTH); ui.label(egui::RichText::new("Extension").strong()); });
                 ui.vertical_centered(|ui| { ui.set_min_width(COL_HANDLING_WIDTH); ui.label(egui::RichText::new("Handling").strong()); });
                 ui.vertical_centered(|ui| { ui.set_min_width(COL_LANG_WIDTH); ui.label(egui::RichText::new("Languages").strong()); });
-                ui.vertical_centered(|ui| { ui.set_min_width(COL_ACTION_WIDTH); ui.label(egui::RichText::new("Actions").strong()); });
+                ui.vertical_centered(|ui| { ui.set_min_width(COL_LOCK_WIDTH); ui.label(egui::RichText::new("Lock").strong()); });
+                ui.vertical_centered(|ui| { ui.set_min_width(COL_ACTION_WIDTH); ui.label(egui::RichText::new("Delete").strong()); });
                 ui.end_row();
 
                 let mut row_to_delete = None;
@@ -233,6 +235,11 @@ pub fn show(ctx: &egui::Context, drag_guard: &mut DragGuard) {
                                 }
                             });
                         });
+                    });
+
+                    ui.vertical_centered(|ui| {
+                        ui.set_min_width(COL_LOCK_WIDTH);
+                        toggle_ui(ui, &mut rule.locked);
                     });
 
                     ui.vertical_centered(|ui| {

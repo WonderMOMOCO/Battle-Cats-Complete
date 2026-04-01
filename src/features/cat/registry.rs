@@ -41,53 +41,72 @@ fn fmt_time(frames: i32) -> String {
     format!("{:.2}s^{}f", frames as f32 / 30.0, frames)
 }
 
-fn fmt_range(min: i32, max: i32) -> String {
-    if min == max { format!("at {}", min) } else { format!("between {}~{}", min, max) }
+fn fmt_range(min_range: i32, max_range: i32) -> String {
+    if min_range == max_range { format!("at {}", min_range) } else { format!("between {}~{}", min_range, max_range) }
 }
 
-fn get_dur_val(v1: i32, v2: i32) -> i32 {
-    if v1 != 0 { v1 } else { v2 }
+fn get_dur_val(value_1: i32, value_2: i32) -> i32 {
+    if value_1 != 0 { value_1 } else { value_2 }
 }
 
-fn fmt_effective_range(c: &CatRaw) -> String {
-    let enemy_base_range = {
-        let start_range = c.long_distance_1_anchor;
-        let end_range = c.long_distance_1_anchor + c.long_distance_1_span;
-        let (min_reach, max_reach) = if start_range < end_range { (start_range, end_range) } else { (end_range, start_range) };
-        if min_reach > 0 { min_reach } else { max_reach }
+fn fmt_effective_range(stats: &CatRaw) -> String {
+    // Standing distance is ALWAYS dictated by Hit 1
+    let primary_anchor = if stats.long_distance_1_anchor != 0 { 
+        stats.long_distance_1_anchor 
+    } else { 
+        stats.standing_range 
     };
+
     let mut range_strings = Vec::new();
-    let range_checks = [
-        (c.long_distance_1_anchor, c.long_distance_1_span),
-        (c.long_distance_2_anchor, if c.long_distance_2_flag == 1 { c.long_distance_2_span } else { 0 }),
-        (c.long_distance_3_anchor, if c.long_distance_3_flag == 1 { c.long_distance_3_span } else { 0 }),
-    ];
-    for (anchor, span) in range_checks {
-        if span != 0 {
-            let start = anchor;
-            let end = anchor + span;
-            let (min, max) = if start < end { (start, end) } else { (end, start) };
-            range_strings.push(format!("{}~{}", min, max));
+    
+    // Does the unit have LD or Omni on ANY hit?
+    let has_ld_or_omni = (stats.long_distance_1_span != 0 || stats.long_distance_1_anchor != 0) ||
+                         (stats.long_distance_2_flag > 0 && (stats.long_distance_2_span != 0 || stats.long_distance_2_anchor != 0)) ||
+                         (stats.long_distance_3_flag > 0 && (stats.long_distance_3_span != 0 || stats.long_distance_3_anchor != 0));
+
+    if has_ld_or_omni {
+        let hit_data = [
+            (true, stats.long_distance_1_anchor, stats.long_distance_1_span, 1),
+            (stats.attack_2 > 0, stats.long_distance_2_anchor, stats.long_distance_2_span, stats.long_distance_2_flag),
+            (stats.attack_3 > 0, stats.long_distance_3_anchor, stats.long_distance_3_span, stats.long_distance_3_flag),
+        ];
+        
+        for (is_active, anchor, span, flag) in hit_data {
+            if is_active {
+                // If it's an active LD/Omni hit...
+                if flag > 0 && (span != 0 || anchor != 0) {
+                    let start = anchor;
+                    let end = anchor + span;
+                    let (min_r, max_r) = if start < end { (start, end) } else { (end, start) };
+                    range_strings.push(format!("{}~{}", min_r, max_r));
+                } else {
+                    // Standard hit fallback! (Using standard Cat 320 collision offset)
+                    range_strings.push(format!("-320~{}", stats.standing_range));
+                }
+            }
         }
     }
+    
+    // ONLY merge if ALL hits are exactly the same
     if range_strings.len() > 1 {
-        let first = range_strings[0].clone();
-        if range_strings.iter().all(|s| s == &first) {
+        let first_string = range_strings[0].clone();
+        if range_strings.iter().all(|s| s == &first_string) {
             range_strings.truncate(1);
         }
     }
+    
     let label_prefix = if range_strings.len() > 1 { "Range split" } else { "Effective Range" };
-    format!("{} {}\nStands at {} Range relative to Enemy Base", label_prefix, range_strings.join(" / "), enemy_base_range)
+    format!("{} {}\nStands at {} Range relative to Enemy Base", label_prefix, range_strings.join(" / "), primary_anchor)
 }
 
-fn fmt_multihit(c: &CatRaw) -> String {
-    let damage_hit_1 = c.attack_1;
-    let damage_hit_2 = c.attack_2;
-    let damage_hit_3 = c.attack_3;
-    let ability_flag_1 = if c.attack_1_abilities > 0 { "True" } else { "False" };
-    let ability_flag_2 = if c.attack_2_abilities > 0 { "True" } else { "False" };
-    let ability_flag_3 = if c.attack_3 > 0 { if c.attack_3_abilities > 0 { " / True" } else { " / False" } } else { "" };
-    let damage_string = if c.attack_3 > 0 { 
+fn fmt_multihit(stats: &CatRaw) -> String {
+    let damage_hit_1 = stats.attack_1;
+    let damage_hit_2 = stats.attack_2;
+    let damage_hit_3 = stats.attack_3;
+    let ability_flag_1 = if stats.attack_1_abilities > 0 { "True" } else { "False" };
+    let ability_flag_2 = if stats.attack_2_abilities > 0 { "True" } else { "False" };
+    let ability_flag_3 = if stats.attack_3 > 0 { if stats.attack_3_abilities > 0 { " / True" } else { " / False" } } else { "" };
+    let damage_string = if stats.attack_3 > 0 { 
         format!("{} / {} / {}", damage_hit_1, damage_hit_2, damage_hit_3) 
     } else { 
         format!("{} / {}", damage_hit_1, damage_hit_2) 
@@ -107,7 +126,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Hidden,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |c| if c.area_attack == 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
+        get_attributes: |stats| if stats.area_attack == 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_,_,_,_| "".into(),
         apply_func: None,
     },
@@ -119,7 +138,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Hidden,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |c| if c.area_attack == 1 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
+        get_attributes: |stats| if stats.area_attack == 1 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_,_,_,_| "".into(),
         apply_func: None,
     },
@@ -133,9 +152,9 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Trait,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |c| if c.target_red > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
+        get_attributes: |stats| if stats.target_red > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_,_,_,_| "Targets Red Enemies".into(),
-        apply_func: Some(|c,_,_,_| c.target_red = 1),
+        apply_func: Some(|stats,_,_,_| stats.target_red = 1),
     },
     CatAbilityDef {
         name: "Target Float",
@@ -145,9 +164,9 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Trait,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |c| if c.target_floating > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
+        get_attributes: |stats| if stats.target_floating > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_,_,_,_| "Targets Floating Enemies".into(),
-        apply_func: Some(|c,_,_,_| c.target_floating = 1),
+        apply_func: Some(|stats,_,_,_| stats.target_floating = 1),
     },
     CatAbilityDef {
         name: "Target Black",
@@ -157,9 +176,9 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Trait,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |c| if c.target_black > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
+        get_attributes: |stats| if stats.target_black > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_,_,_,_| "Targets Black Enemies".into(),
-        apply_func: Some(|c,_,_,_| c.target_black = 1),
+        apply_func: Some(|stats,_,_,_| stats.target_black = 1),
     },
     CatAbilityDef {
         name: "Target Metal",
@@ -169,9 +188,9 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Trait,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |c| if c.target_metal > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
+        get_attributes: |stats| if stats.target_metal > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_,_,_,_| "Targets Metal Enemies".into(),
-        apply_func: Some(|c,_,_,_| c.target_metal = 1),
+        apply_func: Some(|stats,_,_,_| stats.target_metal = 1),
     },
     CatAbilityDef {
         name: "Target Angel",
@@ -181,9 +200,9 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Trait,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |c| if c.target_angel > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
+        get_attributes: |stats| if stats.target_angel > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_,_,_,_| "Targets Angel Enemies".into(),
-        apply_func: Some(|c,_,_,_| c.target_angel = 1),
+        apply_func: Some(|stats,_,_,_| stats.target_angel = 1),
     },
     CatAbilityDef {
         name: "Target Alien",
@@ -193,9 +212,9 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Trait,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |c| if c.target_alien > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
+        get_attributes: |stats| if stats.target_alien > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_,_,_,_| "Targets Alien Enemies".into(),
-        apply_func: Some(|c,_,_,_| c.target_alien = 1),
+        apply_func: Some(|stats,_,_,_| stats.target_alien = 1),
     },
     CatAbilityDef {
         name: "Target Zombie",
@@ -205,9 +224,9 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Trait,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |c| if c.target_zombie > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
+        get_attributes: |stats| if stats.target_zombie > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_,_,_,_| "Targets Zombie Enemies".into(),
-        apply_func: Some(|c,_,_,_| c.target_zombie = 1),
+        apply_func: Some(|stats,_,_,_| stats.target_zombie = 1),
     },
     CatAbilityDef {
         name: "Target Relic",
@@ -217,9 +236,9 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Trait,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |c| if c.target_relic > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
+        get_attributes: |stats| if stats.target_relic > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_,_,_,_| "Targets Relic Enemies".into(),
-        apply_func: Some(|c,_,_,_| c.target_relic = 1),
+        apply_func: Some(|stats,_,_,_| stats.target_relic = 1),
     },
     CatAbilityDef {
         name: "Target Aku",
@@ -229,9 +248,9 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Trait,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |c| if c.target_aku > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
+        get_attributes: |stats| if stats.target_aku > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_,_,_,_| "Targets Aku Enemies".into(),
-        apply_func: Some(|c,_,_,_| c.target_aku = 1),
+        apply_func: Some(|stats,_,_,_| stats.target_aku = 1),
     },
     CatAbilityDef {
         name: "Target White",
@@ -241,9 +260,9 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Trait,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |c| if c.target_traitless > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
+        get_attributes: |stats| if stats.target_traitless > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_,_,_,_| "Targets Traitless Enemies".into(),
-        apply_func: Some(|c,_,_,_| c.target_traitless = 1),
+        apply_func: Some(|stats,_,_,_| stats.target_traitless = 1),
     },
 
     // --- HEADLINE 1 ---
@@ -255,9 +274,9 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Headline1,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |c| if c.attack_only > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
+        get_attributes: |stats| if stats.attack_only > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_, _, target, _| format!("Only damages {}", target),
-        apply_func: Some(|c, _, _, _| c.attack_only = 1),
+        apply_func: Some(|stats, _, _, _| stats.attack_only = 1),
     },
     CatAbilityDef {
         name: "Strong Against",
@@ -267,9 +286,9 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Headline1,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |c| if c.strong_against > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
+        get_attributes: |stats| if stats.strong_against > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_, _, target, _| format!("Deals 1.5×~1.8× Damage to and takes 0.5×~0.4× Damage from {}", target),
-        apply_func: Some(|c, _, _, _| c.strong_against = 1),
+        apply_func: Some(|stats, _, _, _| stats.strong_against = 1),
     },
     CatAbilityDef {
         name: "Massive Damage",
@@ -279,9 +298,9 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Headline1,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |c| if c.massive_damage > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
+        get_attributes: |stats| if stats.massive_damage > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_, _, target, _| format!("Deals 3×~4× Damage to {}", target),
-        apply_func: Some(|c, _, _, _| c.massive_damage = 1),
+        apply_func: Some(|stats, _, _, _| stats.massive_damage = 1),
     },
     CatAbilityDef {
         name: "Insane Damage",
@@ -291,7 +310,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Headline1,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |c| if c.insane_damage > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
+        get_attributes: |stats| if stats.insane_damage > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_, _, target, _| format!("Deals 5×~6× Damage to {}", target),
         apply_func: None,
     },
@@ -303,9 +322,9 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Headline1,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |c| if c.resist > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
+        get_attributes: |stats| if stats.resist > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_, _, target, _| format!("Takes 1/4×~1/5× Damage from {}", target),
-        apply_func: Some(|c, _, _, _| c.resist = 1),
+        apply_func: Some(|stats, _, _, _| stats.resist = 1),
     },
     CatAbilityDef {
         name: "Insanely Tough",
@@ -315,7 +334,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Headline1,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |c| if c.insanely_tough > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
+        get_attributes: |stats| if stats.insanely_tough > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_, _, target, _| format!("Takes 1/6×~1/7× Damage from {}", target),
         apply_func: None,
     },
@@ -329,9 +348,9 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Headline2,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |c| if c.metal > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
+        get_attributes: |stats| if stats.metal > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_, _, _, _| "Damage taken is reduced to 1 for Non-Critical attacks".into(),
-        apply_func: Some(|c,_,_,_| c.metal = 1),
+        apply_func: Some(|stats,_,_,_| stats.metal = 1),
     },
     CatAbilityDef {
         name: "Base Destroyer",
@@ -341,9 +360,9 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Headline2,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |c| if c.base_destroyer > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
+        get_attributes: |stats| if stats.base_destroyer > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_,_,_,_| "Deals 4× Damage to the Enemy Base".into(),
-        apply_func: Some(|c, _, _, _| c.base_destroyer = 1),
+        apply_func: Some(|stats, _, _, _| stats.base_destroyer = 1),
     },
     
     CatAbilityDef {
@@ -354,9 +373,9 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Headline2,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |c| if c.double_bounty > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
+        get_attributes: |stats| if stats.double_bounty > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_,_,_,_| "Receives 2× Cash from Enemies".into(),
-        apply_func: Some(|c, _, _, _| c.double_bounty = 1),
+        apply_func: Some(|stats, _, _, _| stats.double_bounty = 1),
     },
     CatAbilityDef {
         name: "Zombie Killer",
@@ -366,9 +385,9 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Headline2,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |c| if c.zombie_killer > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
+        get_attributes: |stats| if stats.zombie_killer > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_, _, _, _| "Prevents Zombies from reviving".into(),
-        apply_func: Some(|c, _, _, _| c.zombie_killer = 1),
+        apply_func: Some(|stats, _, _, _| stats.zombie_killer = 1),
     },
     CatAbilityDef {
         name: "Soulstrike",
@@ -378,9 +397,9 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Headline2,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |c| if c.soulstrike == 2 || (c.soulstrike > 0 && c.zombie_killer > 0) { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
+        get_attributes: |stats| if stats.soulstrike == 2 || (stats.soulstrike > 0 && stats.zombie_killer > 0) { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_, _, _, _| "Will attack Zombie corpses".into(),
-        apply_func: Some(|c, _, _, _| c.soulstrike = 2),
+        apply_func: Some(|stats, _, _, _| stats.soulstrike = 2),
     },
     CatAbilityDef {
         name: "Colossus Slayer",
@@ -390,9 +409,9 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Headline2,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |c| if c.colossus_slayer > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
+        get_attributes: |stats| if stats.colossus_slayer > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_, _, _, _| "Deals 1.6× Damage to and takes 0.7× Damage from Colossus Enemies".into(),
-        apply_func: Some(|c, _, _, _| c.colossus_slayer = 1),
+        apply_func: Some(|stats, _, _, _| stats.colossus_slayer = 1),
     },
     CatAbilityDef {
         name: "Sage Slayer",
@@ -402,9 +421,9 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Headline2,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |c| if c.sage_slayer > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
+        get_attributes: |stats| if stats.sage_slayer > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_, _, _, _| "Deals 1.2× Damage to and takes 0.5× Damage from Sage Enemies\nCrowd Control effects originating from Sage Enemies reduced by 70%".into(),
-        apply_func: Some(|c, _, _, _| c.sage_slayer = 1),
+        apply_func: Some(|stats, _, _, _| stats.sage_slayer = 1),
     },
     CatAbilityDef {
         name: "Behemoth Slayer",
@@ -417,13 +436,13 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
             ("Dodge Chance", AttrUnit::Percent), 
             ("Dodge Duration", AttrUnit::Frames)
         ],
-        get_attributes: |c| {
-            if c.behemoth_slayer > 0 {
-                if c.behemoth_dodge_chance > 0 {
+        get_attributes: |stats| {
+            if stats.behemoth_slayer > 0 {
+                if stats.behemoth_dodge_chance > 0 {
                     vec![
                         ("Active", 1, AttrUnit::None), 
-                        ("Dodge Chance", c.behemoth_dodge_chance, AttrUnit::Percent), 
-                        ("Dodge Duration", c.behemoth_dodge_duration, AttrUnit::Frames),
+                        ("Dodge Chance", stats.behemoth_dodge_chance, AttrUnit::Percent), 
+                        ("Dodge Duration", stats.behemoth_dodge_duration, AttrUnit::Frames),
                     ]
                 } else {
                     vec![("Active", 1, AttrUnit::None)]
@@ -432,17 +451,17 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
                 vec![]
             }
         },
-        formatter: |_, c, _, _| {
-            let mut txt = "Deals 2.5× Damage to and takes 0.6× Damage from Behemoth Enemies".to_string();
-            if c.behemoth_dodge_chance > 0 {
-                txt.push_str(&format!("\n{}% Chance to Dodge Behemoth Enemies for {}", c.behemoth_dodge_chance, fmt_time(c.behemoth_dodge_duration)));
+        formatter: |_, stats, _, _| {
+            let mut formatted_text = "Deals 2.5× Damage to and takes 0.6× Damage from Behemoth Enemies".to_string();
+            if stats.behemoth_dodge_chance > 0 {
+                formatted_text.push_str(&format!("\n{}% Chance to Dodge Behemoth Enemies for {}", stats.behemoth_dodge_chance, fmt_time(stats.behemoth_dodge_duration)));
             }
-            txt
+            formatted_text
         },
-        apply_func: Some(|c, v1, v2, _| {
-            c.behemoth_slayer = 1;
-            c.behemoth_dodge_chance = if v1 > 0 { v1 } else { 5 };
-            c.behemoth_dodge_duration = if v2 > 0 { v2 } else { 30 };
+        apply_func: Some(|stats, value_1, value_2, _| {
+            stats.behemoth_slayer = 1;
+            stats.behemoth_dodge_chance = if value_1 > 0 { value_1 } else { 5 };
+            stats.behemoth_dodge_duration = if value_2 > 0 { value_2 } else { 30 };
         }),
     },
     CatAbilityDef {
@@ -453,9 +472,9 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Headline2,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |c| if c.eva_killer > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
+        get_attributes: |stats| if stats.eva_killer > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_,_,_,_| "Deals 5× Damage to and takes 0.2× Damage from Eva Angels".into(),
-        apply_func: Some(|c,_,_,_| c.eva_killer = 1),
+        apply_func: Some(|stats,_,_,_| stats.eva_killer = 1),
     },
     CatAbilityDef {
         name: "Witch Killer",
@@ -465,9 +484,9 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Headline2,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |c| if c.witch_killer > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
+        get_attributes: |stats| if stats.witch_killer > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_,_,_,_| "Deals 5× Damage to and takes 0.1× Damage from Witches".into(),
-        apply_func: Some(|c,_,_,_| c.witch_killer = 1),
+        apply_func: Some(|stats,_,_,_| stats.witch_killer = 1),
     },
     CatAbilityDef {
         name: "Wave Block",
@@ -477,9 +496,9 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Headline2,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |c| if c.wave_block > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
+        get_attributes: |stats| if stats.wave_block > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_, _, _, _| "When hit with a Wave Attack, nullifies its Damage and prevents its advancement".into(),
-        apply_func: Some(|c, _, _, _| c.wave_block = 1),
+        apply_func: Some(|stats, _, _, _| stats.wave_block = 1),
     },
     CatAbilityDef {
         name: "Counter Surge",
@@ -489,9 +508,9 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Headline2,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |c| if c.counter_surge > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
+        get_attributes: |stats| if stats.counter_surge > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_,_,_,_| "When hit with a Surge Attack, create a Surge of equal Type, Level, and Range".into(),
-        apply_func: Some(|c,_,_,_| c.counter_surge = 1),
+        apply_func: Some(|stats,_,_,_| stats.counter_surge = 1),
     },
     CatAbilityDef {
         name: "Kamikaze", 
@@ -503,20 +522,20 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         schema: &[
             ("Attacks", AttrUnit::None)
         ],
-        get_attributes: |c| {
-            if c.attack_count_total > -1 && c.attack_count_state == 2 { 
-                vec![("Attacks", c.attack_count_total, AttrUnit::None)] 
+        get_attributes: |stats| {
+            if stats.attack_count_total > -1 && stats.attack_count_state == 2 { 
+                vec![("Attacks", stats.attack_count_total, AttrUnit::None)] 
             } else { 
                 vec![] 
             }
         },
-        formatter: |val, _, _, _| {
-            let suffix = match val {
+        formatter: |value_1, _, _, _| {
+            let limit_suffix = match value_1 {
                 0 => "immediately".to_string(),
                 1 => "after 1 attack".to_string(),
                 n => format!("after {} attacks", n),
             };
-            format!("Unit disappears {}", suffix)
+            format!("Unit disappears {}", limit_suffix)
         },
         apply_func: None,
     },
@@ -530,20 +549,20 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         schema: &[
             ("Attacks", AttrUnit::None)
         ],
-        get_attributes: |c| {
-            if c.attack_count_total > -1 && c.attack_count_state == 0 { 
-                vec![("Attacks", c.attack_count_total, AttrUnit::None)] 
+        get_attributes: |stats| {
+            if stats.attack_count_total > -1 && stats.attack_count_state == 0 { 
+                vec![("Attacks", stats.attack_count_total, AttrUnit::None)] 
             } else { 
                 vec![] 
             }
         },
-        formatter: |val, _, _, _| {
-            let suffix = match val {
+        formatter: |value_1, _, _, _| {
+            let limit_suffix = match value_1 {
                 0 => "immediately".to_string(),
                 1 => "after 1 attack".to_string(),
                 n => format!("after {} attacks", n),
             };
-            format!("Unit stops moving {}", suffix)
+            format!("Unit stops moving {}", limit_suffix)
         },
         apply_func: None,
     },
@@ -557,8 +576,8 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Body1,
         custom_icon: CustomIcon::Multihit,
         schema: &[],
-        get_attributes: |c| if c.attack_2 > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
-        formatter: |_, c, _, _| fmt_multihit(c),
+        get_attributes: |stats| if stats.attack_2 > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
+        formatter: |_, stats, _, _| fmt_multihit(stats),
         apply_func: None,
     },
     CatAbilityDef {
@@ -569,26 +588,21 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Body1,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |c| {
-            let ranges = [
-                (c.long_distance_1_anchor, c.long_distance_1_span),
-                (c.long_distance_2_anchor, if c.long_distance_2_flag == 1 { c.long_distance_2_span } else { 0 }),
-                (c.long_distance_3_anchor, if c.long_distance_3_flag == 1 { c.long_distance_3_span } else { 0 }),
-            ];
-            let mut has_range = false;
-            let mut is_omni = false;
-            for (anchor, span) in ranges {
-                if span != 0 {
-                    has_range = true;
-                    let start = anchor;
-                    let end = anchor + span;
-                    let min = if start < end { start } else { end };
-                    if min <= 0 { is_omni = true; }
-                }
-            }
-            if has_range && !is_omni { vec![("Active", 1, AttrUnit::None)] } else { vec![] }
+        get_attributes: |stats| {
+            // Check if ANY hit is Omni
+            let has_omni = (stats.long_distance_1_span < 0 || (stats.long_distance_1_span == 0 && stats.long_distance_1_anchor != 0)) ||
+                           (stats.long_distance_2_flag > 0 && (stats.long_distance_2_span < 0 || (stats.long_distance_2_span == 0 && stats.long_distance_2_anchor != 0))) ||
+                           (stats.long_distance_3_flag > 0 && (stats.long_distance_3_span < 0 || (stats.long_distance_3_span == 0 && stats.long_distance_3_anchor != 0)));
+            
+            // Check if ANY hit is LD
+            let has_ld = (stats.long_distance_1_span > 0) || 
+                         (stats.long_distance_2_flag > 0 && stats.long_distance_2_span > 0) || 
+                         (stats.long_distance_3_flag > 0 && stats.long_distance_3_span > 0);
+            
+            // ONLY show the Long Distance icon if it has LD and DOES NOT have Omni
+            if has_ld && !has_omni { vec![("Active", 1, AttrUnit::None)] } else { vec![] }
         },
-        formatter: |_, c, _, _| fmt_effective_range(c),
+        formatter: |_, stats, _, _| fmt_effective_range(stats),
         apply_func: None,
     },
     CatAbilityDef {
@@ -599,24 +613,15 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Body1,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |c| {
-            let ranges = [
-                (c.long_distance_1_anchor, c.long_distance_1_span),
-                (c.long_distance_2_anchor, if c.long_distance_2_flag == 1 { c.long_distance_2_span } else { 0 }),
-                (c.long_distance_3_anchor, if c.long_distance_3_flag == 1 { c.long_distance_3_span } else { 0 }),
-            ];
-            let mut is_omni = false;
-            for (anchor, span) in ranges {
-                if span != 0 {
-                    let start = anchor;
-                    let end = anchor + span;
-                    let min = if start < end { start } else { end };
-                    if min <= 0 { is_omni = true; }
-                }
-            }
-            if is_omni { vec![("Active", 1, AttrUnit::None)] } else { vec![] }
+        get_attributes: |stats| {
+            // Check if ANY hit is Omni
+            let has_omni = (stats.long_distance_1_span < 0 || (stats.long_distance_1_span == 0 && stats.long_distance_1_anchor != 0)) ||
+                           (stats.long_distance_2_flag > 0 && (stats.long_distance_2_span < 0 || (stats.long_distance_2_span == 0 && stats.long_distance_2_anchor != 0))) ||
+                           (stats.long_distance_3_flag > 0 && (stats.long_distance_3_span < 0 || (stats.long_distance_3_span == 0 && stats.long_distance_3_anchor != 0)));
+            
+            if has_omni { vec![("Active", 1, AttrUnit::None)] } else { vec![] }
         },
-        formatter: |_, c, _, _| fmt_effective_range(c),
+        formatter: |_, stats, _, _| fmt_effective_range(stats),
         apply_func: None,
     },
     CatAbilityDef {
@@ -627,7 +632,7 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Body1,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |c| if c.conjure_unit_id > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
+        get_attributes: |stats| if stats.conjure_unit_id > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_,_,_,_| "Conjures a Spirit to the battlefield when tapped\nThis Cat may only be deployed one at a time".into(),
         apply_func: None,
     },
@@ -641,17 +646,17 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         schema: &[
             ("Damage", AttrUnit::Percent)
         ],
-        get_attributes: |c| {
-            if c.metal_killer_percent > 0 { 
+        get_attributes: |stats| {
+            if stats.metal_killer_percent > 0 { 
                 vec![
-                    ("Damage", c.metal_killer_percent, AttrUnit::Percent),
+                    ("Damage", stats.metal_killer_percent, AttrUnit::Percent),
                 ] 
             } else { 
                 vec![] 
             }
         },
-        formatter: |val,_,_,_| format!("Reduces Metal enemies current HP by {}% upon hit", val),
-        apply_func: Some(|c,v1,_,_| c.metal_killer_percent = v1),
+        formatter: |value_1,_,_,_| format!("Reduces Metal enemies current HP by {}% upon hit", value_1),
+        apply_func: Some(|stats,value_1,_,_| stats.metal_killer_percent = value_1),
     },
     CatAbilityDef {
         name: "Wave Attack",
@@ -664,23 +669,23 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
             ("Chance", AttrUnit::Percent), 
             ("Level", AttrUnit::None), 
         ],
-        get_attributes: |c| {
-            if c.mini_wave_flag == 0 && c.wave_chance > 0 { 
-                let reach = (332.5 + ((c.wave_level - 1) as f32 * 200.0)).round() as i32;
+        get_attributes: |stats| {
+            if stats.mini_wave_flag == 0 && stats.wave_chance > 0 { 
+                let maximum_reach = (332.5 + ((stats.wave_level - 1) as f32 * 200.0)).round() as i32;
                 vec![
-                    ("Chance", c.wave_chance, AttrUnit::Percent), 
-                    ("Level", c.wave_level, AttrUnit::None),
-                    ("Max Reach", reach, AttrUnit::Range),
+                    ("Chance", stats.wave_chance, AttrUnit::Percent), 
+                    ("Level", stats.wave_level, AttrUnit::None),
+                    ("Max Reach", maximum_reach, AttrUnit::Range),
                 ] 
             } else { 
                 vec![] 
             }
         },
-        formatter: |val, c, _, _| {
-            let reach = 332.5 + ((c.wave_level - 1) as f32 * 200.0);
-            format!("{}% Chance to create a Level {} Wave\nWave reaches {} Range", val, c.wave_level, reach)
+        formatter: |value_1, stats, _, _| {
+            let maximum_reach = 332.5 + ((stats.wave_level - 1) as f32 * 200.0);
+            format!("{}% Chance to create a Level {} Wave\nWave reaches {} Range", value_1, stats.wave_level, maximum_reach)
         },
-        apply_func: Some(|c, v1, v2, _| { c.wave_chance += v1; c.wave_level = v2; }),
+        apply_func: Some(|stats, value_1, value_2, _| { stats.wave_chance += value_1; stats.wave_level = value_2; }),
     },
     CatAbilityDef {
         name: "Mini-Wave",
@@ -693,23 +698,23 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
             ("Chance", AttrUnit::Percent), 
             ("Level", AttrUnit::None), 
         ],
-        get_attributes: |c| {
-            if c.mini_wave_flag > 0 && c.wave_chance > 0 { 
-                let reach = (332.5 + ((c.wave_level - 1) as f32 * 200.0)).round() as i32;
+        get_attributes: |stats| {
+            if stats.mini_wave_flag > 0 && stats.wave_chance > 0 { 
+                let maximum_reach = (332.5 + ((stats.wave_level - 1) as f32 * 200.0)).round() as i32;
                 vec![
-                    ("Chance", c.wave_chance, AttrUnit::Percent), 
-                    ("Level", c.wave_level, AttrUnit::None),
-                    ("Max Reach", reach, AttrUnit::Range),
+                    ("Chance", stats.wave_chance, AttrUnit::Percent), 
+                    ("Level", stats.wave_level, AttrUnit::None),
+                    ("Max Reach", maximum_reach, AttrUnit::Range),
                 ] 
             } else { 
                 vec![] 
             }
         },
-        formatter: |val, c, _, _| {
-             let reach = 332.5 + ((c.wave_level - 1) as f32 * 200.0);
-             format!("{}% Chance to create a Level {} Mini-Wave\nMini-Wave reaches {} Range", val, c.wave_level, reach)
+        formatter: |value_1, stats, _, _| {
+             let maximum_reach = 332.5 + ((stats.wave_level - 1) as f32 * 200.0);
+             format!("{}% Chance to create a Level {} Mini-Wave\nMini-Wave reaches {} Range", value_1, stats.wave_level, maximum_reach)
         },
-        apply_func: Some(|c, v1, v2, _| { c.mini_wave_flag = 1; c.wave_chance += v1; c.wave_level = v2; }),
+        apply_func: Some(|stats, value_1, value_2, _| { stats.mini_wave_flag = 1; stats.wave_chance += value_1; stats.wave_level = value_2; }),
     },
     CatAbilityDef {
         name: "Surge Attack",
@@ -724,29 +729,29 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
             ("Min Range", AttrUnit::Range), 
             ("Max Range", AttrUnit::Range), 
         ],
-        get_attributes: |c| {
-            if c.mini_surge_flag == 0 && c.surge_chance > 0 { 
+        get_attributes: |stats| {
+            if stats.mini_surge_flag == 0 && stats.surge_chance > 0 { 
                 vec![
-                    ("Chance", c.surge_chance, AttrUnit::Percent), 
-                    ("Level", c.surge_level, AttrUnit::None), 
-                    ("Min Range", c.surge_spawn_anchor, AttrUnit::Range), 
-                    ("Max Range", c.surge_spawn_anchor + c.surge_spawn_span, AttrUnit::Range),
-                    ("Width", c.surge_spawn_span, AttrUnit::Range),
+                    ("Chance", stats.surge_chance, AttrUnit::Percent), 
+                    ("Level", stats.surge_level, AttrUnit::None), 
+                    ("Min Range", stats.surge_spawn_anchor, AttrUnit::Range), 
+                    ("Max Range", stats.surge_spawn_anchor + stats.surge_spawn_span, AttrUnit::Range),
+                    ("Width", stats.surge_spawn_span, AttrUnit::Range),
                 ] 
             } else { 
                 vec![] 
             }
         },
-        formatter: |val, c, _, _| {
-            let start = c.surge_spawn_anchor;
-            let end = c.surge_spawn_anchor + c.surge_spawn_span;
-            let (min, max) = if start < end { (start, end) } else { (end, start) };
-            format!("{}% Chance to create a Level {} Surge\n{} Range", val, c.surge_level, fmt_range(min, max))
+        formatter: |value_1, stats, _, _| {
+            let start_bound = stats.surge_spawn_anchor;
+            let end_bound = stats.surge_spawn_anchor + stats.surge_spawn_span;
+            let (minimum_range, maximum_range) = if start_bound < end_bound { (start_bound, end_bound) } else { (end_bound, start_bound) };
+            format!("{}% Chance to create a Level {} Surge\n{} Range", value_1, stats.surge_level, fmt_range(minimum_range, maximum_range))
         },
-        apply_func: Some(|c, v1, v2, g| { 
-            c.surge_chance += v1; c.surge_level = v2; 
-            c.surge_spawn_anchor = g.min_3 as i32 / 4;
-            c.surge_spawn_span = g.min_4 as i32 / 4;
+        apply_func: Some(|stats, value_1, value_2, group_data| { 
+            stats.surge_chance += value_1; stats.surge_level = value_2; 
+            stats.surge_spawn_anchor = group_data.min_3 as i32 / 4;
+            stats.surge_spawn_span = group_data.min_4 as i32 / 4;
         }),
     },
     CatAbilityDef {
@@ -762,29 +767,29 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
             ("Min Range", AttrUnit::Range), 
             ("Max Range", AttrUnit::Range), 
         ],
-        get_attributes: |c| {
-            if c.mini_surge_flag > 0 && c.surge_chance > 0 { 
+        get_attributes: |stats| {
+            if stats.mini_surge_flag > 0 && stats.surge_chance > 0 { 
                 vec![
-                    ("Chance", c.surge_chance, AttrUnit::Percent), 
-                    ("Level", c.surge_level, AttrUnit::None), 
-                    ("Min Range", c.surge_spawn_anchor, AttrUnit::Range), 
-                    ("Max Range", c.surge_spawn_anchor + c.surge_spawn_span, AttrUnit::Range),
-                    ("Width", c.surge_spawn_span, AttrUnit::Range),
+                    ("Chance", stats.surge_chance, AttrUnit::Percent), 
+                    ("Level", stats.surge_level, AttrUnit::None), 
+                    ("Min Range", stats.surge_spawn_anchor, AttrUnit::Range), 
+                    ("Max Range", stats.surge_spawn_anchor + stats.surge_spawn_span, AttrUnit::Range),
+                    ("Width", stats.surge_spawn_span, AttrUnit::Range),
                 ] 
             } else { 
                 vec![] 
             }
         },
-        formatter: |val, c, _, _| {
-            let start = c.surge_spawn_anchor;
-            let end = c.surge_spawn_anchor + c.surge_spawn_span;
-            let (min, max) = if start < end { (start, end) } else { (end, start) };
-            format!("{}% Chance to create a Level {} Mini-Surge\n{} Range", val, c.surge_level, fmt_range(min, max))
+        formatter: |value_1, stats, _, _| {
+            let start_bound = stats.surge_spawn_anchor;
+            let end_bound = stats.surge_spawn_anchor + stats.surge_spawn_span;
+            let (minimum_range, maximum_range) = if start_bound < end_bound { (start_bound, end_bound) } else { (end_bound, start_bound) };
+            format!("{}% Chance to create a Level {} Mini-Surge\n{} Range", value_1, stats.surge_level, fmt_range(minimum_range, maximum_range))
         },
-        apply_func: Some(|c, v1, v2, g| { 
-            c.mini_surge_flag = 1; c.surge_chance += v1; c.surge_level = v2; 
-            c.surge_spawn_anchor = g.min_3 as i32 / 4;
-            c.surge_spawn_span = g.min_4 as i32 / 4;
+        apply_func: Some(|stats, value_1, value_2, group_data| { 
+            stats.mini_surge_flag = 1; stats.surge_chance += value_1; stats.surge_level = value_2; 
+            stats.surge_spawn_anchor = group_data.min_3 as i32 / 4;
+            stats.surge_spawn_span = group_data.min_4 as i32 / 4;
         }),
     },
     CatAbilityDef {
@@ -799,28 +804,28 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
             ("Min Range", AttrUnit::Range), 
             ("Max Range", AttrUnit::Range), 
         ],
-        get_attributes: |c| {
-            if c.explosion_chance > 0 { 
+        get_attributes: |stats| {
+            if stats.explosion_chance > 0 { 
                 vec![
-                    ("Chance", c.explosion_chance, AttrUnit::Percent), 
-                    ("Min Range", c.explosion_spawn_anchor, AttrUnit::Range), 
-                    ("Max Range", c.explosion_spawn_anchor + c.explosion_spawn_span, AttrUnit::Range),
-                    ("Width", c.explosion_spawn_span, AttrUnit::Range),
+                    ("Chance", stats.explosion_chance, AttrUnit::Percent), 
+                    ("Min Range", stats.explosion_spawn_anchor, AttrUnit::Range), 
+                    ("Max Range", stats.explosion_spawn_anchor + stats.explosion_spawn_span, AttrUnit::Range),
+                    ("Width", stats.explosion_spawn_span, AttrUnit::Range),
                 ] 
             } else { 
                 vec![] 
             }
         },
-        formatter: |val, c, _, _| {
-             let start = c.explosion_spawn_anchor;
-             let end = c.explosion_spawn_anchor + c.explosion_spawn_span;
-             let (min, max) = if start < end { (start, end) } else { (end, start) };
-             format!("{}% Chance to create an Explosion {} Range", val, fmt_range(min, max))
+        formatter: |value_1, stats, _, _| {
+             let start_bound = stats.explosion_spawn_anchor;
+             let end_bound = stats.explosion_spawn_anchor + stats.explosion_spawn_span;
+             let (minimum_range, maximum_range) = if start_bound < end_bound { (start_bound, end_bound) } else { (end_bound, start_bound) };
+             format!("{}% Chance to create an Explosion {} Range", value_1, fmt_range(minimum_range, maximum_range))
         },
-        apply_func: Some(|c, v1, _, g| {
-            c.explosion_chance += v1;
-            c.explosion_spawn_anchor = g.min_2 as i32 / 4;
-            c.explosion_spawn_span = g.min_3 as i32 / 4;
+        apply_func: Some(|stats, value_1, _, group_data| {
+            stats.explosion_chance += value_1;
+            stats.explosion_spawn_anchor = group_data.min_2 as i32 / 4;
+            stats.explosion_spawn_span = group_data.min_3 as i32 / 4;
         }),
     },
     CatAbilityDef {
@@ -834,21 +839,20 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
             ("Chance", AttrUnit::Percent), 
             ("Boost", AttrUnit::Percent)
         ],
-        get_attributes: |c| {
-            if c.savage_blow_chance > 0 { 
+        get_attributes: |stats| {
+            if stats.savage_blow_chance > 0 { 
                 vec![
-                    ("Chance", c.savage_blow_chance, AttrUnit::Percent), 
-                    ("Boost", c.savage_blow_boost, AttrUnit::Percent),
+                    ("Chance", stats.savage_blow_chance, AttrUnit::Percent), 
+                    ("Boost", stats.savage_blow_boost, AttrUnit::Percent),
                 ] 
             } else { 
                 vec![] 
             }
         },
-        formatter: |val, c, _, _| {
-            let mult = (c.savage_blow_boost as f32 + 100.0) / 100.0;
-            format!("{}% Chance to perform a Savage Blow dealing {}× Damage", val, mult)
+        formatter: |value_1, stats, _, _| {
+            format!("{}% Chance to Savage Blow\ndealing +{}% Damage", value_1, stats.savage_blow_boost)
         },
-        apply_func: Some(|c, v1, v2, _| { c.savage_blow_chance += v1; if v2 > 0 { c.savage_blow_boost = v2; } }),
+        apply_func: Some(|stats, value_1, value_2, _| { stats.savage_blow_chance += value_1; if value_2 > 0 { stats.savage_blow_boost = value_2; } }),
     },
     CatAbilityDef {
         name: "Critical Hit",
@@ -860,17 +864,17 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         schema: &[
             ("Chance", AttrUnit::Percent)
         ],
-        get_attributes: |c| {
-            if c.critical_chance > 0 { 
+        get_attributes: |stats| {
+            if stats.critical_chance > 0 { 
                 vec![
-                    ("Chance", c.critical_chance, AttrUnit::Percent),
+                    ("Chance", stats.critical_chance, AttrUnit::Percent),
                 ] 
             } else { 
                 vec![] 
             }
         },
-        formatter: |val, _, _, _| format!("{}% Chance to perform a Critical Hit dealing 2× Damage\nCritcal Hits bypass Metal resistance", val),
-        apply_func: Some(|c, v1, _, _| c.critical_chance += v1),
+        formatter: |value_1, _, _, _| format!("{}% Chance to Critical Hit dealing +100% Damage\nCritcal Hits bypass Metal resistance", value_1),
+        apply_func: Some(|stats, value_1, _, _| stats.critical_chance += value_1),
     },
     CatAbilityDef {
         name: "Strengthen",
@@ -883,23 +887,23 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
             ("HP", AttrUnit::Percent), 
             ("Boost", AttrUnit::Percent)
         ],
-        get_attributes: |c| {
-            if c.strengthen_threshold > 0 { 
+        get_attributes: |stats| {
+            if stats.strengthen_threshold > 0 { 
                 vec![
-                    ("HP", c.strengthen_threshold, AttrUnit::Percent), 
-                    ("Boost", c.strengthen_boost, AttrUnit::Percent),
+                    ("HP", stats.strengthen_threshold, AttrUnit::Percent), 
+                    ("Boost", stats.strengthen_boost, AttrUnit::Percent),
                 ] 
             } else { 
                 vec![] 
             }
         },
-        formatter: |_, c, _, _| format!("Damage dealt increases by +{}% when reduced to {}% HP", c.strengthen_boost, c.strengthen_threshold),
-        apply_func: Some(|c, v1, v2, _| {
-             if c.strengthen_boost == 0 {
-                 c.strengthen_threshold = 100 - v1; 
-                 c.strengthen_boost = v2;
+        formatter: |_, stats, _, _| format!("When reduced to or below {}% HP\nDamage dealt increases by +{}%", stats.strengthen_threshold, stats.strengthen_boost),
+        apply_func: Some(|stats, value_1, value_2, _| {
+             if stats.strengthen_boost == 0 {
+                 stats.strengthen_threshold = 100 - value_1; 
+                 stats.strengthen_boost = value_2;
              } else {
-                 c.strengthen_boost += if v1 != 0 { v1 } else { v2 };
+                 stats.strengthen_boost += if value_1 != 0 { value_1 } else { value_2 };
              }
         }),
     },
@@ -913,17 +917,17 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         schema: &[
             ("Chance", AttrUnit::Percent)
         ],
-        get_attributes: |c| {
-            if c.survive > 0 { 
+        get_attributes: |stats| {
+            if stats.survive > 0 { 
                 vec![
-                    ("Chance", c.survive, AttrUnit::Percent),
+                    ("Chance", stats.survive, AttrUnit::Percent),
                 ] 
             } else { 
                 vec![] 
             }
         },
-        formatter: |val, _, _, _| format!("{}% Chance to Survive a lethal strike", val),
-        apply_func: Some(|c, v1, _, _| c.survive += v1),
+        formatter: |value_1, _, _, _| format!("{}% Chance to Survive a lethal strike", value_1),
+        apply_func: Some(|stats, value_1, _, _| stats.survive += value_1),
     },
     CatAbilityDef {
         name: "Barrier Breaker",
@@ -935,17 +939,17 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         schema: &[
             ("Chance", AttrUnit::Percent)
         ],
-        get_attributes: |c| {
-            if c.barrier_breaker_chance > 0 { 
+        get_attributes: |stats| {
+            if stats.barrier_breaker_chance > 0 { 
                 vec![
-                    ("Chance", c.barrier_breaker_chance, AttrUnit::Percent),
+                    ("Chance", stats.barrier_breaker_chance, AttrUnit::Percent),
                 ] 
             } else { 
                 vec![] 
             }
         },
-        formatter: |val, _, _, _| format!("{}% Chance to break enemy Barriers", val),
-        apply_func: Some(|c, v1, _, _| c.barrier_breaker_chance += v1),
+        formatter: |value_1, _, _, _| format!("{}% Chance to break enemy Barriers", value_1),
+        apply_func: Some(|stats, value_1, _, _| stats.barrier_breaker_chance += value_1),
     },
     CatAbilityDef {
         name: "Shield Piercer",
@@ -957,17 +961,17 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         schema: &[
             ("Chance", AttrUnit::Percent)
         ],
-        get_attributes: |c| {
-            if c.shield_pierce_chance > 0 { 
+        get_attributes: |stats| {
+            if stats.shield_pierce_chance > 0 { 
                 vec![
-                    ("Chance", c.shield_pierce_chance, AttrUnit::Percent),
+                    ("Chance", stats.shield_pierce_chance, AttrUnit::Percent),
                 ] 
             } else { 
                 vec![] 
             }
         },
-        formatter: |val, _, _, _| format!("{}% Chance to pierce enemy Shields", val),
-        apply_func: Some(|c, v1, _, _| c.shield_pierce_chance += v1),
+        formatter: |value_1, _, _, _| format!("{}% Chance to pierce enemy Shields", value_1),
+        apply_func: Some(|stats, value_1, _, _| stats.shield_pierce_chance += value_1),
     },
     
     // --- BODY 2 ---
@@ -982,18 +986,18 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
             ("Chance", AttrUnit::Percent), 
             ("Duration", AttrUnit::Frames)
         ],
-        get_attributes: |c| {
-            if c.dodge_chance > 0 { 
+        get_attributes: |stats| {
+            if stats.dodge_chance > 0 { 
                 vec![
-                    ("Chance", c.dodge_chance, AttrUnit::Percent), 
-                    ("Duration", c.dodge_duration, AttrUnit::Frames),
+                    ("Chance", stats.dodge_chance, AttrUnit::Percent), 
+                    ("Duration", stats.dodge_duration, AttrUnit::Frames),
                 ] 
             } else { 
                 vec![] 
             }
         },
-        formatter: |val, _, target, dur| format!("{}% Chance to Dodge {} for {}", val, target, fmt_time(dur)),
-        apply_func: Some(|c, v1, v2, _| { c.dodge_chance += v1; c.dodge_duration += v2; }),
+        formatter: |value_1, _, target, duration_frames| format!("{}% Chance to Dodge {} for {}", value_1, target, fmt_time(duration_frames)),
+        apply_func: Some(|stats, value_1, value_2, _| { stats.dodge_chance += value_1; stats.dodge_duration += value_2; }),
     },
     CatAbilityDef {
         name: "Weaken",
@@ -1007,23 +1011,23 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
             ("Reduced To", AttrUnit::Percent), 
             ("Duration", AttrUnit::Frames)
         ],
-        get_attributes: |c| {
-            if c.weaken_chance > 0 { 
+        get_attributes: |stats| {
+            if stats.weaken_chance > 0 { 
                 vec![
-                    ("Chance", c.weaken_chance, AttrUnit::Percent), 
-                    ("Reduced To", c.weaken_to, AttrUnit::Percent), 
-                    ("Duration", c.weaken_duration, AttrUnit::Frames),
+                    ("Chance", stats.weaken_chance, AttrUnit::Percent), 
+                    ("Reduced To", stats.weaken_to, AttrUnit::Percent), 
+                    ("Duration", stats.weaken_duration, AttrUnit::Frames),
                 ] 
             } else { 
                 vec![] 
             }
         },
-        formatter: |val, c, target, dur| format!("{}% Chance to weaken {}\nto {}% Attack Power for {}", val, target, c.weaken_to, fmt_time(dur)),
-        apply_func: Some(|c, v1, v2, group| {
-            if c.weaken_chance == 0 {
-                 c.weaken_chance = v1; c.weaken_duration = v2; c.weaken_to = (100 - group.min_3) as i32; 
-            } else if group.text_id == 42 { c.weaken_duration += get_dur_val(v1, v2); } 
-            else { c.weaken_chance += v1; c.weaken_duration += v2; }
+        formatter: |value_1, stats, target, duration_frames| format!("{}% Chance to weaken {}\nto {}% Attack Power for {}", value_1, target, stats.weaken_to, fmt_time(duration_frames)),
+        apply_func: Some(|stats, value_1, value_2, group_data| {
+            if stats.weaken_chance == 0 {
+                 stats.weaken_chance = value_1; stats.weaken_duration = value_2; stats.weaken_to = (100 - group_data.min_3) as i32; 
+            } else if group_data.text_id == 42 { stats.weaken_duration += get_dur_val(value_1, value_2); } 
+            else { stats.weaken_chance += value_1; stats.weaken_duration += value_2; }
         }),
     },
     CatAbilityDef {
@@ -1037,21 +1041,21 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
             ("Chance", AttrUnit::Percent), 
             ("Duration", AttrUnit::Frames)
         ],
-        get_attributes: |c| {
-            if c.freeze_chance > 0 { 
+        get_attributes: |stats| {
+            if stats.freeze_chance > 0 { 
                 vec![
-                    ("Chance", c.freeze_chance, AttrUnit::Percent), 
-                    ("Duration", c.freeze_duration, AttrUnit::Frames),
+                    ("Chance", stats.freeze_chance, AttrUnit::Percent), 
+                    ("Duration", stats.freeze_duration, AttrUnit::Frames),
                 ] 
             } else { 
                 vec![] 
             }
         },
-        formatter: |val, _, target, dur| format!("{}% Chance to Freeze {} for {}", val, target, fmt_time(dur)),
-        apply_func: Some(|c, v1, v2, g| {
-            if c.freeze_chance == 0 { c.freeze_chance = v1; c.freeze_duration = v2; } 
-            else if g.text_id == 74 { c.freeze_chance += v1; } 
-            else { c.freeze_duration += get_dur_val(v1, v2); }
+        formatter: |value_1, _, target, duration_frames| format!("{}% Chance to Freeze {} for {}", value_1, target, fmt_time(duration_frames)),
+        apply_func: Some(|stats, value_1, value_2, group_data| {
+            if stats.freeze_chance == 0 { stats.freeze_chance = value_1; stats.freeze_duration = value_2; } 
+            else if group_data.text_id == 74 { stats.freeze_chance += value_1; } 
+            else { stats.freeze_duration += get_dur_val(value_1, value_2); }
         }),
     },
     CatAbilityDef {
@@ -1065,21 +1069,21 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
             ("Chance", AttrUnit::Percent), 
             ("Duration", AttrUnit::Frames)
         ],
-        get_attributes: |c| {
-            if c.slow_chance > 0 { 
+        get_attributes: |stats| {
+            if stats.slow_chance > 0 { 
                 vec![
-                    ("Chance", c.slow_chance, AttrUnit::Percent), 
-                    ("Duration", c.slow_duration, AttrUnit::Frames),
+                    ("Chance", stats.slow_chance, AttrUnit::Percent), 
+                    ("Duration", stats.slow_duration, AttrUnit::Frames),
                 ] 
             } else { 
                 vec![] 
             }
         },
-        formatter: |val, _, target, dur| format!("{}% Chance to Slow {} for {}", val, target, fmt_time(dur)),
-        apply_func: Some(|c, v1, v2, g| {
-            if c.slow_chance == 0 { c.slow_chance = v1; c.slow_duration = v2; } 
-            else if g.text_id == 63 { c.slow_chance += v1; } 
-            else { c.slow_duration += get_dur_val(v1, v2); }
+        formatter: |value_1, _, target, duration_frames| format!("{}% Chance to Slow {} for {}", value_1, target, fmt_time(duration_frames)),
+        apply_func: Some(|stats, value_1, value_2, group_data| {
+            if stats.slow_chance == 0 { stats.slow_chance = value_1; stats.slow_duration = value_2; } 
+            else if group_data.text_id == 63 { stats.slow_chance += value_1; } 
+            else { stats.slow_duration += get_dur_val(value_1, value_2); }
         }),
     },
     CatAbilityDef {
@@ -1092,17 +1096,17 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         schema: &[
             ("Chance", AttrUnit::Percent)
         ],
-        get_attributes: |c| {
-            if c.knockback_chance > 0 { 
+        get_attributes: |stats| {
+            if stats.knockback_chance > 0 { 
                 vec![
-                    ("Chance", c.knockback_chance, AttrUnit::Percent),
+                    ("Chance", stats.knockback_chance, AttrUnit::Percent),
                 ] 
             } else { 
                 vec![] 
             }
         },
-        formatter: |val, _, target, _| format!("{}% Chance to Knockback {}", val, target),
-        apply_func: Some(|c, v1, _, _| c.knockback_chance += v1),
+        formatter: |value_1, _, target, _| format!("{}% Chance to Knockback {}", value_1, target),
+        apply_func: Some(|stats, value_1, _, _| stats.knockback_chance += value_1),
     },
     CatAbilityDef {
         name: "Curse",
@@ -1115,21 +1119,21 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
             ("Chance", AttrUnit::Percent), 
             ("Duration", AttrUnit::Frames)
         ],
-        get_attributes: |c| {
-            if c.curse_chance > 0 { 
+        get_attributes: |stats| {
+            if stats.curse_chance > 0 { 
                 vec![
-                    ("Chance", c.curse_chance, AttrUnit::Percent), 
-                    ("Duration", c.curse_duration, AttrUnit::Frames),
+                    ("Chance", stats.curse_chance, AttrUnit::Percent), 
+                    ("Duration", stats.curse_duration, AttrUnit::Frames),
                 ] 
             } else { 
                 vec![] 
             }
         },
-        formatter: |val, _, target, dur| format!("{}% Chance to Curse {} for {}", val, target, fmt_time(dur)),
-        apply_func: Some(|c, v1, v2, g| {
-             if c.curse_chance == 0 { c.curse_chance = v1; c.curse_duration = v2; } 
-             else if g.text_id == 93 { c.curse_duration += get_dur_val(v1, v2); } 
-             else { c.curse_chance += v1; }
+        formatter: |value_1, _, target, duration_frames| format!("{}% Chance to Curse {} for {}", value_1, target, fmt_time(duration_frames)),
+        apply_func: Some(|stats, value_1, value_2, group_data| {
+             if stats.curse_chance == 0 { stats.curse_chance = value_1; stats.curse_duration = value_2; } 
+             else if group_data.text_id == 93 { stats.curse_duration += get_dur_val(value_1, value_2); } 
+             else { stats.curse_chance += value_1; }
         }),
     },
     CatAbilityDef {
@@ -1145,19 +1149,19 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
             ("Min Distance", AttrUnit::Range), 
             ("Max Distance", AttrUnit::Range)
         ],
-        get_attributes: |c| {
-            if c.warp_chance > 0 { 
+        get_attributes: |stats| {
+            if stats.warp_chance > 0 { 
                 vec![
-                    ("Chance", c.warp_chance, AttrUnit::Percent), 
-                    ("Duration", c.warp_duration, AttrUnit::Frames), 
-                    ("Min Distance", c.warp_distance_minimum, AttrUnit::Range), 
-                    ("Max Distance", c.warp_distance_maximum, AttrUnit::Range),
+                    ("Chance", stats.warp_chance, AttrUnit::Percent), 
+                    ("Duration", stats.warp_duration, AttrUnit::Frames), 
+                    ("Min Distance", stats.warp_distance_minimum, AttrUnit::Range), 
+                    ("Max Distance", stats.warp_distance_maximum, AttrUnit::Range),
                 ] 
             } else { 
                 vec![] 
             }
         },
-        formatter: |val, c, target, dur| format!("{}% Chance to Warp {} {}~{} Range for {}", val, target, c.warp_distance_minimum, c.warp_distance_maximum, fmt_time(dur)),
+        formatter: |value_1, stats, target, duration_frames| format!("{}% Chance to Warp {} {}~{} Range for {}", value_1, target, stats.warp_distance_minimum, stats.warp_distance_maximum, fmt_time(duration_frames)),
         apply_func: None,
     },
     
@@ -1170,9 +1174,9 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Footer,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |c| if c.wave_immune > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
+        get_attributes: |stats| if stats.wave_immune > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_,_,_,_| "Immune to Wave Attacks".into(),
-        apply_func: Some(|c,_,_,_| c.wave_immune = 1),
+        apply_func: Some(|stats,_,_,_| stats.wave_immune = 1),
     },
     CatAbilityDef {
         name: "Immune Surge",
@@ -1182,9 +1186,9 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Footer,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |c| if c.surge_immune > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
+        get_attributes: |stats| if stats.surge_immune > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_,_,_,_| "Immune to Surge Attacks".into(),
-        apply_func: Some(|c,_,_,_| c.surge_immune = 1),
+        apply_func: Some(|stats,_,_,_| stats.surge_immune = 1),
     },
     CatAbilityDef {
         name: "Immune Explosion",
@@ -1194,9 +1198,9 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Footer,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |c| if c.explosion_immune > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
+        get_attributes: |stats| if stats.explosion_immune > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_,_,_,_| "Immune to Explosions".into(),
-        apply_func: Some(|c,_,_,_| c.explosion_immune = 1),
+        apply_func: Some(|stats,_,_,_| stats.explosion_immune = 1),
     },
     CatAbilityDef {
         name: "Immune Weaken",
@@ -1206,9 +1210,9 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Footer,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |c| if c.weaken_immune > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
+        get_attributes: |stats| if stats.weaken_immune > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_,_,_,_| "Immune to Weaken".into(),
-        apply_func: Some(|c,_,_,_| c.weaken_immune = 1),
+        apply_func: Some(|stats,_,_,_| stats.weaken_immune = 1),
     },
     CatAbilityDef {
         name: "Immune Freeze",
@@ -1218,9 +1222,9 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Footer,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |c| if c.freeze_immune > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
+        get_attributes: |stats| if stats.freeze_immune > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_,_,_,_| "Immune to Freeze".into(),
-        apply_func: Some(|c,_,_,_| c.freeze_immune = 1),
+        apply_func: Some(|stats,_,_,_| stats.freeze_immune = 1),
     },
     CatAbilityDef {
         name: "Immune Slow",
@@ -1230,9 +1234,9 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Footer,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |c| if c.slow_immune > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
+        get_attributes: |stats| if stats.slow_immune > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_,_,_,_| "Immune to Slow".into(),
-        apply_func: Some(|c,_,_,_| c.slow_immune = 1),
+        apply_func: Some(|stats,_,_,_| stats.slow_immune = 1),
     },
     CatAbilityDef {
         name: "Immune Knockback",
@@ -1242,9 +1246,9 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Footer,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |c| if c.knockback_immune > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
+        get_attributes: |stats| if stats.knockback_immune > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_,_,_,_| "Immune to Knockback".into(),
-        apply_func: Some(|c,_,_,_| c.knockback_immune = 1),
+        apply_func: Some(|stats,_,_,_| stats.knockback_immune = 1),
     },
     CatAbilityDef {
         name: "Immune Curse",
@@ -1254,9 +1258,9 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Footer,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |c| if c.curse_immune > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
+        get_attributes: |stats| if stats.curse_immune > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_,_,_,_| "Immune to Curse".into(),
-        apply_func: Some(|c,_,_,_| c.curse_immune = 1),
+        apply_func: Some(|stats,_,_,_| stats.curse_immune = 1),
     },
     CatAbilityDef {
         name: "Immune Toxic",
@@ -1266,9 +1270,9 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Footer,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |c| if c.toxic_immune > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
+        get_attributes: |stats| if stats.toxic_immune > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_,_,_,_| "Immune to Toxic".into(),
-        apply_func: Some(|c,_,_,_| c.toxic_immune = 1),
+        apply_func: Some(|stats,_,_,_| stats.toxic_immune = 1),
     },
     CatAbilityDef {
         name: "Immune Warp",
@@ -1278,9 +1282,9 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Footer,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |c| if c.warp_immune > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
+        get_attributes: |stats| if stats.warp_immune > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_,_,_,_| "Immune to Warp".into(),
-        apply_func: Some(|c,_,_,_| c.warp_immune = 1),
+        apply_func: Some(|stats,_,_,_| stats.warp_immune = 1),
     },
     CatAbilityDef {
         name: "Immune Boss Wave",
@@ -1290,9 +1294,9 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Footer,
         custom_icon: CustomIcon::BossWave,
         schema: &[],
-        get_attributes: |c| if c.boss_wave_immune > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
+        get_attributes: |stats| if stats.boss_wave_immune > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_,_,_,_| "Immune to Boss Shockwaves".into(),
-        apply_func: Some(|c,_,_,_| c.boss_wave_immune = 1),
+        apply_func: Some(|stats,_,_,_| stats.boss_wave_immune = 1),
     },
 
     // --- RESISTANCES ---
@@ -1304,8 +1308,8 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Footer,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |_c| vec![],
-        formatter: |val,_,_,_| format!("Resist Weaken ({}%)", val),
+        get_attributes: |_stats| vec![],
+        formatter: |value_1,_,_,_| format!("Resist Weaken ({}%)", value_1),
         apply_func: Some(|_,_,_,_| {}),
     },
     CatAbilityDef {
@@ -1316,8 +1320,8 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Footer,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |_c| vec![],
-        formatter: |val,_,_,_| format!("Resist Freeze ({}%)", val),
+        get_attributes: |_stats| vec![],
+        formatter: |value_1,_,_,_| format!("Resist Freeze ({}%)", value_1),
         apply_func: Some(|_,_,_,_| {}),
     },
     CatAbilityDef {
@@ -1328,8 +1332,8 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Footer,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |_c| vec![],
-        formatter: |val,_,_,_| format!("Resist Slow ({}%)", val),
+        get_attributes: |_stats| vec![],
+        formatter: |value_1,_,_,_| format!("Resist Slow ({}%)", value_1),
         apply_func: Some(|_,_,_,_| {}),
     },
     CatAbilityDef {
@@ -1340,8 +1344,8 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Footer,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |_c| vec![],
-        formatter: |val,_,_,_| format!("Resist Knockback ({}%)", val),
+        get_attributes: |_stats| vec![],
+        formatter: |value_1,_,_,_| format!("Resist Knockback ({}%)", value_1),
         apply_func: Some(|_,_,_,_| {}),
     },
     CatAbilityDef {
@@ -1352,8 +1356,8 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Footer,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |_c| vec![],
-        formatter: |val,_,_,_| format!("Resist Wave ({}%)", val),
+        get_attributes: |_stats| vec![],
+        formatter: |value_1,_,_,_| format!("Resist Wave ({}%)", value_1),
         apply_func: Some(|_,_,_,_| {}),
     },
     CatAbilityDef {
@@ -1364,8 +1368,8 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Footer,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |_c| vec![],
-        formatter: |val,_,_,_| format!("Resist Warp ({}%)", val),
+        get_attributes: |_stats| vec![],
+        formatter: |value_1,_,_,_| format!("Resist Warp ({}%)", value_1),
         apply_func: Some(|_,_,_,_| {}),
     },
     CatAbilityDef {
@@ -1376,8 +1380,8 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Footer,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |_c| vec![],
-        formatter: |val,_,_,_| format!("Resist Curse ({}%)", val),
+        get_attributes: |_stats| vec![],
+        formatter: |value_1,_,_,_| format!("Resist Curse ({}%)", value_1),
         apply_func: Some(|_,_,_,_| {}),
     },
     CatAbilityDef {
@@ -1388,8 +1392,8 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Footer,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |_c| vec![],
-        formatter: |val,_,_,_| format!("Resist Toxic ({}%)", val),
+        get_attributes: |_stats| vec![],
+        formatter: |value_1,_,_,_| format!("Resist Toxic ({}%)", value_1),
         apply_func: Some(|_,_,_,_| {}),
     },
     CatAbilityDef {
@@ -1400,8 +1404,8 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Footer,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |_c| vec![],
-        formatter: |val,_,_,_| format!("Resist Surge ({}%)", val),
+        get_attributes: |_stats| vec![],
+        formatter: |value_1,_,_,_| format!("Resist Surge ({}%)", value_1),
         apply_func: Some(|_,_,_,_| {}),
     },
 
@@ -1414,9 +1418,9 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Footer,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |_c| vec![],
+        get_attributes: |_stats| vec![],
         formatter: |_,_,_,_| "".into(),
-        apply_func: Some(|c, v1, _, _| c.eoc1_cost = c.eoc1_cost.saturating_sub(v1)),
+        apply_func: Some(|stats, value_1, _, _| stats.eoc1_cost = stats.eoc1_cost.saturating_sub(value_1)),
     },
     CatAbilityDef {
         name: "Recover Speed Up",
@@ -1426,9 +1430,9 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Footer,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |_c| vec![],
+        get_attributes: |_stats| vec![],
         formatter: |_,_,_,_| "".into(),
-        apply_func: Some(|c, v1, _, _| c.cooldown = c.cooldown.saturating_sub(v1)),
+        apply_func: Some(|stats, value_1, _, _| stats.cooldown = stats.cooldown.saturating_sub(value_1)),
     },
     CatAbilityDef {
         name: "Move Speed Up",
@@ -1438,9 +1442,9 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Footer,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |_c| vec![],
+        get_attributes: |_stats| vec![],
         formatter: |_,_,_,_| "".into(),
-        apply_func: Some(|c, v1, _, _| c.speed += v1),
+        apply_func: Some(|stats, value_1, _, _| stats.speed += value_1),
     },
     CatAbilityDef {
         name: "Attack Buff",
@@ -1450,13 +1454,13 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Footer,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |_c| vec![],
+        get_attributes: |_stats| vec![],
         formatter: |_,_,_,_| "".into(),
-        apply_func: Some(|c, v1, _, _| {
-            let factor = (100 + v1) as f32 / 100.0;
-            c.attack_1 = (c.attack_1 as f32 * factor).round() as i32;
-            c.attack_2 = (c.attack_2 as f32 * factor).round() as i32;
-            c.attack_3 = (c.attack_3 as f32 * factor).round() as i32;
+        apply_func: Some(|stats, value_1, _, _| {
+            let percentage_factor = (100 + value_1) as f32 / 100.0;
+            stats.attack_1 = (stats.attack_1 as f32 * percentage_factor).round() as i32;
+            stats.attack_2 = (stats.attack_2 as f32 * percentage_factor).round() as i32;
+            stats.attack_3 = (stats.attack_3 as f32 * percentage_factor).round() as i32;
         }),
     },
     CatAbilityDef {
@@ -1467,11 +1471,11 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Footer,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |_c| vec![],
+        get_attributes: |_stats| vec![],
         formatter: |_,_,_,_| "".into(),
-        apply_func: Some(|c, v1, _, _| {
-            let factor = (100 + v1) as f32 / 100.0;
-            c.hitpoints = (c.hitpoints as f32 * factor).round() as i32;
+        apply_func: Some(|stats, value_1, _, _| {
+            let percentage_factor = (100 + value_1) as f32 / 100.0;
+            stats.hitpoints = (stats.hitpoints as f32 * percentage_factor).round() as i32;
         }),
     },
     CatAbilityDef {
@@ -1482,11 +1486,11 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Footer,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |_c| vec![],
+        get_attributes: |_stats| vec![],
         formatter: |_,_,_,_| "".into(),
-        apply_func: Some(|c, v1, _, _| {
-             let reduction = (c.time_before_attack_1 as f32 * v1 as f32 / 100.0).round() as i32;
-             c.time_before_attack_1 = c.time_before_attack_1.saturating_sub(reduction);
+        apply_func: Some(|stats, value_1, _, _| {
+             let time_reduction = (stats.time_before_attack_1 as f32 * value_1 as f32 / 100.0).round() as i32;
+             stats.time_before_attack_1 = stats.time_before_attack_1.saturating_sub(time_reduction);
         }),
     },
     CatAbilityDef {
@@ -1497,9 +1501,9 @@ pub const CAT_ABILITY_REGISTRY: &[CatAbilityDef] = &[
         group: DisplayGroup::Footer,
         custom_icon: CustomIcon::None,
         schema: &[],
-        get_attributes: |_c| vec![],
+        get_attributes: |_stats| vec![],
         formatter: |_,_,_,_| "".into(),
-        apply_func: Some(|c, v1, _, _| c.knockbacks += v1),
+        apply_func: Some(|stats, value_1, _, _| stats.knockbacks += value_1),
     },
 ];
 
@@ -1518,122 +1522,122 @@ pub const CAT_STATS_REGISTRY: &[CatStatsDef] = &[
     CatStatsDef {
         name: "Hitpoints",
         display_name: "Hitpoints",
-        get_value: |c, _| c.hitpoints,
-        formatter: |val| format!("{}", val),
+        get_value: |stats, _| stats.hitpoints,
+        formatter: |value_1| format!("{}", value_1),
         linked_talent_id: Some(32),
-        talent_modifier_fmt: Some(|v1, _| format!("(+{}%)", v1)),
+        talent_modifier_fmt: Some(|value_1, _| format!("(+{}%)", value_1)),
     },
     CatStatsDef {
         name: "Knockbacks",
         display_name: "Knockback",
-        get_value: |c, _| c.knockbacks,
-        formatter: |val| format!("{}", val),
+        get_value: |stats, _| stats.knockbacks,
+        formatter: |value_1| format!("{}", value_1),
         linked_talent_id: Some(28),
-        talent_modifier_fmt: Some(|v1, _| format!("(+{})", v1)),
+        talent_modifier_fmt: Some(|value_1, _| format!("(+{})", value_1)),
     },
     CatStatsDef {
         name: "Speed",
         display_name: "Speed",
-        get_value: |c, _| c.speed,
-        formatter: |val| format!("{}", val),
+        get_value: |stats, _| stats.speed,
+        formatter: |value_1| format!("{}", value_1),
         linked_talent_id: Some(27),
-        talent_modifier_fmt: Some(|v1, _| format!("(+{})", v1)),
+        talent_modifier_fmt: Some(|value_1, _| format!("(+{})", value_1)),
     },
     CatStatsDef {
         name: "Range",
         display_name: "Range",
-        get_value: |c, _| c.standing_range,
-        formatter: |val| format!("{}", val),
+        get_value: |stats, _| stats.standing_range,
+        formatter: |value_1| format!("{}", value_1),
         linked_talent_id: None,
         talent_modifier_fmt: None,
     },
     CatStatsDef {
         name: "Attack",
         display_name: "Attack",
-        get_value: |c, _| c.attack_1 + c.attack_2 + c.attack_3,
-        formatter: |val| format!("{}", val),
+        get_value: |stats, _| stats.attack_1 + stats.attack_2 + stats.attack_3,
+        formatter: |value_1| format!("{}", value_1),
         linked_talent_id: Some(31),
-        talent_modifier_fmt: Some(|v1, _| format!("(+{}%)", v1)),
+        talent_modifier_fmt: Some(|value_1, _| format!("(+{}%)", value_1)),
     },
     CatStatsDef {
         name: "Dps",
         display_name: "DPS",
-        get_value: |c, anim_frames| {
-            let total_atk = c.attack_1 + c.attack_2 + c.attack_3;
-            let mut effective_foreswing = c.pre_attack_animation;
-            if c.attack_3 > 0 && c.time_before_attack_3 > 0 { effective_foreswing = c.time_before_attack_3; } 
-            else if c.attack_2 > 0 && c.time_before_attack_2 > 0 { effective_foreswing = c.time_before_attack_2; }
-            let cooldown_frames = c.time_before_attack_1.saturating_sub(1);
-            let cycle = (effective_foreswing + cooldown_frames).max(anim_frames);
-            if cycle > 0 { ((total_atk as f32 * 30.0) / cycle as f32).round() as i32 } else { 0 }
+        get_value: |stats, animation_frames| {
+            let total_attack_damage = stats.attack_1 + stats.attack_2 + stats.attack_3;
+            let mut effective_foreswing = stats.pre_attack_animation;
+            if stats.attack_3 > 0 && stats.time_before_attack_3 > 0 { effective_foreswing = stats.time_before_attack_3; } 
+            else if stats.attack_2 > 0 && stats.time_before_attack_2 > 0 { effective_foreswing = stats.time_before_attack_2; }
+            let cooldown_frames = stats.time_before_attack_1.saturating_sub(1);
+            let attack_cycle = (effective_foreswing + cooldown_frames).max(animation_frames);
+            if attack_cycle > 0 { ((total_attack_damage as f32 * 30.0) / attack_cycle as f32).round() as i32 } else { 0 }
         },
-        formatter: |val| format!("{}", val),
+        formatter: |value_1| format!("{}", value_1),
         linked_talent_id: None,
         talent_modifier_fmt: None,
     },
     CatStatsDef {
         name: "Atk Cycle",
         display_name: "Atk Cycle",
-        get_value: |c, anim_frames| {
-            let mut effective_foreswing = c.pre_attack_animation;
-            if c.attack_3 > 0 && c.time_before_attack_3 > 0 { effective_foreswing = c.time_before_attack_3; } 
-            else if c.attack_2 > 0 && c.time_before_attack_2 > 0 { effective_foreswing = c.time_before_attack_2; }
-            let cooldown_frames = c.time_before_attack_1.saturating_sub(1);
-            (effective_foreswing + cooldown_frames).max(anim_frames)
+        get_value: |stats, animation_frames| {
+            let mut effective_foreswing = stats.pre_attack_animation;
+            if stats.attack_3 > 0 && stats.time_before_attack_3 > 0 { effective_foreswing = stats.time_before_attack_3; } 
+            else if stats.attack_2 > 0 && stats.time_before_attack_2 > 0 { effective_foreswing = stats.time_before_attack_2; }
+            let cooldown_frames = stats.time_before_attack_1.saturating_sub(1);
+            (effective_foreswing + cooldown_frames).max(animation_frames)
         },
-        formatter: |val| format!("{}f", val), 
+        formatter: |value_1| format!("{}f", value_1), 
         linked_talent_id: None,
         talent_modifier_fmt: None,
     },
     CatStatsDef {
         name: "Atk Type",
         display_name: "Atk Type",
-        get_value: |c, _| c.area_attack,
-        formatter: |val| if val == 0 { "Single".to_string() } else { "Area".to_string() },
+        get_value: |stats, _| stats.area_attack,
+        formatter: |value_1| if value_1 == 0 { "Single".to_string() } else { "Area".to_string() },
         linked_talent_id: None,
         talent_modifier_fmt: None,
     },
     CatStatsDef {
         name: "Cost",
         display_name: "Cost",
-        get_value: |c, _| (c.eoc1_cost as f32 * 1.5).round() as i32,
-        formatter: |val| format!("{}¢", val),
+        get_value: |stats, _| (stats.eoc1_cost as f32 * 1.5).round() as i32,
+        formatter: |value_1| format!("{}¢", value_1),
         linked_talent_id: Some(25),
-        talent_modifier_fmt: Some(|v1, _| format!("(-{}¢)", (v1 as f32 * 1.5).round() as i32)),
+        talent_modifier_fmt: Some(|value_1, _| format!("(-{}¢)", (value_1 as f32 * 1.5).round() as i32)),
     },
     CatStatsDef {
         name: "Cooldown",
         display_name: "Cooldown",
-        get_value: |c, _| (c.cooldown - 264).max(60),
-        formatter: |val| format!("{:.2}s^{}f", val as f32 / 30.0, val),
+        get_value: |stats, _| (stats.cooldown - 264).max(60),
+        formatter: |value_1| format!("{:.2}s^{}f", value_1 as f32 / 30.0, value_1),
         linked_talent_id: Some(26),
-        talent_modifier_fmt: Some(|v1, _| format!("(-{}f)", v1)),
+        talent_modifier_fmt: Some(|value_1, _| format!("(-{}f)", value_1)),
     },
     CatStatsDef {
         name: "TBA",
         display_name: "TBA",
-        get_value: |c, _| c.time_before_attack_1,
-        formatter: |val| format!("{}f", val),
+        get_value: |stats, _| stats.time_before_attack_1,
+        formatter: |value_1| format!("{}f", value_1),
         linked_talent_id: Some(61),
-        talent_modifier_fmt: Some(|v1, _| format!("(-{}%)", v1)),
+        talent_modifier_fmt: Some(|value_1, _| format!("(-{}%)", value_1)),
     },
 ];
 
 // --- REGISTRY HELPER FUNCTIONS ---
 
 pub fn get_cat_stat(name: &str) -> &'static CatStatsDef {
-    CAT_STATS_REGISTRY.iter().find(|s| s.name == name).expect("Stat not found in registry")
+    CAT_STATS_REGISTRY.iter().find(|stat_definition| stat_definition.name == name).expect("CRITICAL: Hardcoded stat name was not found in CAT_STATS_REGISTRY")
 }
 
-pub fn format_cat_stat(name: &str, stats: &CatRaw, anim_frames: i32) -> String {
-    let def = get_cat_stat(name);
-    (def.formatter)((def.get_value)(stats, anim_frames))
+pub fn format_cat_stat(name: &str, stats: &CatRaw, animation_frames: i32) -> String {
+    let stat_definition = get_cat_stat(name);
+    (stat_definition.formatter)((stat_definition.get_value)(stats, animation_frames))
 }
 
 pub fn get_by_talent_id(id: u8) -> Option<&'static CatAbilityDef> {
-    CAT_ABILITY_REGISTRY.iter().find(|def| def.talent_id == id)
+    CAT_ABILITY_REGISTRY.iter().find(|definition| definition.talent_id == id)
 }
 
 pub fn get_fallback_by_icon(icon_id: usize) -> &'static str {
-    CAT_ABILITY_REGISTRY.iter().find(|def| def.icon_id == icon_id).map(|def| def.fallback).unwrap_or("???")
+    CAT_ABILITY_REGISTRY.iter().find(|definition| definition.icon_id == icon_id).map(|definition| definition.fallback).unwrap_or("???")
 }

@@ -48,7 +48,7 @@ pub struct EnemyListState {
     #[serde(skip)] pub active_scan_ids: HashSet<u32>,
     #[serde(skip)] pub detail_texture: Option<egui::TextureHandle>,
     #[serde(skip)] pub detail_key: String,
-    #[serde(skip)] pub icon_sheet: crate::global::formats::imgcut::SpriteSheet,   
+    #[serde(skip)] pub img015_sheets: Vec<crate::global::formats::imgcut::SpriteSheet>,   
     #[serde(skip)] pub anim_sheet: crate::global::formats::imgcut::SpriteSheet,
     #[serde(skip)] pub model_data: Option<Model>,
     #[serde(skip)] pub anim_viewer: AnimViewer,
@@ -75,7 +75,7 @@ impl Default for EnemyListState {
             active_scan_ids: HashSet::new(),
             detail_texture: None,
             detail_key: String::new(),
-            icon_sheet: crate::global::formats::imgcut::SpriteSheet::default(), 
+            img015_sheets: Vec::new(), 
             anim_sheet: crate::global::formats::imgcut::SpriteSheet::default(), 
             model_data: None,
             anim_viewer: AnimViewer::default(),
@@ -200,14 +200,14 @@ pub fn show(ctx: &egui::Context, state: &mut EnemyListState, settings: &mut Sett
 
         master::show(
             ctx, ui, enemy_entry, &mut state.selected_tab, &mut state.mag_input,
-            &mut state.magnification, settings, &mut state.icon_sheet,
+            &mut state.magnification, settings, &mut state.img015_sheets,
             &mut state.anim_sheet, &mut state.model_data, &mut state.anim_viewer,
             &assets, &mut state.detail_texture, &mut state.detail_key,
         );
     });
 
     crate::features::enemy::ui::filter::show_popup(
-        ctx, &mut state.filter_state, &mut state.icon_sheet,
+        ctx, &mut state.filter_state, &mut state.img015_sheets,
         &assets, settings, &mut state.drag_guard,
     );
 }

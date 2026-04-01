@@ -3,7 +3,7 @@ use crate::features::import::logic::{ImportState, ImportSubTab};
 use crate::features::settings::logic::Settings;
 use crate::features::import::ui::{adb_view, raw_view, decrypt_view};
 
-pub fn show(ui: &mut egui::Ui, state: &mut ImportState, settings: &Settings) {
+pub fn show(ui: &mut egui::Ui, state: &mut ImportState, settings: &mut Settings) {
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 5.0;
 

@@ -66,6 +66,8 @@ pub struct GameDataSettings {
     pub app_folder_persistence: bool,
     pub enable_ultra_compression: bool,
     pub last_compression_level: i32,
+    pub adb_import_type_idx: usize,
+    pub adb_region_idx: usize,
 }
 
 impl Default for GameDataSettings {
@@ -75,6 +77,8 @@ impl Default for GameDataSettings {
             app_folder_persistence: false,
             enable_ultra_compression: false,
             last_compression_level: 9,
+            adb_import_type_idx: 0,
+            adb_region_idx: 4,
         }
     }
 }

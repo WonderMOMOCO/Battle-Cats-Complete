@@ -1,55 +1,13 @@
-use std::path::Path;
 use std::time::Instant;
 use std::sync::mpsc::TryRecvError;
 
 use super::CatListState;
 use super::scanner;
 use crate::global::formats::imgcut::SpriteSheet; 
-use crate::features::cat::data::unitlevel;
-use crate::features::cat::data::unitbuy;
-use crate::features::cat::data::skillacquisition;
-use crate::features::cat::data::unitevolve;
-use crate::features::cat::paths;
 use crate::features::settings::logic::state::ScannerConfig;
 
-pub fn ensure_global_data_loaded(state: &mut CatListState, priority: &[String]) {
-    let cats_dir = Path::new(paths::DIR_CATS);
-
-    if state.cached_level_curves.is_none() {
-        state.cached_level_curves = Some(unitlevel::load_level_curves(cats_dir, priority));
-    }
-    if state.cached_unit_buy.is_none() {
-        state.cached_unit_buy = Some(unitbuy::load_unitbuy(cats_dir, priority));
-    }
-    if state.cached_talents.is_none() {
-        state.cached_talents = Some(skillacquisition::load(cats_dir, priority));
-    }
-    if state.cached_evolve_text.is_none() {
-        state.cached_evolve_text = Some(unitevolve::load(cats_dir, priority));
-    }
-}
-
 pub fn refresh_cat(state: &mut CatListState, id: u32, config: ScannerConfig) {
-    ensure_global_data_loaded(state, &config.language_priority);
-
-    let cats_dir = Path::new(paths::DIR_CATS);
-    let unit_folder = cats_dir.join(format!("{:03}", id));
-
-    let curves = match &state.cached_level_curves { Some(c) => c, None => return };
-    let buy = match &state.cached_unit_buy { Some(b) => b, None => return };
-    let talents = match &state.cached_talents { Some(t) => t, None => return };
-    let evolve = match &state.cached_evolve_text { Some(e) => e, None => return };
-
-    let new_entry = scanner::process_cat_entry(
-        &unit_folder,
-        curves, 
-        buy,
-        talents,
-        evolve,
-        &config 
-    );
-
-    match new_entry {
+    match scanner::scan_single(id, &config) {
         Some(entry) => {
             match state.cats.binary_search_by_key(&id, |c| c.id) {
                 Ok(pos) => state.cats[pos] = entry,
@@ -81,7 +39,7 @@ pub fn update_data(state: &mut CatListState) {
                 state.active_scan_ids.insert(id);
                 
                 match state.cats.binary_search_by_key(&id, |c| c.id) {
-                    Ok(pos) => state.cats[pos] = cat_entry,       
+                    Ok(pos) => state.cats[pos] = cat_entry,      
                     Err(pos) => state.cats.insert(pos, cat_entry), 
                 }
                 
@@ -120,18 +78,11 @@ pub fn update_data(state: &mut CatListState) {
 }
 
 pub fn resync_scan(state: &mut CatListState, config: ScannerConfig) {
-    state.cached_level_curves = None;
-    state.cached_unit_buy = None;
-    state.cached_talents = None;
-    state.cached_evolve_text = None;
-    
     state.active_scan_ids.clear();
     state.scan_receiver = Some(scanner::start_scan(config));
 }
 
 pub fn restart_scan(state: &mut CatListState, config: ScannerConfig) {
-    state.skill_descriptions = None; 
-    
     let current_selection_id = state.selected_cat;
     let current_form = state.selected_form;
     let current_tab = state.selected_detail_tab;
@@ -140,11 +91,6 @@ pub fn restart_scan(state: &mut CatListState, config: ScannerConfig) {
     state.last_update_time = None;
     state.incoming_cats.clear();
     state.active_scan_ids.clear();
-    
-    state.cached_level_curves = None;
-    state.cached_unit_buy = None;
-    state.cached_talents = None;
-    state.cached_evolve_text = None;
 
     state.cat_list.clear_cache(); 
     state.detail_texture = None;

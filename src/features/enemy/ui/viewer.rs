@@ -27,7 +27,21 @@ pub fn show(
     let resolve = |p: PathBuf| {
         let parent = p.parent()?;
         let name = p.file_name()?.to_str()?;
-        crate::global::get(parent, name, priority).into_iter().next()
+        let iname = format!("i{}", name);
+
+        // Check for "i" prefix as well as base because of Ms. Sign (021_e)
+        for code in priority {
+            if code == "--" { break; }
+            let slice = [code.clone()];
+            
+            if let Some(found) = crate::global::get(parent, name, &slice).into_iter().next() {
+                return Some(found);
+            }
+            if let Some(found) = crate::global::get(parent, &iname, &slice).into_iter().next() {
+                return Some(found);
+            }
+        }
+        None
     };
 
     // Standard anims

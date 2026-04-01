@@ -48,32 +48,79 @@ pub struct UnitBuyRow {
 
 impl UnitBuyRow {
     pub fn from_csv_line(csv_line: &str, delimiter: char) -> Option<Self> {
-        let parts: Vec<&str> = csv_line.split(delimiter).map(|s| s.trim()).collect();
-        let get = |idx: usize| -> i32 { parts.get(idx).and_then(|s| s.parse::<i32>().ok()).unwrap_or(-1) };
-        let get_i64 = |idx: usize| -> i64 { parts.get(idx).and_then(|s| s.parse::<i64>().ok()).unwrap_or(-1) };
-        let parse_materials = |start_index: usize| -> Vec<(i32, i32)> {
-            let mut mats = Vec::new();
-            for i in 0..5 {
-                let base = start_index + (i * 2);
-                let item_id = get(base);
-                let cost = get(base + 1);
-                if item_id != -1 && cost > 0 { mats.push((item_id, cost)); }
-            }
-            mats
+        let parts: Vec<&str> = csv_line.split(delimiter).map(|string_part| string_part.trim()).collect();
+        
+        let get_integer = |column_index: usize| -> i32 { 
+            parts.get(column_index).and_then(|string_part| string_part.parse::<i32>().ok()).unwrap_or(-1) 
         };
-        let parse_upgrades = |start_index: usize| -> Vec<i32> { (0..10).map(|i| get(start_index + i)).collect() };
-        let mut rest_vec = Vec::new();
+        
+        let get_long = |column_index: usize| -> i64 { 
+            parts.get(column_index).and_then(|string_part| string_part.parse::<i64>().ok()).unwrap_or(-1) 
+        };
+        
+        let parse_materials = |start_index: usize| -> Vec<(i32, i32)> {
+            let mut material_list = Vec::new();
+            for index in 0..5 {
+                let base_index = start_index + (index * 2);
+                let item_id = get_integer(base_index);
+                let item_cost = get_integer(base_index + 1);
+                if item_id != -1 && item_cost > 0 { 
+                    material_list.push((item_id, item_cost)); 
+                }
+            }
+            material_list
+        };
+        
+        let parse_upgrades = |start_index: usize| -> Vec<i32> { 
+            (0..10).map(|index| get_integer(start_index + index)).collect() 
+        };
+        
+        let mut rest_vector = Vec::new();
         if parts.len() > 63 {
-            for i in 63..parts.len() { if let Ok(val) = parts[i].parse::<i32>() { rest_vec.push(val); } }
+            for index in 63..parts.len() { 
+                let Ok(parsed_value) = parts[index].parse::<i32>() else { continue; };
+                rest_vector.push(parsed_value); 
+            }
         }
+        
         Some(Self {
-            stage_unlock_requirement: get(0), purchase_cost: get(1), upgrade_costs: parse_upgrades(2), 
-            currency_type: get(12), rarity: get(13), guide_order: get(14), chapter_unlock_requirement: get(15), sell_xp_yield: get(16), unknown_17: get(17),
-            level_cap_ch2: get(18), base_max_plus_level: get(19), evolve_level_xp: get(20), unknown_21: get(21), level_cap_ch1: get(22), true_form_id: get(23), ultra_form_id: get(24),
-            true_form_unlock_level: get(25), ultra_form_unlock_level: get(26), true_form_xp_cost: get(27), true_form_materials: parse_materials(28),
-            ultra_form_xp_cost: get(38), ultra_form_materials: parse_materials(39), unknown_49: get(49), level_cap_standard: get(50), level_cap_plus: get(51),
-            unknown_52: get(52), unknown_53: get(53), unknown_54: get(54), unknown_55: get(55), unknown_56: get(56), version_added: get_i64(57), sell_np_yield: get(58),
-            unknown_59: get(59), unknown_60: get(60), egg_id_normal: get(61), egg_id_evolved: get(62), rest: rest_vec,
+            stage_unlock_requirement: get_integer(0),
+            purchase_cost: get_integer(1),
+            upgrade_costs: parse_upgrades(2), 
+            currency_type: get_integer(12),
+            rarity: get_integer(13),
+            guide_order: get_integer(14),
+            chapter_unlock_requirement: get_integer(15),
+            sell_xp_yield: get_integer(16),
+            unknown_17: get_integer(17),
+            level_cap_ch2: get_integer(18),
+            base_max_plus_level: get_integer(19),
+            evolve_level_xp: get_integer(20),
+            unknown_21: get_integer(21),
+            level_cap_ch1: get_integer(22),
+            true_form_id: get_integer(23),
+            ultra_form_id: get_integer(24),
+            true_form_unlock_level: get_integer(25),
+            ultra_form_unlock_level: get_integer(26),
+            true_form_xp_cost: get_integer(27),
+            true_form_materials: parse_materials(28),
+            ultra_form_xp_cost: get_integer(38),
+            ultra_form_materials: parse_materials(39),
+            unknown_49: get_integer(49),
+            level_cap_standard: get_integer(50),
+            level_cap_plus: get_integer(51),
+            unknown_52: get_integer(52),
+            unknown_53: get_integer(53),
+            unknown_54: get_integer(54),
+            unknown_55: get_integer(55),
+            unknown_56: get_integer(56),
+            version_added: get_long(57),
+            sell_np_yield: get_integer(58),
+            unknown_59: get_integer(59),
+            unknown_60: get_integer(60),
+            egg_id_normal: get_integer(61),
+            egg_id_evolved: get_integer(62),
+            rest: rest_vector,
         })
     }
 }
@@ -84,14 +131,17 @@ pub fn load_unitbuy(cats_directory: &Path, priority: &[String]) -> HashMap<u32, 
         return unit_buy_map;
     };
     
-    if let Ok(file_content) = fs::read_to_string(&file_path) {
-        let delimiter = utils::detect_csv_separator(&file_content);
-        for (line_index, csv_line) in file_content.lines().enumerate() {
-            if csv_line.trim().is_empty() { continue; }
-            if let Some(row_data) = UnitBuyRow::from_csv_line(csv_line, delimiter) {
-                unit_buy_map.insert(line_index as u32, row_data);
-            }
-        }
-    } 
+    let Ok(file_content) = fs::read_to_string(&file_path) else {
+        return unit_buy_map;
+    };
+    
+    let delimiter = utils::detect_csv_separator(&file_content);
+    for (line_index, csv_line) in file_content.lines().enumerate() {
+        if csv_line.trim().is_empty() { continue; }
+        
+        let Some(row_data) = UnitBuyRow::from_csv_line(csv_line, delimiter) else { continue; };
+        unit_buy_map.insert(line_index as u32, row_data);
+    }
+    
     unit_buy_map
 }

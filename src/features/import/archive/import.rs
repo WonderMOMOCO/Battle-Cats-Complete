@@ -351,7 +351,8 @@ fn import_legacy_zip(path_str: &str, tx: Sender<String>) -> Result<bool, String>
     }
     
     // Perform extraction
-    let _ = tx.send(format!("Found {} new or updated files.\nStarting extraction...", indices_to_extract.len()));
+    let _ = tx.send(format!("Found {} new or updated files.", indices_to_extract.len()));
+    let _ = tx.send(format!("Starting extraction..."));
 
     for i in indices_to_extract {
         let mut file = archive.by_index(i).unwrap();

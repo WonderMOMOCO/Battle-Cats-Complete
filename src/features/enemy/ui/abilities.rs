@@ -16,7 +16,7 @@ pub const TRAIT_Y: f32 = 7.0;
 pub fn render(
     ui: &mut egui::Ui, 
     enemy: &EnemyEntry, 
-    sheet: &SpriteSheet, 
+    sheets: &[SpriteSheet], 
     assets: &CustomAssets,
     settings: &Settings,
     magnification: i32,
@@ -32,20 +32,20 @@ pub fn render(
     let main_border = egui::Color32::BLACK;
 
     if !grp_trait.is_empty() {
-        render_icon_row(ui, &grp_trait, sheet, settings, main_border, assets);
+        render_icon_row(ui, &grp_trait, sheets, settings, main_border, assets);
         previous_content = true;
         last_was_trait = true;
     }
 
     if !grp_hl1.is_empty() { 
         if previous_content { ui.add_space(if last_was_trait { TRAIT_Y } else { ABILITY_Y }); last_was_trait = false; }
-        render_icon_row(ui, &grp_hl1, sheet, settings, main_border, assets); 
+        render_icon_row(ui, &grp_hl1, sheets, settings, main_border, assets); 
         previous_content = true;
     }
     
     if !grp_hl2.is_empty() { 
         if previous_content { ui.add_space(if last_was_trait { TRAIT_Y } else { ABILITY_Y }); last_was_trait = false; }
-        render_icon_row(ui, &grp_hl2, sheet, settings, main_border, assets); 
+        render_icon_row(ui, &grp_hl2, sheets, settings, main_border, assets); 
         previous_content = true;
     }
 
@@ -53,24 +53,24 @@ pub fn render(
     if has_body {
        if previous_content { ui.add_space(if last_was_trait { TRAIT_Y } else { ABILITY_Y }); last_was_trait = false; }
        
-       render_list_view(ui, &grp_b1, sheet, assets, settings, main_border);
+       render_list_view(ui, &grp_b1, sheets, assets, settings, main_border);
        
        if !grp_b1.is_empty() && !grp_b2.is_empty() { ui.add_space(ABILITY_Y); }
 
-       render_list_view(ui, &grp_b2, sheet, assets, settings, main_border);
+       render_list_view(ui, &grp_b2, sheets, assets, settings, main_border);
        previous_content = true;
     }
 
     if !grp_footer.is_empty() {
         if previous_content { ui.add_space(if last_was_trait { TRAIT_Y } else { ABILITY_Y }); }
-        render_icon_row(ui, &grp_footer, sheet, settings, main_border, assets); 
+        render_icon_row(ui, &grp_footer, sheets, settings, main_border, assets); 
     }
 }
 
 pub fn render_icon_row(
     ui: &mut egui::Ui, 
     items: &Vec<AbilityItem>, 
-    sheet: &SpriteSheet, 
+    sheets: &[SpriteSheet], 
     settings: &Settings, 
     border_color: egui::Color32,
     assets: &CustomAssets,
@@ -79,7 +79,7 @@ pub fn render_icon_row(
         ui.spacing_mut().item_spacing = egui::vec2(ABILITY_X, ABILITY_Y);
         ui.horizontal_wrapped(|ui| {
             for item in items {
-                let r = render_single_icon(ui, item, sheet, settings, border_color, assets);
+                let r = render_single_icon(ui, item, sheets, settings, border_color, assets);
                 r.on_hover_ui(|ui| text_with_superscript(ui, &item.text));
             }
         });
@@ -89,7 +89,7 @@ pub fn render_icon_row(
 fn render_single_icon(
     ui: &mut egui::Ui, 
     item: &AbilityItem, 
-    sheet: &SpriteSheet, 
+    sheets: &[SpriteSheet], 
     _settings: &Settings, 
     border: egui::Color32,
     assets: &CustomAssets,
@@ -108,35 +108,37 @@ fn render_single_icon(
         }
     };
 
-    let response = if custom_texture.is_some() {
-        ui.add(egui::Image::new(egui::load::SizedTexture::new(custom_texture.unwrap().id(), size)))
-    } else if sheet.cuts_map.contains_key(&item.icon_id) {
-        let cut = sheet.cuts_map.get(&item.icon_id).unwrap();
-        if let Some(tex) = &sheet.texture_handle {
-             ui.add(egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)).uv(cut.uv_coordinates))
-        } else {
-             ui.allocate_response(size, egui::Sense::hover())
-        }
-    } else {
-        let alt = registry::get_fallback_by_icon(item.icon_id);
-        render_fallback_icon(ui, alt, border)
-    };
+    if let Some(tex) = custom_texture {
+        return ui.add(egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)));
+    }
 
-    if let Some(border_id) = item.border_id {
-        if let Some(b_cut) = sheet.cuts_map.get(&border_id) {
+    // Cascade through available language sheets
+    for sheet in sheets {
+        if let Some(cut) = sheet.cuts_map.get(&item.icon_id) {
             if let Some(tex) = &sheet.texture_handle {
-                ui.put(response.rect, egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)).uv(b_cut.uv_coordinates));
+                let response = ui.add(egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)).uv(cut.uv_coordinates));
+                
+                if let Some(border_id) = item.border_id {
+                    if let Some(b_cut) = sheet.cuts_map.get(&border_id) {
+                        ui.put(response.rect, egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)).uv(b_cut.uv_coordinates));
+                    }
+                }
+                return response;
+            } else if sheet.is_loading_active {
+                return ui.allocate_response(size, egui::Sense::hover());
             }
         }
     }
 
-    response
+    // Fallback if missing from ALL loaded sheets
+    let alt = registry::get_fallback_by_icon(item.icon_id);
+    render_fallback_icon(ui, alt, border)
 }
 
 pub fn render_list_view(
     ui: &mut egui::Ui, 
     items: &Vec<AbilityItem>, 
-    sheet: &SpriteSheet,
+    sheets: &[SpriteSheet],
     assets: &CustomAssets,
     settings: &Settings, 
     border_color: egui::Color32,
@@ -144,7 +146,7 @@ pub fn render_list_view(
     for (i, item) in items.iter().enumerate() {
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 8.0; 
-            render_single_icon(ui, item, sheet, settings, border_color, assets); 
+            render_single_icon(ui, item, sheets, settings, border_color, assets); 
             text_with_superscript(ui, &item.text);
         }); 
 

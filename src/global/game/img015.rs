@@ -98,6 +98,7 @@ pub const ICON_EXPLOSION: usize = 335;
 pub const ICON_IMMUNE_EXPLOSION: usize = 337;
 pub const ICON_SUPERVILLIAN: usize = 384;
 pub const ICON_RESIST_EXPLOSION: usize = 386;
+pub const ICON_CUT_COOLDOWN: usize = 389;
 
 // Mock IDs For Custom Assets
 pub const ICON_STOP: usize = 9992;
@@ -109,22 +110,22 @@ pub const ICON_IMMUNE_BOSS_WAVE: usize = 9997;
 pub const ICON_KAMIKAZE: usize = 9998;
 pub const ICON_MULTIHIT: usize = 9999;
 
-pub fn ensure_loaded(ctx: &egui::Context, sheet: &mut SpriteSheet, settings: &Settings) {
-    sheet.update(ctx);
-
-    if sheet.texture_handle.is_some() || sheet.is_loading_active {
-        return;
-    }
-
+pub fn ensure_loaded(ctx: &egui::Context, sheets: &mut Vec<SpriteSheet>, settings: &Settings) {
     let base_dir = paths::img015_folder(std::path::Path::new(""));
     
     let png_paths = crate::global::resolver::get(&base_dir, "img015.png", &settings.general.language_priority);
     let cut_paths = crate::global::resolver::get(&base_dir, "img015.imgcut", &settings.general.language_priority);
 
-    if let (Some(png_path), Some(imgcut_path)) = (png_paths.into_iter().next(), cut_paths.into_iter().next()) {
-        
-        let key = png_path.file_stem().unwrap().to_string_lossy().into_owned();
-        
-        sheet.load(ctx, &png_path, &imgcut_path, key);
+    if sheets.len() != png_paths.len() {
+        sheets.resize_with(png_paths.len(), SpriteSheet::default);
+    }
+
+    for (i, (png_path, imgcut_path)) in png_paths.into_iter().zip(cut_paths.into_iter()).enumerate() {
+        sheets[i].update(ctx);
+
+        if sheets[i].texture_handle.is_none() && !sheets[i].is_loading_active {
+            let key = png_path.file_stem().unwrap().to_string_lossy().into_owned();
+            sheets[i].load(ctx, &png_path, &imgcut_path, key);
+        }
     }
 }

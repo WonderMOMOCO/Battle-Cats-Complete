@@ -19,14 +19,14 @@ pub const TILDE_SPACING: f32 = 5.0;
 pub fn show_popup(
     ctx: &egui::Context,
     state: &mut EnemyFilterState,
-    sheet: &mut SpriteSheet,
+    sheets: &mut Vec<SpriteSheet>,
     assets: &CustomAssets,
     settings: &Settings,
     drag_guard: &mut DragGuard,
 ) {
     if !state.is_open { return; }
     
-    img015::ensure_loaded(ctx, sheet, settings);
+    img015::ensure_loaded(ctx, sheets, settings);
 
     let window_id = egui::Id::new("Enemy Filter");
     let (allow_drag, fixed_pos) = drag_guard.assign_bounds(ctx, window_id);
@@ -70,7 +70,6 @@ pub fn show_popup(
             });
             ui.add_space(15.0);
 
-            // STATS SECTION
             ui.heading("Stats");
             ui.add_space(5.0);
             
@@ -128,13 +127,13 @@ pub fn show_popup(
             ui.horizontal_wrapped(|ui| {
                 ui.spacing_mut().item_spacing = egui::vec2(4.0, 4.0);
                 for &icon_id in UI_TRAIT_ORDER {
-                    render_filter_icon(ui, icon_id, &mut state.active_icons, sheet, assets);
+                    render_filter_icon(ui, icon_id, &mut state.active_icons, sheets, assets);
                     rendered_icons.insert(icon_id); 
                 }
             });
 
             ui.add_space(8.0);
-            render_display_group(ui, state, &mut rendered_icons, DisplayGroup::Headline1, false, true, sheet, assets);
+            render_display_group(ui, state, &mut rendered_icons, DisplayGroup::Headline1, false, true, sheets, assets);
             ui.add_space(15.0);
 
             ui.heading("Attack Type");
@@ -142,7 +141,7 @@ pub fn show_popup(
             ui.horizontal_wrapped(|ui| {
                 ui.spacing_mut().item_spacing = egui::vec2(4.0, 4.0);
                 for &icon_id in ATTACK_TYPE_ICONS {
-                    render_filter_icon(ui, icon_id, &mut state.active_icons, sheet, assets);
+                    render_filter_icon(ui, icon_id, &mut state.active_icons, sheets, assets);
                     rendered_icons.insert(icon_id);
                 }
             });
@@ -151,10 +150,10 @@ pub fn show_popup(
             ui.heading("Abilities");
             ui.add_space(5.0);
 
-            render_display_group(ui, state, &mut rendered_icons, DisplayGroup::Headline2, false, true, sheet, assets);
-            render_display_group(ui, state, &mut rendered_icons, DisplayGroup::Body1, true, true, sheet, assets); 
-            render_display_group(ui, state, &mut rendered_icons, DisplayGroup::Body2, true, true, sheet, assets); 
-            render_display_group(ui, state, &mut rendered_icons, DisplayGroup::Footer, false, true, sheet, assets);
+            render_display_group(ui, state, &mut rendered_icons, DisplayGroup::Headline2, false, true, sheets, assets);
+            render_display_group(ui, state, &mut rendered_icons, DisplayGroup::Body1, true, true, sheets, assets); 
+            render_display_group(ui, state, &mut rendered_icons, DisplayGroup::Body2, true, true, sheets, assets); 
+            render_display_group(ui, state, &mut rendered_icons, DisplayGroup::Footer, false, true, sheets, assets);
             ui.add_space(50.0); 
         });
         
@@ -189,7 +188,7 @@ fn render_display_group(
     target_group: DisplayGroup,
     is_vertical: bool,
     draw_labels: bool,
-    sheet: &SpriteSheet,
+    sheets: &[SpriteSheet],
     assets: &CustomAssets,
 ) {
     let mut icons_in_group = Vec::new();
@@ -215,14 +214,14 @@ fn render_display_group(
             ui.vertical(|ui| {
                 ui.spacing_mut().item_spacing = egui::vec2(0.0, 4.0);
                 for icon_id in icons_in_group {
-                    render_filter_icon_row(ui, state, icon_id, draw_labels, sheet, assets);
+                    render_filter_icon_row(ui, state, icon_id, draw_labels, sheets, assets);
                 }
             });
         } else {
             ui.horizontal_wrapped(|ui| {
                 ui.spacing_mut().item_spacing = egui::vec2(4.0, 4.0);
                 for icon_id in icons_in_group {
-                    render_filter_icon(ui, icon_id, &mut state.active_icons, sheet, assets);
+                    render_filter_icon(ui, icon_id, &mut state.active_icons, sheets, assets);
                 }
             });
         }
@@ -235,13 +234,12 @@ fn render_filter_icon_row(
     state: &mut EnemyFilterState,
     icon_id: usize, 
     draw_labels: bool,
-    sheet: &SpriteSheet,
+    sheets: &[SpriteSheet],
     assets: &CustomAssets,
 ) {
     let is_active = state.active_icons.contains(&icon_id);
     let name = get_icon_name(icon_id);
     
-    // Grab the ability definition from the registry to read its static schema
     let ability_def = ENEMY_ABILITY_REGISTRY.iter().find(|d| d.icon_id == icon_id);
     let schema = ability_def.map(|d| d.schema).unwrap_or(&[]);
     let has_adv = !schema.is_empty();
@@ -256,7 +254,7 @@ fn render_filter_icon_row(
         .show(ui, |ui| {
             ui.vertical(|ui| {
                 ui.horizontal(|ui| {
-                    render_filter_icon(ui, icon_id, &mut state.active_icons, sheet, assets);
+                    render_filter_icon(ui, icon_id, &mut state.active_icons, sheets, assets);
                     
                     if draw_labels {
                         ui.add_space(10.0); 
@@ -268,7 +266,6 @@ fn render_filter_icon_row(
                     }
                 });
 
-                // Auto-Generate the Advanced Grid directly from the Registry Schema
                 if is_active && has_adv {
                     ui.add_space(4.0);
                     ui.horizontal(|ui| {
@@ -322,7 +319,7 @@ fn render_filter_icon(
     ui: &mut egui::Ui, 
     icon_id: usize, 
     active_icons: &mut HashSet<usize>,
-    sheet: &crate::global::formats::imgcut::SpriteSheet,
+    sheets: &[SpriteSheet],
     assets: &crate::global::assets::CustomAssets,
 ) {
     let is_active = active_icons.contains(&icon_id);
@@ -346,18 +343,23 @@ fn render_filter_icon(
         }
         response.on_hover_text(get_icon_name(icon_id));
         drawn = true;
-    } else if let Some(cut) = sheet.cuts_map.get(&icon_id) {
-        if let Some(tex) = &sheet.texture_handle {
-            let img = egui::Image::new(egui::load::SizedTexture::new(tex.id(), egui::vec2(32.0, 32.0)))
-                .uv(cut.uv_coordinates)
-                .tint(tint);
-            let response = ui.add(egui::ImageButton::new(img).frame(false));
-            if response.clicked() {
-                if is_active { active_icons.remove(&icon_id); } 
-                else { active_icons.insert(icon_id); }
+    } else {
+        for sheet in sheets {
+            if let Some(cut) = sheet.cuts_map.get(&icon_id) {
+                if let Some(tex) = &sheet.texture_handle {
+                    let img = egui::Image::new(egui::load::SizedTexture::new(tex.id(), egui::vec2(32.0, 32.0)))
+                        .uv(cut.uv_coordinates)
+                        .tint(tint);
+                    let response = ui.add(egui::ImageButton::new(img).frame(false));
+                    if response.clicked() {
+                        if is_active { active_icons.remove(&icon_id); } 
+                        else { active_icons.insert(icon_id); }
+                    }
+                    response.on_hover_text(get_icon_name(icon_id));
+                    drawn = true;
+                    break;
+                }
             }
-            response.on_hover_text(get_icon_name(icon_id));
-            drawn = true;
         }
     }
 

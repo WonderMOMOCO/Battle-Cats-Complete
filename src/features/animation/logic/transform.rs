@@ -54,14 +54,14 @@ impl Default for GlobalState {
 pub fn solve_hierarchy(parts: &[ModelPart], model: &Model) -> Vec<WorldTransform> {
     let mut results = Vec::with_capacity(parts.len());
 
-    for (part_idx, _) in parts.iter().enumerate() {
-        results.push(solve_single_part(part_idx, parts, model));
+    for (part_index, _) in parts.iter().enumerate() {
+        results.push(solve_single_part(part_index, parts, model));
     }
     
     // Stable sort by Z-order then ID
-    results.sort_by(|a, b| {
-        a.z_order.cmp(&b.z_order)
-            .then(a.part_index.cmp(&b.part_index))
+    results.sort_by(|part_a, part_b| {
+        part_a.z_order.cmp(&part_b.z_order)
+            .then(part_a.part_index.cmp(&part_b.part_index))
     });
 
     results
@@ -72,24 +72,24 @@ fn solve_single_part(target_index: usize, parts: &[ModelPart], model: &Model) ->
     
     // Build Parent Chain
     let mut chain = Vec::new();
-    let mut curr = target_index;
-    let mut safety = 0;
+    let mut current_index = target_index;
+    let mut safety_counter = 0;
     
     loop {
-        chain.push(curr);
-        let next_parent = parts[curr].parent_id;
+        chain.push(current_index);
+        let next_parent = parts[current_index].parent_id;
         
         // Root check
         if next_parent == -1 { break; }
         // Cycle check
-        if next_parent as usize == curr { break; } 
+        if next_parent as usize == current_index { break; } 
         
-        curr = next_parent as usize;
+        current_index = next_parent as usize;
         // Bounds check
-        if curr >= parts.len() { break; }
+        if current_index >= parts.len() { break; }
         
-        safety += 1;
-        if safety > 100 { break; } // Prevent infinite loops
+        safety_counter += 1;
+        if safety_counter > 100 { break; } // Prevent infinite loops
     }
     
     // Accumulate Global States
@@ -97,14 +97,14 @@ fn solve_single_part(target_index: usize, parts: &[ModelPart], model: &Model) ->
     let mut current_global = GlobalState::default();
 
     // Iterate backwards through chain
-    for &part_idx in chain.iter().rev() {
-        let local = get_local_state(&parts[part_idx], model);
-        let new_flip_x = local.flip_x * current_global.flip_x;
-        let new_flip_y = local.flip_y * current_global.flip_y;
-        let new_scale_x = local.scale_x * current_global.scale_x;
-        let new_scale_y = local.scale_y * current_global.scale_y;
-        let new_angle = local.angle * new_flip_x * new_flip_y + current_global.angle;
-        let new_opacity = local.opacity * current_global.opacity;
+    for &part_index in chain.iter().rev() {
+        let local_state = get_local_state(&parts[part_index], model);
+        let new_flip_x = local_state.flip_x * current_global.flip_x;
+        let new_flip_y = local_state.flip_y * current_global.flip_y;
+        let new_scale_x = local_state.scale_x * current_global.scale_x;
+        let new_scale_y = local_state.scale_y * current_global.scale_y;
+        let new_angle = local_state.angle * new_flip_x * new_flip_y + current_global.angle;
+        let new_opacity = local_state.opacity * current_global.opacity;
 
         current_global = GlobalState {
             scale_x: new_scale_x,
@@ -117,85 +117,91 @@ fn solve_single_part(target_index: usize, parts: &[ModelPart], model: &Model) ->
         
         global_states.push(current_global);
     }
+    
     struct VectorStep {
-        pos: [f64; 2],      // The local position of the node
-        matrix_scale: [f64; 2], // The scale/flip matrix params from the PARENT
-        matrix_rot: [f64; 4],   // The rotation matrix params from the PARENT
+        position: [f64; 2],        // The local position of the node
+        matrix_scale: [f64; 2],    // The scale/flip matrix params from the PARENT
+        matrix_rotation: [f64; 4], // The rotation matrix params from the PARENT
     }
 
     let mut vector_steps = Vec::with_capacity(chain.len());
     if chain.len() > 1 {
-        
-        for idx in 0..chain.len() - 1 {
-            let child_idx = chain[chain.len() - 1 - (idx + 1)]; // i+1 from Root
-            let parent_idx = chain[chain.len() - 1 - idx];     // i from Root
+        for step_index in 0..chain.len() - 1 {
+            let child_index = chain[chain.len() - 1 - (step_index + 1)]; // i+1 from Root
+            let parent_index = chain[chain.len() - 1 - step_index];      // i from Root
             
-            let child_local = get_local_state(&parts[child_idx], model);
-            let parent_local = get_local_state(&parts[parent_idx], model);
-            let parent_global_flip_x = global_states[idx].flip_x;
-            let parent_global_flip_y = global_states[idx].flip_y;
-            let pos = [child_local.x, -child_local.y];
-            let scale_x_comp = parent_local.scale_x * parent_local.flip_x;
-            let scale_y_comp = parent_local.scale_y * parent_local.flip_y;
-            let angle_rad = parent_local.angle.to_radians() * parent_global_flip_x * parent_global_flip_y;
-            let cos_val = angle_rad.cos();
-            let sin_val = angle_rad.sin();
-            let rot_matrix = [cos_val, sin_val, -sin_val, cos_val];
+            let child_local_state = get_local_state(&parts[child_index], model);
+            let parent_local_state = get_local_state(&parts[parent_index], model);
+            let parent_global_flip_x = global_states[step_index].flip_x;
+            let parent_global_flip_y = global_states[step_index].flip_y;
+            
+            let position = [child_local_state.x, -child_local_state.y];
+            let scale_x_computed = parent_local_state.scale_x * parent_local_state.flip_x;
+            let scale_y_computed = parent_local_state.scale_y * parent_local_state.flip_y;
+            
+            let angle_radians = parent_local_state.angle.to_radians() * parent_global_flip_x * parent_global_flip_y;
+            let cosine_value = angle_radians.cos();
+            let sine_value = angle_radians.sin();
+            let rotation_matrix = [cosine_value, sine_value, -sine_value, cosine_value];
 
             vector_steps.push(VectorStep {
-                pos,
-                matrix_scale: [scale_x_comp, scale_y_comp],
-                matrix_rot: rot_matrix,
+                position,
+                matrix_scale: [scale_x_computed, scale_y_computed],
+                matrix_rotation: rotation_matrix,
             });
         }
     }
 
     // Scale Application
     let step_count = vector_steps.len();
-    for apply_idx in 0..step_count {
-        let scale = vector_steps[apply_idx].matrix_scale;
-        for target_idx in apply_idx..step_count {
-            vector_steps[target_idx].pos[0] *= scale[0];
-            vector_steps[target_idx].pos[1] *= scale[1];
+    for apply_index in 0..step_count {
+        let current_scale = vector_steps[apply_index].matrix_scale;
+        for modify_index in apply_index..step_count {
+            vector_steps[modify_index].position[0] *= current_scale[0];
+            vector_steps[modify_index].position[1] *= current_scale[1];
         }
     }
 
-    // Rotation Application and Summation
-    let mut final_pos = [0.0, 0.0];
-    for apply_idx in 0..step_count {
-        let rot_matrix = vector_steps[apply_idx].matrix_rot;
-        for target_idx in apply_idx..step_count {
-            let x = vector_steps[target_idx].pos[0];
-            let y = vector_steps[target_idx].pos[1];
+    let root_index = chain.last().copied().unwrap_or(target_index);
+    let root_state = get_local_state(&parts[root_index], model);
+    let root_part = &parts[root_index];
+    
+    // Inject the root pivot into the starting coordinates
+    let mut final_position = [
+        (root_state.x + root_part.pivot_x as f64) * root_state.scale_x * root_state.flip_x, 
+        -(root_state.y + root_part.pivot_y as f64) * root_state.scale_y * root_state.flip_y
+    ];
+
+    for apply_index in 0..step_count {
+        let current_rotation_matrix = vector_steps[apply_index].matrix_rotation;
+        for modify_index in apply_index..step_count {
+            let x = vector_steps[modify_index].position[0];
+            let y = vector_steps[modify_index].position[1];
             
-            let new_x = x * rot_matrix[0] + y * rot_matrix[1];
-            let new_y = x * rot_matrix[2] + y * rot_matrix[3];
+            let new_x = x * current_rotation_matrix[0] + y * current_rotation_matrix[1];
+            let new_y = x * current_rotation_matrix[2] + y * current_rotation_matrix[3];
             
-            vector_steps[target_idx].pos = [new_x, new_y];
+            vector_steps[modify_index].position = [new_x, new_y];
         }
         
-        final_pos[0] += vector_steps[apply_idx].pos[0];
-        final_pos[1] += vector_steps[apply_idx].pos[1];
+        final_position[0] += vector_steps[apply_index].position[0];
+        final_position[1] += vector_steps[apply_index].position[1];
     }
 
     // Construct Final Matrix
-    let target_global = if !global_states.is_empty() {
-        global_states.last().unwrap()
-    } else {
-        &current_global
-    };
+    let target_global = global_states.last().unwrap_or(&current_global);
 
     let final_scale_x = target_global.scale_x * target_global.flip_x;
     let final_scale_y = target_global.scale_y * target_global.flip_y;
     
-    let angle_rad = target_global.angle.to_radians();
-    let cos_final = angle_rad.cos();
-    let sin_final = angle_rad.sin();
+    let angle_radians = target_global.angle.to_radians();
+    let cosine_final = angle_radians.cos();
+    let sine_final = angle_radians.sin();
     
     let matrix = [
-        (final_scale_x * cos_final) as f32,     (final_scale_x * sin_final) as f32,          0.0,
-        (-final_scale_y * sin_final) as f32,    (final_scale_y * cos_final) as f32,          0.0,
-        final_pos[0] as f32, -final_pos[1] as f32,     1.0 
+        (final_scale_x * cosine_final) as f32,     (final_scale_x * sine_final) as f32,          0.0,
+        (-final_scale_y * sine_final) as f32,      (final_scale_y * cosine_final) as f32,          0.0,
+        final_position[0] as f32, -final_position[1] as f32,     1.0 
     ];
 
     WorldTransform {

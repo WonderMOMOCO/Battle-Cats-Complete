@@ -18,7 +18,7 @@ pub fn render(
     base_stats: &CatRaw,
     cat: &CatEntry, 
     level: i32,
-    sheet: &SpriteSheet, 
+    sheets: &[SpriteSheet], 
     assets: &CustomAssets,
     settings: &Settings, 
     talent_data: Option<&TalentRaw>,
@@ -37,20 +37,20 @@ pub fn render(
     let main_border = egui::Color32::BLACK;
 
     if !grp_trait.is_empty() {
-        render_icon_row(ui, &grp_trait, sheet, settings, main_border, assets);
+        render_icon_row(ui, &grp_trait, sheets, settings, main_border, assets);
         previous_content = true;
         last_was_trait = true;
     }
 
     if !grp_hl1.is_empty() { 
         if previous_content { ui.add_space(if last_was_trait { TRAIT_Y } else { ABILITY_Y }); last_was_trait = false; }
-        render_icon_row(ui, &grp_hl1, sheet, settings, main_border, assets); 
+        render_icon_row(ui, &grp_hl1, sheets, settings, main_border, assets); 
         previous_content = true;
     }
     
     if !grp_hl2.is_empty() { 
         if previous_content { ui.add_space(if last_was_trait { TRAIT_Y } else { ABILITY_Y }); last_was_trait = false; }
-        render_icon_row(ui, &grp_hl2, sheet, settings, main_border, assets); 
+        render_icon_row(ui, &grp_hl2, sheets, settings, main_border, assets); 
         previous_content = true;
     }
 
@@ -58,24 +58,24 @@ pub fn render(
     if has_body {
        if previous_content { ui.add_space(if last_was_trait { TRAIT_Y } else { ABILITY_Y }); last_was_trait = false; }
        
-       render_list_view(ui, &grp_b1, sheet, assets, cat.id, level, curve, final_stats, settings, main_border);
+       render_list_view(ui, &grp_b1, sheets, assets, cat.id, level, curve, final_stats, settings, main_border);
        
        if !grp_b1.is_empty() && !grp_b2.is_empty() { ui.add_space(ABILITY_Y); }
 
-       render_list_view(ui, &grp_b2, sheet, assets, cat.id, level, curve, final_stats, settings, main_border);
+       render_list_view(ui, &grp_b2, sheets, assets, cat.id, level, curve, final_stats, settings, main_border);
        previous_content = true;
     }
 
     if !grp_footer.is_empty() {
         if previous_content { ui.add_space(if last_was_trait { TRAIT_Y } else { ABILITY_Y }); }
-        render_icon_row(ui, &grp_footer, sheet, settings, main_border, assets); 
+        render_icon_row(ui, &grp_footer, sheets, settings, main_border, assets); 
     }
 }
 
 pub fn render_icon_row(
     ui: &mut egui::Ui, 
     items: &Vec<AbilityItem>, 
-    sheet: &SpriteSheet, 
+    sheets: &[SpriteSheet], 
     settings: &Settings, 
     border_color: egui::Color32,
     assets: &CustomAssets,
@@ -84,7 +84,7 @@ pub fn render_icon_row(
         ui.spacing_mut().item_spacing = egui::vec2(ABILITY_X, ABILITY_Y);
         ui.horizontal_wrapped(|ui| {
             for item in items {
-                let r = render_single_icon(ui, item, sheet, settings, border_color, assets);
+                let r = render_single_icon(ui, item, sheets, settings, border_color, assets);
                 r.on_hover_ui(|ui| text_with_superscript(ui, &item.text));
             }
         });
@@ -94,7 +94,7 @@ pub fn render_icon_row(
 fn render_single_icon(
     ui: &mut egui::Ui, 
     item: &AbilityItem, 
-    sheet: &SpriteSheet, 
+    sheets: &[SpriteSheet], 
     _settings: &Settings, 
     border: egui::Color32,
     assets: &CustomAssets,
@@ -103,35 +103,34 @@ fn render_single_icon(
 
     let custom_texture = item.custom_icon.get_texture(assets);
 
-    let response = if custom_texture.is_some() {
-        ui.add(egui::Image::new(egui::load::SizedTexture::new(custom_texture.unwrap().id(), size)))
-    } else if sheet.cuts_map.contains_key(&item.icon_id) {
-        let cut = sheet.cuts_map.get(&item.icon_id).unwrap();
-        if let Some(tex) = &sheet.texture_handle {
-             ui.add(egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)).uv(cut.uv_coordinates))
-        } else {
-             ui.allocate_response(size, egui::Sense::hover())
-        }
-    } else {
-        let alt = crate::features::cat::registry::get_fallback_by_icon(item.icon_id);
-        render_fallback_icon(ui, alt, border)
-    };
+    if let Some(tex) = custom_texture {
+        return ui.add(egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)));
+    }
 
-    if let Some(border_id) = item.border_id {
-        if let Some(b_cut) = sheet.cuts_map.get(&border_id) {
+    for sheet in sheets {
+        if let Some(cut) = sheet.cuts_map.get(&item.icon_id) {
             if let Some(tex) = &sheet.texture_handle {
-                ui.put(response.rect, egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)).uv(b_cut.uv_coordinates));
+                 let response = ui.add(egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)).uv(cut.uv_coordinates));
+                 if let Some(border_id) = item.border_id {
+                     if let Some(b_cut) = sheet.cuts_map.get(&border_id) {
+                         ui.put(response.rect, egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)).uv(b_cut.uv_coordinates));
+                     }
+                 }
+                 return response;
+            } else if sheet.is_loading_active {
+                 return ui.allocate_response(size, egui::Sense::hover());
             }
         }
     }
 
-    response
+    let alt = crate::features::cat::registry::get_fallback_by_icon(item.icon_id);
+    render_fallback_icon(ui, alt, border)
 }
 
 pub fn render_list_view(
     ui: &mut egui::Ui, 
     items: &Vec<AbilityItem>, 
-    sheet: &SpriteSheet,
+    sheets: &[SpriteSheet],
     assets: &CustomAssets,
     cat_id: u32,
     current_level: i32,
@@ -146,7 +145,7 @@ pub fn render_list_view(
         
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 8.0; 
-            render_single_icon(ui, item, sheet, settings, border_color, assets); 
+            render_single_icon(ui, item, sheets, settings, border_color, assets); 
 
             if !is_conjure {
                 text_with_superscript(ui, &item.text);
@@ -158,7 +157,7 @@ pub fn render_list_view(
         let expanded = ui.data(|d| d.get_temp::<bool>(id).unwrap_or(settings.cat_data.expand_spirit_details));
         if is_conjure && expanded {
             ui.add_space(ABILITY_Y);
-            render_conjure_details(ui, s, current_level, curve, sheet, assets, settings);
+            render_conjure_details(ui, s, current_level, curve, sheets, assets, settings);
         }
         
         if i < items.len() - 1 {
@@ -191,7 +190,7 @@ fn render_conjure_details(
     parent_stats: &CatRaw,
     level: i32,
     curve: Option<&stats::CatLevelCurve>,
-    sheet: &SpriteSheet,
+    sheets: &[SpriteSheet],
     assets: &CustomAssets,
     settings: &Settings
 ) {
@@ -227,12 +226,17 @@ fn render_conjure_details(
                 let icon = img015::ICON_AREA_ATTACK;
                 let size = egui::vec2(stats::ICON_SIZE, stats::ICON_SIZE);
                 
-                if sheet.cuts_map.contains_key(&icon) {
-                    let cut = sheet.cuts_map.get(&icon).unwrap();
-                    if let Some(tex) = &sheet.texture_handle {
-                         ui.add(egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)).uv(cut.uv_coordinates));
+                let mut drawn = false;
+                for sheet in sheets {
+                    if let Some(cut) = sheet.cuts_map.get(&icon) {
+                        if let Some(tex) = &sheet.texture_handle {
+                             ui.add(egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)).uv(cut.uv_coordinates));
+                             drawn = true;
+                             break;
+                        }
                     }
-                } else {
+                }
+                if !drawn {
                     let alt = crate::features::cat::registry::get_fallback_by_icon(icon);
                     render_fallback_icon(ui, alt, spirit_border);
                 }
@@ -249,35 +253,35 @@ fn render_conjure_details(
             let mut last_was_trait = false;
 
             if !spirit_traits.is_empty() { 
-                render_icon_row(ui, &spirit_traits, sheet, settings, spirit_border, assets); 
+                render_icon_row(ui, &spirit_traits, sheets, settings, spirit_border, assets); 
                 prev = true;
                 last_was_trait = true;
             }
 
             if !spirit_head_1.is_empty() { 
                 if prev { ui.add_space(if last_was_trait { TRAIT_Y } else { ABILITY_Y }); last_was_trait = false; }
-                render_icon_row(ui, &spirit_head_1, sheet, settings, spirit_border, assets); 
+                render_icon_row(ui, &spirit_head_1, sheets, settings, spirit_border, assets); 
                 prev = true;
             }
 
             if !spirit_head_2.is_empty() { 
                 if prev { ui.add_space(if last_was_trait { TRAIT_Y } else { ABILITY_Y }); last_was_trait = false; }
-                render_icon_row(ui, &spirit_head_2, sheet, settings, spirit_border, assets); 
+                render_icon_row(ui, &spirit_head_2, sheets, settings, spirit_border, assets); 
                 prev = true;
             }
             
             let has_body = !spirit_body_1.is_empty() || !spirit_body_2.is_empty();
             if has_body {
                 if prev { ui.add_space(if last_was_trait { TRAIT_Y } else { ABILITY_Y }); last_was_trait = false; }
-                render_list_view(ui, &spirit_body_1, sheet, assets, 0, level, curve, &conjure_final, settings, spirit_border);
+                render_list_view(ui, &spirit_body_1, sheets, assets, 0, level, curve, &conjure_final, settings, spirit_border);
                 if !spirit_body_1.is_empty() && !spirit_body_2.is_empty() { ui.add_space(ABILITY_Y); }
-                render_list_view(ui, &spirit_body_2, sheet, assets, 0, level, curve, &conjure_final, settings, spirit_border);
+                render_list_view(ui, &spirit_body_2, sheets, assets, 0, level, curve, &conjure_final, settings, spirit_border);
                 prev = true;
             }
             
             if !spirit_footer.is_empty() {
                 if prev { ui.add_space(if last_was_trait { TRAIT_Y } else { ABILITY_Y }); }
-                render_icon_row(ui, &spirit_footer, sheet, settings, spirit_border, assets);
+                render_icon_row(ui, &spirit_footer, sheets, settings, spirit_border, assets);
             }
         });
 }

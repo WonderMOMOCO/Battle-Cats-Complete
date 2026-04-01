@@ -22,7 +22,7 @@ pub fn show(
     mag_input: &mut String,
     magnification: &mut i32,
     settings: &mut Settings,
-    icon_sheet: &mut SpriteSheet,
+    img015_sheets: &mut Vec<SpriteSheet>,
     anim_sheet: &mut SpriteSheet,
     model_data: &mut Option<Model>,
     anim_viewer: &mut AnimViewer,
@@ -30,13 +30,12 @@ pub fn show(
     detail_texture: &mut Option<egui::TextureHandle>,
     detail_key: &mut String,
 ) {
-    img015::ensure_loaded(ctx, icon_sheet, settings);
+    img015::ensure_loaded(ctx, img015_sheets, settings);
 
     let export_action = header::render(
         ctx, ui, enemy_entry, current_tab, mag_input, magnification, detail_texture, detail_key,
     );
 
-    // --- VFS SYNC: Fetch modded enemy stats dynamically ---
     let dynamic_entry = crate::features::enemy::logic::scanner::scan_single(enemy_entry.id, &settings.scanner_config());
     let stats = dynamic_entry.as_ref().map(|e| &e.stats).unwrap_or(&enemy_entry.stats);
 
@@ -80,7 +79,10 @@ pub fn show(
             };
 
             let priority_clone = settings.general.language_priority.clone();
-            let cuts_clone = icon_sheet.cuts_map.clone(); 
+            let mut cuts_clone = std::collections::HashMap::new();
+            for sheet in img015_sheets.iter().rev() {
+                cuts_clone.extend(sheet.cuts_map.clone());
+            }
 
             if export_action == ExportAction::Copy {
                 generate_and_copy(ctx.clone(), priority_clone, data, cuts_clone);
@@ -116,7 +118,7 @@ pub fn show(
                     abilities::render(
                         ui, 
                         enemy_entry, 
-                        icon_sheet, 
+                        img015_sheets, 
                         assets,
                         settings,
                         *magnification

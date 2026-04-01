@@ -115,6 +115,8 @@ pub struct EnemyRaw {
     pub explosion_span: i32,
     pub explosion_immune: i32,
     pub type_supervillain: i32,
+    pub cut_cooldown_chance: i32,
+    pub cut_cooldown_percent: i32,
 }
 
 impl EnemyRaw {
@@ -266,6 +268,8 @@ pub fn load_all(t_unit_path: &Path) -> Option<Vec<EnemyRaw>> {
             explosion_span: get_int(108) / 4,
             explosion_immune: get_int(109),
             type_supervillain: get_int(110),
+            cut_cooldown_chance: get_int(111),
+            cut_cooldown_percent: get_int(112),
         });
     }
     
