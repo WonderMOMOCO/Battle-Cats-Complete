@@ -20,7 +20,6 @@ impl UnitExplanation {
         for (line_index, file_line) in file_content.lines().enumerate().take(4) {
             let parts: Vec<&str> = file_line.split(separator_char).collect();
             
-            // Parse Name
             if let Some(name_part) = parts.get(0) {
                 let trimmed_name = name_part.trim();
                 
@@ -33,7 +32,6 @@ impl UnitExplanation {
                 }
             }
 
-            // Parse Description
             let desc_lines: Vec<String> = parts.iter()
                 .skip(1)
                 .take(3)
@@ -41,6 +39,13 @@ impl UnitExplanation {
                 .collect();
             
             descriptions[line_index] = desc_lines;
+        }
+
+        for i in 1..4 {
+            if !names[i].is_empty() && names[i] == names[i - 1] && descriptions[i] == descriptions[i - 1] {
+                names[i].clear();
+                descriptions[i].clear();
+            }
         }
 
         Some(Self { names, descriptions })

@@ -39,7 +39,7 @@ const ALL_PAGES: &[Page] = &[
     Page::Home,
     Page::Cats,
     Page::Enemies,
-    // Page::Stages,
+    //Page::Stages,
     Page::Mods,
     Page::Data,
     Page::Settings,
