@@ -3,7 +3,7 @@ use std::path::Path;
 use std::sync::mpsc::Sender;
 use std::thread;
 
-pub fn create_game_archive(tx: Sender<String>, compression_level: i32, filename: String) -> Result<(), String> {
+pub fn create_game_archive(tx: Sender<String>, compression_level: i32, filename: String, include_raw: bool) -> Result<(), String> {
     let game_root = Path::new("game");
     let export_dir = Path::new("exports");
     
@@ -55,7 +55,7 @@ pub fn create_game_archive(tx: Sender<String>, compression_level: i32, filename:
             let path = entry_result.path();
             let path_str = path.to_string_lossy();
             
-            if path_str.contains("game/raw") || path_str.contains("game\\raw") { 
+            if !include_raw && (path_str.contains("game/raw") || path_str.contains("game\\raw")) { 
                 continue; 
             }
             

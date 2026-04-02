@@ -120,29 +120,22 @@ pub fn spawn_full_import(sender: Sender<AdbEvent>, base_output_dir: PathBuf, mod
         if mode == AdbImportType::All {
             let _ = sender.send(AdbEvent::Status("Checking Root Permissions...".to_string()));
             
-            // Try to verify if we already have root access via 'su' without hanging the daemon
             let is_rooted = driver::run_command(&["-s", &current_serial, "shell", "su", "-c", "echo root_test"]).unwrap_or_default();
 
             if is_rooted.contains("root_test") {
                 let _ = sender.send(AdbEvent::Status("Root access confirmed via su.".to_string()));
             } else {
                 let _ = sender.send(AdbEvent::Status("Requesting Root Access (ADB Root)...".to_string()));
-                // Try standard adb root (might hang on some emulators if root is blocked)
                 let _ = driver::run_command(&["-s", &current_serial, "root"]);
                 
-                // Give the daemon a moment to process the restart command
                 thread::sleep(Duration::from_secs(3));
                 
-                // Re-establish the connection based on device type
                 if current_serial.contains(':') {
-                     // TCP/IP network emulators drop connection on adb root and must be manually reconnected
                      let _ = driver::connect_wireless(&current_serial);
                 } else if !current_serial.starts_with("emulator") {
-                     // For physical USB devices, refresh the serial (find_usb_device ignores emulators)
                      if let Some(new_serial) = driver::find_usb_device() { current_serial = new_serial; }
                 }
                 
-                // 3. CRITICAL FIX: Block the thread until the device is completely responsive again
                 let _ = sender.send(AdbEvent::Status("Waiting for device to reconnect...".to_string()));
                 let _ = driver::run_command(&["-s", &current_serial, "wait-for-device"]);
             }
@@ -237,7 +230,7 @@ pub fn spawn_full_import(sender: Sender<AdbEvent>, base_output_dir: PathBuf, mod
     });
 }
 
-fn process_single_region_adb(_sender: &Sender<AdbEvent>, serial: &str, package_name: &str, output_dir: &PathBuf, mode: AdbImportType) -> Result<(), String> {
+fn process_single_region_adb(sender: &Sender<AdbEvent>, serial: &str, package_name: &str, output_dir: &PathBuf, mode: AdbImportType) -> Result<(), String> {
     if mode == AdbImportType::All {
         let whoami = driver::run_command(&["-s", serial, "shell", "whoami"]).unwrap_or_default();
         let remote_src = format!("/data/data/{}/files", package_name);
@@ -249,12 +242,10 @@ fn process_single_region_adb(_sender: &Sender<AdbEvent>, serial: &str, package_n
         
         let mut success = false;
         
-        // 1. Standard Root Copy
         if whoami.contains("root") {
             success = driver::run_command(&["-s", serial, "shell", "cp", "-r", &remote_src, remote_stage_dir]).is_ok();
         }
         
-        // 2. SU Shell Copy
         if !success {
             let command_string = format!("'cp -r {} {}'", remote_src, remote_stage_dir);
             if driver::run_command(&["-s", serial, "shell", "su", "-c", &command_string]).is_ok() {
@@ -262,7 +253,6 @@ fn process_single_region_adb(_sender: &Sender<AdbEvent>, serial: &str, package_n
             }
         }
         
-        // 3. MuMu / Nox specific SU Copy
         if !success {
             if driver::run_command(&["-s", serial, "shell", "su", "0", "cp", "-r", &remote_src, remote_stage_dir]).is_ok() {
                 success = true;
@@ -297,21 +287,32 @@ fn process_single_region_adb(_sender: &Sender<AdbEvent>, serial: &str, package_n
         let _ = driver::run_command(&["-s", serial, "shell", "rm", "-rf", remote_stage_target]);
     } 
 
-    if let Err(apk_error) = pull_split_apk(serial, package_name, "split_InstallPack.apk", output_dir) {
-        return Err(format!("APK Pull Failed: {}", apk_error));
+    let mut pulled_apk = false;
+
+    if pull_target_apk(serial, package_name, "split_InstallPack.apk", output_dir).is_ok() {
+        pulled_apk = true;
+    } else if pull_target_apk(serial, package_name, "base.apk", output_dir).is_ok() {
+        pulled_apk = true;
     }
     
-    let apk_path = output_dir.join("split_InstallPack.apk");
-    let apk_size = apk_path.metadata().map(|metadata| metadata.len()).unwrap_or(0);
-    
-    if !apk_path.exists() || apk_size == 0 {
-         return Err("APK verification failed: File missing or empty.".to_string());
+    if !pulled_apk {
+        let msg_suffix = match mode {
+            AdbImportType::Update => "Aborting import.",
+            AdbImportType::All => "Import may not include important/updated data.",
+        };
+        
+        let warning = format!("Warning: Update or Base APK not found. {}", msg_suffix);
+        let _ = sender.send(AdbEvent::Status(warning.clone()));
+        
+        if mode == AdbImportType::Update {
+            return Err(warning);
+        }
     }
 
     Ok(())
 }
 
-fn pull_split_apk(serial: &str, package_name: &str, target: &str, output_dir: &Path) -> Result<(), String> {
+fn pull_target_apk(serial: &str, package_name: &str, target: &str, output_dir: &Path) -> Result<(), String> {
     let command_output = driver::run_command(&["-s", serial, "shell", "pm", "path", package_name])?;
     let remote_path = command_output.lines().find(|line| line.contains("base.apk"))
         .ok_or("APK Path not found.")?.trim().strip_prefix("package:").unwrap_or("")
@@ -328,5 +329,13 @@ fn pull_split_apk(serial: &str, package_name: &str, target: &str, output_dir: &P
     };
     
     driver::run_command(&["-s", serial, "pull", &remote_path, local_path_str])?;
+    
+    let apk_size = local_path.metadata().map(|metadata| metadata.len()).unwrap_or(0);
+    
+    if !local_path.exists() || apk_size == 0 {
+        let _ = std::fs::remove_file(&local_path);
+        return Err("APK verification failed: File missing or empty.".to_string());
+    }
+    
     Ok(())
 }

@@ -4,10 +4,18 @@ use std::thread;
 use crate::features::import::logic::ImportState;
 use crate::features::import::archive;
 use crate::features::settings::logic::Settings;
+use crate::features::settings::ui::tabs::toggle_ui;
 
 pub fn show(ui: &mut egui::Ui, state: &mut ImportState, settings: &mut Settings) {
-    ui.label("Package database into a ZST archive.");
+    ui.label("Package database into a ZST archive");
     ui.add_space(10.0);
+    
+    ui.horizontal(|ui| {
+        toggle_ui(ui, &mut state.include_raw);
+        ui.label("Include \"raw\" Folder");
+    });
+    
+    ui.add_space(5.0);
     
     ui.horizontal(|ui| {
         ui.label("Filename:");
@@ -83,9 +91,10 @@ pub fn show(ui: &mut egui::Ui, state: &mut ImportState, settings: &mut Settings)
         
         let level = state.compression_level;
         let filename_arg = full_name.clone(); 
+        let include_raw_arg = state.include_raw;
 
         thread::spawn(move || {
-            if let Err(e) = archive::create_game_archive(tx.clone(), level, filename_arg) {
+            if let Err(e) = archive::create_game_archive(tx.clone(), level, filename_arg, include_raw_arg) {
                  let _ = tx.send(format!("Error Packing: {}", e));
             }
         });

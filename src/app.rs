@@ -39,7 +39,7 @@ const ALL_PAGES: &[Page] = &[
     Page::Home,
     Page::Cats,
     Page::Enemies,
-    //Page::Stages,
+    #[cfg(debug_assertions)] Page::Stages,
     Page::Mods,
     Page::Data,
     Page::Settings,
@@ -86,6 +86,11 @@ impl BattleCatsApp {
         } else {
             Default::default()
         };
+
+        #[cfg(not(debug_assertions))]
+        if app.current_page == Page::Stages {
+            app.current_page = Page::Home;
+        }
 
         crate::features::settings::logic::lang::ensure_complete_list(&mut app.settings.general.language_priority);
 
