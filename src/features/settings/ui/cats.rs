@@ -40,11 +40,6 @@ pub fn show(ui: &mut egui::Ui, settings: &mut CatDataSettings) -> bool {
             });
 
             ui.horizontal(|ui| {
-                toggle_ui(ui, &mut settings.unit_persistence);
-                ui.label("Selected Unit Persistence");
-            });
-
-            ui.horizontal(|ui| {
                 if toggle_ui(ui, &mut settings.show_invalid_units).changed() {
                     refresh_needed = true;
                 }

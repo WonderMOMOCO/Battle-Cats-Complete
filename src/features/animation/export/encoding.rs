@@ -30,7 +30,8 @@ pub struct ExportConfig {
     pub end_frame: i32,
     #[allow(dead_code)] pub interpolation: bool,
     pub output_path: PathBuf,
-    pub base_name: String, 
+    pub base_name: String,
+    pub background: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -81,16 +82,18 @@ pub fn encode_native(
                 
                 match message {
                     EncoderMessage::Frame(raw_pixels, w, h, delay_ms) => {
-                        let image_data = prepare_image(raw_pixels, w, h);
+                        let image_data = prepare_image(raw_pixels, w, h, config.background);
                         let mut frame_ticks = (delay_ms as f32 / 10.0).round() as u16;
                         if frame_ticks < 2 { frame_ticks = 2; } 
                         
                         let mut pixel_buffer = image_data.into_vec();
-                        for chunk in pixel_buffer.chunks_exact_mut(4) {
-                            if chunk[3] < 127 { 
-                                chunk[0] = 0; chunk[1] = 0; chunk[2] = 0; chunk[3] = 0; 
-                            } else { 
-                                chunk[3] = 255; 
+                        if !config.background {
+                            for chunk in pixel_buffer.chunks_exact_mut(4) {
+                                if chunk[3] < 127 { 
+                                    chunk[0] = 0; chunk[1] = 0; chunk[2] = 0; chunk[3] = 0; 
+                                } else { 
+                                    chunk[3] = 255; 
+                                }
                             }
                         }
                         
@@ -115,7 +118,7 @@ pub fn encode_native(
                 
                 match message {
                     EncoderMessage::Frame(raw_pixels, w, h, delay_ms) => {
-                        let image_data = prepare_image(raw_pixels, w, h);
+                        let image_data = prepare_image(raw_pixels, w, h, config.background);
                         let _ = webp_encoder.add_frame(&image_data.into_vec(), timestamp_ms);
                         timestamp_ms += delay_ms as i32;
                         frames_processed += 1;
@@ -153,7 +156,7 @@ pub fn encode_native(
                 
                 match message {
                     EncoderMessage::Frame(raw_pixels, w, h, _) => {
-                        let image_data = prepare_image(raw_pixels, w, h);
+                        let image_data = prepare_image(raw_pixels, w, h, config.background);
                         let current_frame = config.start_frame + (frame_index as i32 * step_direction);
                         let entry_name = format!("{}.{}f.png", config.base_name, current_frame);
                         
@@ -231,14 +234,19 @@ pub fn render_frame(
     }
 }
 
-pub fn prepare_image(mut pixel_buffer: Vec<u8>, width: u32, height: u32) -> RgbaImage {
+pub fn prepare_image(mut pixel_buffer: Vec<u8>, width: u32, height: u32, is_opaque_bg: bool) -> RgbaImage {
     for chunk in pixel_buffer.chunks_exact_mut(4) {
-        let alpha_value = chunk[3];
-        if alpha_value > 0 && alpha_value < 255 {
-            let float_alpha = alpha_value as f32 / 255.0;
-            chunk[0] = (chunk[0] as f32 / float_alpha).min(255.0) as u8;
-            chunk[1] = (chunk[1] as f32 / float_alpha).min(255.0) as u8;
-            chunk[2] = (chunk[2] as f32 / float_alpha).min(255.0) as u8;
+        if is_opaque_bg {
+            // Force fully opaque so encoders don't apply 1-bit transparency logic to anti-aliased edges
+            chunk[3] = 255;
+        } else {
+            let alpha_value = chunk[3];
+            if alpha_value > 0 && alpha_value < 255 {
+                let float_alpha = alpha_value as f32 / 255.0;
+                chunk[0] = (chunk[0] as f32 / float_alpha).min(255.0) as u8;
+                chunk[1] = (chunk[1] as f32 / float_alpha).min(255.0) as u8;
+                chunk[2] = (chunk[2] as f32 / float_alpha).min(255.0) as u8;
+            }
         }
     }
     

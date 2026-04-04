@@ -36,7 +36,6 @@ impl Default for GeneralSettings {
 pub struct CatDataSettings {
     pub preferred_banner_form: usize,
     pub high_banner_quality: bool,
-    pub unit_persistence: bool,
     pub show_invalid_units: bool,
     pub expand_spirit_details: bool,
     pub default_level: i32,
@@ -47,9 +46,8 @@ pub struct CatDataSettings {
 impl Default for CatDataSettings {
     fn default() -> Self {
         Self {
-            preferred_banner_form: 0,
-            high_banner_quality: false,
-            unit_persistence: true,
+            preferred_banner_form: 3,
+            high_banner_quality: true,
             show_invalid_units: false,
             expand_spirit_details: false,
             default_level: 50,

@@ -156,7 +156,9 @@ pub fn encode(
             match message {
                 EncoderMessage::Frame(raw_pixels, w, h, _) => {
                     if progress_sender.send(EncoderStatus::Progress(frames_processed)).is_err() { break; } 
-                    let image_data = prepare_image(raw_pixels, w, h);
+                    
+                    let image_data = prepare_image(raw_pixels, w, h, config.background);
+                    
                     if ffmpeg_stdin.write_all(&image_data.into_vec()).is_err() { break; }
                     frames_processed += 1;
                 },

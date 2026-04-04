@@ -106,11 +106,6 @@ pub fn show(ctx: &egui::Context, state: &mut EnemyListState, settings: &mut Sett
 
     if !state.initialized {
         state.initialized = true;
-        
-        if !settings.cat_data.unit_persistence {
-            state.selected_enemy = None;
-            state.enemy_list.reset_scroll();
-        }
     }
 
     if state.scan_receiver.is_some() {

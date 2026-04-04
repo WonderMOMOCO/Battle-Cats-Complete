@@ -126,11 +126,6 @@ pub fn show(ctx: &egui::Context, state: &mut CatListState, settings: &mut Settin
 
     if !state.initialized {
         state.initialized = true;
-        
-        if !settings.cat_data.unit_persistence {
-            state.selected_cat = None;
-            state.cat_list.reset_scroll();
-        }
     }
 
     if state.scan_receiver.is_some() {

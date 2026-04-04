@@ -2,7 +2,7 @@ use std::fs;
 use std::path::Path;
 use eframe::egui;
 
-use crate::features::settings::logic::exceptions::{ExceptionRule, ExceptionList, get_config_path, RuleHandling};
+use crate::features::settings::logic::exceptions::{ExceptionRule, ExceptionList, RuleHandling};
 use crate::global::ui::shared::DragGuard;
 use super::tabs::toggle_ui;
 
@@ -30,7 +30,7 @@ pub fn open(ctx: &egui::Context) {
     let mut state = ctx.data(|d| d.get_temp::<ManageExceptionsState>(state_id)).unwrap_or_else(|| {
         ManageExceptionsState { 
             is_open: false, 
-            rules: ExceptionList::load_or_default(&get_config_path()).rules
+            rules: ExceptionList::load_or_default().rules
         }
     });
     state.is_open = true;
@@ -94,7 +94,7 @@ pub fn show(ctx: &egui::Context, drag_guard: &mut DragGuard) {
     let mut state = ctx.data(|d| d.get_temp::<ManageExceptionsState>(state_id)).unwrap_or_else(|| {
         ManageExceptionsState { 
             is_open: false, 
-            rules: ExceptionList::load_or_default(&get_config_path()).rules
+            rules: ExceptionList::load_or_default().rules
         }
     });
 
@@ -152,7 +152,7 @@ pub fn show(ctx: &egui::Context, drag_guard: &mut DragGuard) {
                         let success = match ExceptionList::load_from_file(&path) {
                             Ok(list) => {
                                 state.rules = list.rules;
-                                let _ = ExceptionList { rules: state.rules.clone() }.save_to_file(&get_config_path());
+                                ExceptionList { rules: state.rules.clone() }.save();
                                 true
                             },
                             Err(_) => false,
@@ -255,11 +255,11 @@ pub fn show(ctx: &egui::Context, drag_guard: &mut DragGuard) {
 
     if show_reset_confirm_modal(ctx, drag_guard) {
         state.rules = ExceptionList::default().rules;
-        let _ = ExceptionList { rules: state.rules.clone() }.save_to_file(&get_config_path());
+        ExceptionList { rules: state.rules.clone() }.save();
     }
 
     if state.rules != original_rules || (state.is_open && !is_open) {
-        let _ = ExceptionList { rules: state.rules.clone() }.save_to_file(&get_config_path());
+        ExceptionList { rules: state.rules.clone() }.save();
     }
 
     state.is_open = is_open;

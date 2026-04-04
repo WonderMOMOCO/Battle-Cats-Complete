@@ -82,11 +82,7 @@ impl Default for BattleCatsApp {
 
 impl BattleCatsApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        let mut app: Self = if let Some(storage) = cc.storage {
-            eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default()
-        } else {
-            Default::default()
-        };
+        let mut app: Self = crate::global::io::json::load("settings.json").unwrap_or_default();
 
         #[cfg(not(debug_assertions))]
         if app.current_page == Page::Stages {
@@ -131,8 +127,8 @@ fn setup_custom_fonts(ctx: &egui::Context) {
 }
 
 impl eframe::App for BattleCatsApp {
-    fn save(&mut self, storage: &mut dyn eframe::Storage) {
-        eframe::set_value(storage, eframe::APP_KEY, self);
+    fn save(&mut self, _storage: &mut dyn eframe::Storage) {
+        crate::global::io::json::save("settings.json", self);
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {

@@ -123,7 +123,7 @@ fn encode_via_pipe(
         match message {
             EncoderMessage::Frame(raw_pixels, w, h, _) => {
                 if status_sender.send(EncoderStatus::Progress(frames_processed)).is_err() { break; }
-                let image_data = prepare_image(raw_pixels, w, h);
+                let image_data = prepare_image(raw_pixels, w, h, config.background);
                 if ffmpeg_stdin.write_all(&image_data.into_vec()).is_err() { break; }
                 frames_processed += 1;
             },
@@ -175,7 +175,7 @@ fn encode_via_folder(
         }
         match message {
             EncoderMessage::Frame(raw_pixels, w, h, _) => {
-                let image_data = prepare_image(raw_pixels, w, h);
+                let image_data = prepare_image(raw_pixels, w, h, config.background);
                 let current_frame_path = work_directory.join(format!("frame_{:05}.png", frames_processed));
                 if image_data.save(&current_frame_path).is_ok() {
                     frame_paths.push(current_frame_path);

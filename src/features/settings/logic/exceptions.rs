@@ -1,8 +1,7 @@
 use serde::{Deserialize, Serialize};
-use indexmap::IndexMap; // Replaced BTreeMap with IndexMap
-use std::path::{Path, PathBuf};
+use indexmap::IndexMap; 
+use std::path::Path;
 use std::fs;
-use directories::ProjectDirs;
 
 #[derive(Clone, Copy, PartialEq, Serialize, Deserialize, Debug)]
 pub enum RuleHandling {
@@ -22,18 +21,6 @@ impl RuleHandling {
             Self::Only => "Only".to_string(),
             Self::Ignore => "Ignore".to_string(),
         }
-    }
-}
-
-pub fn get_config_path() -> PathBuf {
-    if let Some(proj_dirs) = ProjectDirs::from("", "", "battle_cats_complete") {
-        let data_dir = proj_dirs.data_dir();
-        if !data_dir.exists() {
-            let _ = fs::create_dir_all(data_dir);
-        }
-        data_dir.join("exceptions.json")
-    } else {
-        PathBuf::from("data/exceptions.json")
     }
 }
 
@@ -77,6 +64,14 @@ impl Default for ExceptionList {
 }
 
 impl ExceptionList {
+    pub fn save(&self) {
+        crate::global::io::json::save("exceptions.json", self);
+    }
+
+    pub fn load_or_default() -> Self {
+        crate::global::io::json::load("exceptions.json").unwrap_or_default()
+    }
+
     pub fn save_to_file(&self, path: &Path) -> Result<(), std::io::Error> {
         let json = serde_json::to_string_pretty(self)?;
         fs::write(path, json)
@@ -84,23 +79,6 @@ impl ExceptionList {
 
     pub fn load_from_file(path: &Path) -> Result<Self, String> {
         let data = fs::read_to_string(path).map_err(|e| e.to_string())?;
-        let list: ExceptionList = serde_json::from_str(&data).map_err(|e| e.to_string())?;
-        Ok(list)
-    }
-
-    pub fn load_or_default(path: &Path) -> Self {
-        if path.exists() {
-            if let Ok(list) = Self::load_from_file(path) {
-                return list;
-            }
-        }
-        
-        let default_list = Self::default();
-        if let Some(parent) = path.parent() {
-            let _ = fs::create_dir_all(parent);
-        }
-        let _ = default_list.save_to_file(path);
-        
-        default_list
+        serde_json::from_str(&data).map_err(|e| e.to_string())
     }
 }

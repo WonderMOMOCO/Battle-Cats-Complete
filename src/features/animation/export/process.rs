@@ -102,6 +102,7 @@ pub fn start_export(state: &mut ExporterState) {
         start_frame: state.frame_start, end_frame: state.frame_end, interpolation: state.interpolation,
         output_path,
         base_name, 
+        background: state.background, // ADDED THIS
     };
 
     let (sender, receiver) = mpsc::channel();
@@ -172,7 +173,7 @@ pub fn process_frame(
     
     let world_parts = transform::solve_hierarchy(&parts, model);
     let pan = egui::vec2(-state.region_x - (state.region_w as f32 / (2.0 * state.zoom)), -state.region_y - (state.region_h as f32 / (2.0 * state.zoom)));
-    let bg_color = if state.background { [50, 50, 50, 255] } else { [0, 0, 0, 0] };
+    let bg_color = if state.background { [80, 80, 80, 255] } else { [0, 0, 0, 0] };
 
     let renderer_arc = renderer_ref.clone();
     let sheet_arc = Arc::new(sheet.clone()); 

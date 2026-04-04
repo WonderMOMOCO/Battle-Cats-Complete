@@ -97,10 +97,6 @@ impl CatList {
         self.missing_ids.remove(&id);
         self.pending_requests.remove(&id);
     }
-
-    pub fn reset_scroll(&mut self) {
-        self.scroll_to_top_needed = true;
-    }
     
     pub fn force_search_rebuild(&mut self) {
         self.last_unit_count = usize::MAX;

@@ -1,9 +1,9 @@
 use regex::{Regex, RegexSet};
 use crate::global::io::patterns;
-use crate::features::settings::logic::exceptions::{ExceptionList, ExceptionRule, get_config_path};
+use crate::features::settings::logic::exceptions::{ExceptionList, ExceptionRule};
 
 pub fn compile() -> (RegexSet, Vec<ExceptionRule>) {
-    let exceptions = ExceptionList::load_or_default(&get_config_path());
+    let exceptions = ExceptionList::load_or_default();
     
     let mut patterns_for_set = Vec::new();
     let mut active_rules = Vec::new();

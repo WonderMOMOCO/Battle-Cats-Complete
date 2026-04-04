@@ -1,7 +1,5 @@
 use eframe::egui;
 use serde::{Deserialize, Serialize};
-use std::fs;
-use std::path::PathBuf;
 use crate::global::utils::process_markdown;
 use crate::global::ui::shared::DragGuard;
 
@@ -10,27 +8,18 @@ pub const NOTICE_TITLE: &str = "NOTICE";
 pub const NOTICE_CONTENT: &str = r#"
 # Database Restructure Required
 
-- With this update the Database's fundamental structure has changed, the app will not work out of the box post-update.
-- To fix this, go to Game > Data, select "Raw", change the Source to "Folder", and select your "game" folder as the source, running the Job should begin the Database Reorganization and fix the App.
+- With this update the Databases fundamental structure has changed, the app will not work out of the box post-update.
+- To fix this, go to Game > Data, select "Raw", change the Source to "Folder", and select your "game" folder as the source, running the Job should begin the Database Reorginization and fix the App.
 - To see this message again, go to "Changelogs" on the bottom left of the Home page.
+
+# Settings Reset
+
+User settings will be reset with this update, being initialized to defaults. I switched the app over to json-based settings so crashes or force closes wont wipe your current settings.
 "#;
 
 #[derive(Serialize, Deserialize, Default)]
 struct AppMeta {
     app_version: String,
-}
-
-fn get_meta_path() -> PathBuf {
-    let mut path = if cfg!(target_os = "windows") {
-        PathBuf::from(std::env::var("APPDATA").unwrap_or_else(|_| ".".to_string()))
-    } else {
-        PathBuf::from(std::env::var("HOME").unwrap_or_else(|_| ".".to_string())).join(".config")
-    };
-    path.push("battle_cats_complete");
-    path.push("data");
-    fs::create_dir_all(&path).ok();
-    path.push("meta.json");
-    path
 }
 
 pub fn check_and_show(ctx: &egui::Context, drag_guard: &mut DragGuard) {
@@ -42,16 +31,13 @@ pub fn check_and_show(ctx: &egui::Context, drag_guard: &mut DragGuard) {
     let mut is_open = ctx.data(|d| d.get_temp::<Option<bool>>(state_id)).flatten();
 
     let current_version = env!("CARGO_PKG_VERSION").to_string();
-    let meta_path = get_meta_path();
 
+    // Check version once per session using the universal JSON loader
     if is_open.is_none() {
-        let needs_notice = if meta_path.exists() {
-            if let Ok(data) = fs::read_to_string(&meta_path) {
-                if let Ok(meta) = serde_json::from_str::<AppMeta>(&data) {
-                    meta.app_version != current_version
-                } else { true }
-            } else { true }
-        } else { true };
+        let needs_notice = match crate::global::io::json::load::<AppMeta>("meta.json") {
+            Some(meta) => meta.app_version != current_version,
+            None => true, // If file doesn't exist, show notice
+        };
 
         is_open = Some(needs_notice);
         ctx.data_mut(|d| d.insert_temp(state_id, Some(needs_notice)));
@@ -88,10 +74,9 @@ pub fn check_and_show(ctx: &egui::Context, drag_guard: &mut DragGuard) {
                     show_window = false;
                     ctx.data_mut(|d| d.insert_temp(state_id, Some(false)));
                     
+                    // Mark as read by atomically saving version to disk via utility
                     let new_meta = AppMeta { app_version: current_version.clone() };
-                    if let Ok(json) = serde_json::to_string_pretty(&new_meta) {
-                        let _ = fs::write(&meta_path, json);
-                    }
+                    crate::global::io::json::save("meta.json", &new_meta);
                 }
             });
         });
