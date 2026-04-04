@@ -14,7 +14,7 @@ pub struct MapStageEntry {
 }
 
 pub fn load(dir: &Path, filename: &str, priority: &[String]) -> Vec<MapStageEntry> {
-    let paths = resolver::get(dir, filename, priority);
+    let paths = resolver::get(dir, &[filename], priority);
     let target = paths.first();
     let Some(path) = target else { return Vec::new(); };
     

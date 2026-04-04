@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use indexmap::IndexMap; // Replaced BTreeMap with IndexMap
 use std::path::{Path, PathBuf};
 use std::fs;
 use directories::ProjectDirs;
@@ -42,13 +42,13 @@ pub struct ExceptionRule {
     pub pattern: String,
     pub extension: String,
     pub handling: RuleHandling,
-    pub languages: BTreeMap<String, bool>,
+    pub languages: IndexMap<String, bool>,
     pub locked: bool,
 }
 
 impl Default for ExceptionRule {
     fn default() -> Self {
-        let mut languages = BTreeMap::new();
+        let mut languages = IndexMap::new();
         for lang in ["en", "ja", "tw", "ko", "es", "de", "fr", "it", "th"] {
             languages.insert(lang.to_string(), false);
         }

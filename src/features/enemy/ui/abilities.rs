@@ -4,10 +4,9 @@ use crate::features::enemy::logic::abilities;
 use crate::global::formats::imgcut::SpriteSheet;
 use crate::features::settings::logic::Settings;
 use crate::global::ui::shared::{render_fallback_icon, text_with_superscript};
-use crate::global::game::img015;
 use crate::global::assets::CustomAssets;
-use crate::global::game::abilities::{AbilityItem, CustomIcon};
-use crate::features::enemy::registry;
+use crate::global::game::abilities::AbilityItem;
+use crate::features::enemy::registry::{self, Magnification};
 
 pub const ABILITY_X: f32 = 3.0;
 pub const ABILITY_Y: f32 = 5.0;
@@ -19,7 +18,7 @@ pub fn render(
     sheets: &[SpriteSheet], 
     assets: &CustomAssets,
     settings: &Settings,
-    magnification: i32,
+    magnification: Magnification,
 ) {
     ui.spacing_mut().item_spacing.y = 0.0;
 
@@ -96,43 +95,37 @@ fn render_single_icon(
 ) -> egui::Response {
     let size = egui::vec2(40.0, 40.0);
 
-    let custom_texture = match item.icon_id {
-        img015::ICON_DOJO => Some(&assets.dojo),
-        img015::ICON_STARRED_ALIEN => Some(&assets.starred_alien),
-        img015::ICON_BURROW => Some(&assets.burrow),
-        img015::ICON_REVIVE => Some(&assets.revive),
-        _ => match item.custom_icon {
-            CustomIcon::Multihit => Some(&assets.multihit),
-            CustomIcon::Kamikaze => Some(&assets.kamikaze),
-            _ => None,
-        }
-    };
-
-    if let Some(tex) = custom_texture {
+    // Try Custom Icon first using the struct's native getter
+    if let Some(tex) = item.custom_icon.get_texture(assets) {
         return ui.add(egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)));
     }
 
-    // Cascade through available language sheets
-    for sheet in sheets {
-        if let Some(cut) = sheet.cuts_map.get(&item.icon_id) {
-            if let Some(tex) = &sheet.texture_handle {
-                let response = ui.add(egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)).uv(cut.uv_coordinates));
-                
-                if let Some(border_id) = item.border_id {
-                    if let Some(b_cut) = sheet.cuts_map.get(&border_id) {
-                        ui.put(response.rect, egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)).uv(b_cut.uv_coordinates));
+    // Cascade through available language sheets for Standard Icons
+    if let Some(icon_id) = item.icon_id {
+        for sheet in sheets {
+            if let Some(cut) = sheet.cuts_map.get(&icon_id) {
+                if let Some(tex) = &sheet.texture_handle {
+                    let response = ui.add(egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)).uv(cut.uv_coordinates));
+                    
+                    if let Some(border_id) = item.border_id {
+                        if let Some(b_cut) = sheet.cuts_map.get(&border_id) {
+                            ui.put(response.rect, egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)).uv(b_cut.uv_coordinates));
+                        }
                     }
+                    return response;
+                } else if sheet.is_loading_active {
+                    return ui.allocate_response(size, egui::Sense::hover());
                 }
-                return response;
-            } else if sheet.is_loading_active {
-                return ui.allocate_response(size, egui::Sense::hover());
             }
         }
+
+        // Fallback if missing from ALL loaded sheets
+        let alt = registry::get_fallback_by_icon(icon_id);
+        return render_fallback_icon(ui, alt, border);
     }
 
-    // Fallback if missing from ALL loaded sheets
-    let alt = registry::get_fallback_by_icon(item.icon_id);
-    render_fallback_icon(ui, alt, border)
+    // Ultimate fallback if no Custom Icon or ID is provided
+    render_fallback_icon(ui, "???", border)
 }
 
 pub fn render_list_view(

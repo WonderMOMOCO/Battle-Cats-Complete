@@ -6,7 +6,7 @@ use crate::global::utils::detect_csv_separator;
 
 pub fn load(dir: &Path, filename: &str, priority: &[String]) -> HashMap<u32, Vec<String>> {
     let mut map: HashMap<u32, Vec<String>> = HashMap::new();
-    let paths = resolver::get(dir, filename, priority);
+    let paths = resolver::get(dir, &[filename], priority);
     
     // Reverse iterate to apply lowest priority first, allowing higher priority to overwrite
     for path in paths.iter().rev() {

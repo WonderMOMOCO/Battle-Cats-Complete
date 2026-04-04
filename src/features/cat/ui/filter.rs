@@ -5,7 +5,7 @@ use crate::global::formats::imgcut::SpriteSheet;
 use crate::global::assets::CustomAssets;
 use crate::global::game::abilities::UI_TRAIT_ORDER;
 use crate::global::ui::shared::DragGuard;
-use crate::features::cat::registry::{CAT_ABILITY_REGISTRY, DisplayGroup};
+use crate::features::cat::registry::{CAT_ABILITY_REGISTRY, DisplayGroup, AbilityIcon};
 use crate::global::game::img015;
 use crate::features::settings::logic::Settings;
 
@@ -203,7 +203,7 @@ pub fn show_popup(
             ui.horizontal_wrapped(|ui| {
                 ui.spacing_mut().item_spacing = egui::vec2(4.0, 4.0);
                 for &icon_id in UI_TRAIT_ORDER {
-                    render_filter_icon(ui, icon_id, &mut state.active_icons, sheets, assets);
+                    render_filter_icon(ui, &AbilityIcon::Standard(icon_id), &mut state.active_icons, sheets, assets);
                 }
             });
             ui.add_space(15.0);
@@ -212,8 +212,8 @@ pub fn show_popup(
             ui.add_space(5.0);
             ui.horizontal_wrapped(|ui| {
                 ui.spacing_mut().item_spacing = egui::vec2(4.0, 4.0);
-                for &icon_id in ATTACK_TYPE_ICONS {
-                    render_filter_icon(ui, icon_id, &mut state.active_icons, sheets, assets);
+                for icon in ATTACK_TYPE_ICONS {
+                    render_filter_icon(ui, icon, &mut state.active_icons, sheets, assets);
                 }
             });
             ui.add_space(15.0);
@@ -233,9 +233,11 @@ pub fn show_popup(
             if check_talents {
                 let mut talent_icons = Vec::new();
                 for def in CAT_ABILITY_REGISTRY.iter() {
-                    if !rendered_icons.contains(&def.icon_id) && !UI_TRAIT_ORDER.contains(&def.icon_id) && !ATTACK_TYPE_ICONS.contains(&def.icon_id) {
-                        if !talent_icons.contains(&def.icon_id) {
-                            talent_icons.push(def.icon_id);
+                    let is_trait = if let AbilityIcon::Standard(id) = def.icon { UI_TRAIT_ORDER.contains(&id) } else { false };
+                    
+                    if !rendered_icons.contains(&def.icon) && !is_trait && !ATTACK_TYPE_ICONS.contains(&def.icon) {
+                        if !talent_icons.contains(&def.icon) {
+                            talent_icons.push(def.icon.clone());
                         }
                     }
                 }
@@ -246,8 +248,8 @@ pub fn show_popup(
                     ui.add_space(5.0);
                     ui.horizontal_wrapped(|ui| {
                         ui.spacing_mut().item_spacing = egui::vec2(4.0, 4.0);
-                        for icon_id in talent_icons {
-                            render_filter_icon(ui, icon_id, &mut state.active_icons, sheets, assets);
+                        for icon in talent_icons {
+                            render_filter_icon(ui, &icon, &mut state.active_icons, sheets, assets);
                         }
                     });
                 }
@@ -283,7 +285,7 @@ pub fn show_popup(
 fn render_display_group(
     ui: &mut egui::Ui,
     state: &mut CatFilterState,
-    rendered_icons: &mut HashSet<usize>,
+    rendered_icons: &mut HashSet<AbilityIcon>,
     target_group: DisplayGroup,
     is_vertical: bool,
     draw_labels: bool,
@@ -293,22 +295,27 @@ fn render_display_group(
     let mut icons_in_group = Vec::new();
     
     for def in CAT_ABILITY_REGISTRY.iter() {
-        if def.group == target_group && !UI_TRAIT_ORDER.contains(&def.icon_id) && !ATTACK_TYPE_ICONS.contains(&def.icon_id) {
-            if !icons_in_group.contains(&def.icon_id) {
-                icons_in_group.push(def.icon_id);
-                rendered_icons.insert(def.icon_id);
+        let is_trait = if let AbilityIcon::Standard(id) = def.icon { UI_TRAIT_ORDER.contains(&id) } else { false };
+
+        if def.group == target_group && !is_trait && !ATTACK_TYPE_ICONS.contains(&def.icon) {
+            if !icons_in_group.contains(&def.icon) {
+                icons_in_group.push(def.icon.clone());
+                rendered_icons.insert(def.icon.clone());
             }
         }
     }
     
     if target_group == DisplayGroup::Headline2 {
-        if !icons_in_group.contains(&img015::ICON_CONJURE) { 
-            icons_in_group.insert(0, img015::ICON_CONJURE); 
-            rendered_icons.insert(img015::ICON_CONJURE);
+        let conjure = AbilityIcon::Standard(img015::ICON_CONJURE);
+        let kamikaze = AbilityIcon::Custom(crate::global::game::abilities::CustomIcon::Kamikaze);
+
+        if !icons_in_group.contains(&conjure) { 
+            icons_in_group.insert(0, conjure.clone()); 
+            rendered_icons.insert(conjure);
         }
-        if !icons_in_group.contains(&img015::ICON_KAMIKAZE) { 
-            icons_in_group.push(img015::ICON_KAMIKAZE); 
-            rendered_icons.insert(img015::ICON_KAMIKAZE);
+        if !icons_in_group.contains(&kamikaze) { 
+            icons_in_group.push(kamikaze.clone()); 
+            rendered_icons.insert(kamikaze);
         }
     }
     
@@ -316,15 +323,15 @@ fn render_display_group(
         if is_vertical {
             ui.vertical(|ui| {
                 ui.spacing_mut().item_spacing = egui::vec2(0.0, 4.0);
-                for icon_id in icons_in_group {
-                    render_filter_icon_row(ui, state, icon_id, draw_labels, sheets, assets);
+                for icon in icons_in_group {
+                    render_filter_icon_row(ui, state, &icon, draw_labels, sheets, assets);
                 }
             });
         } else {
             ui.horizontal_wrapped(|ui| {
                 ui.spacing_mut().item_spacing = egui::vec2(4.0, 4.0);
-                for icon_id in icons_in_group {
-                    render_filter_icon(ui, icon_id, &mut state.active_icons, sheets, assets);
+                for icon in icons_in_group {
+                    render_filter_icon(ui, &icon, &mut state.active_icons, sheets, assets);
                 }
             });
         }
@@ -347,15 +354,15 @@ fn filter_button(ui: &mut egui::Ui, active: &mut bool, label: &str, size: [f32; 
 fn render_filter_icon_row(
     ui: &mut egui::Ui, 
     state: &mut CatFilterState,
-    icon_id: usize, 
+    icon: &AbilityIcon, 
     draw_labels: bool,
     sheets: &[SpriteSheet],
     assets: &CustomAssets,
 ) {
-    let is_active = state.active_icons.contains(&icon_id);
-    let name = get_icon_name(icon_id);
+    let is_active = state.active_icons.contains(icon);
+    let name = get_icon_name(icon);
     
-    let ability_def = CAT_ABILITY_REGISTRY.iter().find(|d| d.icon_id == icon_id);
+    let ability_def = CAT_ABILITY_REGISTRY.iter().find(|d| &d.icon == icon);
     let schema = ability_def.map(|d| d.schema).unwrap_or(&[]);
     let has_adv = !schema.is_empty();
 
@@ -369,14 +376,14 @@ fn render_filter_icon_row(
         .show(ui, |ui| {
             ui.vertical(|ui| {
                 ui.horizontal(|ui| {
-                    render_filter_icon(ui, icon_id, &mut state.active_icons, sheets, assets);
+                    render_filter_icon(ui, icon, &mut state.active_icons, sheets, assets);
                     
                     if draw_labels {
                         ui.add_space(10.0); 
                         let color = if is_active { egui::Color32::WHITE } else { egui::Color32::from_gray(120) };
                         if ui.add(egui::Label::new(egui::RichText::new(&name).color(color)).sense(egui::Sense::click())).clicked() {
-                            if is_active { state.active_icons.remove(&icon_id); } 
-                            else { state.active_icons.insert(icon_id); }
+                            if is_active { state.active_icons.remove(icon); } 
+                            else { state.active_icons.insert(icon.clone()); }
                         }
                     }
                 });
@@ -386,14 +393,14 @@ fn render_filter_icon_row(
                     ui.horizontal(|ui| {
                         ui.add_space(3.0); 
                         
-                        egui::Grid::new(format!("adv_grid_{}", icon_id))
+                        egui::Grid::new(format!("adv_grid_{}", name))
                             .spacing([8.0, 6.0]) 
                             .show(ui, |ui| {
                                 for &(attr, _) in schema {
                                     ui.label(format!("{}:", attr));
                                     
                                     let range = state.adv_ranges
-                                        .entry(icon_id)
+                                        .entry(icon.clone())
                                         .or_default()
                                         .entry(attr)
                                         .or_default();
@@ -426,47 +433,45 @@ fn render_filter_icon_row(
 
 fn render_filter_icon(
     ui: &mut egui::Ui, 
-    icon_id: usize, 
-    active_icons: &mut HashSet<usize>,
+    icon: &AbilityIcon, 
+    active_icons: &mut HashSet<AbilityIcon>,
     sheets: &[SpriteSheet],
     assets: &crate::global::assets::CustomAssets,
 ) {
-    let is_active = active_icons.contains(&icon_id);
+    let is_active = active_icons.contains(icon);
     let tint = if is_active { egui::Color32::WHITE } else { egui::Color32::from_gray(80) };
     
-    let custom_variant = crate::features::cat::registry::CAT_ABILITY_REGISTRY.iter()
-        .find(|d| d.icon_id == icon_id)
-        .map(|d| d.custom_icon)
-        .unwrap_or(crate::global::game::abilities::CustomIcon::None);
-
-    let custom_tex = custom_variant.get_texture(assets);
-
     let mut drawn = false;
     
-    if let Some(tex) = custom_tex {
-        let img = egui::Image::new(tex).fit_to_exact_size(egui::vec2(32.0, 32.0)).tint(tint);
-        let response = ui.add(egui::ImageButton::new(img).frame(false));
-        if response.clicked() {
-            if is_active { active_icons.remove(&icon_id); } 
-            else { active_icons.insert(icon_id); }
-        }
-        response.on_hover_text(get_icon_name(icon_id));
-        drawn = true;
-    } else {
-        for sheet in sheets {
-            if let Some(cut) = sheet.cuts_map.get(&icon_id) {
-                if let Some(tex) = &sheet.texture_handle {
-                    let img = egui::Image::new(egui::load::SizedTexture::new(tex.id(), egui::vec2(32.0, 32.0)))
-                        .uv(cut.uv_coordinates)
-                        .tint(tint);
-                    let response = ui.add(egui::ImageButton::new(img).frame(false));
-                    if response.clicked() {
-                        if is_active { active_icons.remove(&icon_id); } 
-                        else { active_icons.insert(icon_id); }
+    match icon {
+        AbilityIcon::Custom(custom_variant) => {
+            if let Some(tex) = custom_variant.get_texture(assets) {
+                let img = egui::Image::new(tex).fit_to_exact_size(egui::vec2(32.0, 32.0)).tint(tint);
+                let response = ui.add(egui::ImageButton::new(img).frame(false));
+                if response.clicked() {
+                    if is_active { active_icons.remove(icon); } 
+                    else { active_icons.insert(icon.clone()); }
+                }
+                response.on_hover_text(get_icon_name(icon));
+                drawn = true;
+            }
+        },
+        AbilityIcon::Standard(icon_id) => {
+            for sheet in sheets {
+                if let Some(cut) = sheet.cuts_map.get(icon_id) {
+                    if let Some(tex) = &sheet.texture_handle {
+                        let img = egui::Image::new(egui::load::SizedTexture::new(tex.id(), egui::vec2(32.0, 32.0)))
+                            .uv(cut.uv_coordinates)
+                            .tint(tint);
+                        let response = ui.add(egui::ImageButton::new(img).frame(false));
+                        if response.clicked() {
+                            if is_active { active_icons.remove(icon); } 
+                            else { active_icons.insert(icon.clone()); }
+                        }
+                        response.on_hover_text(get_icon_name(icon));
+                        drawn = true;
+                        break;
                     }
-                    response.on_hover_text(get_icon_name(icon_id));
-                    drawn = true;
-                    break;
                 }
             }
         }
@@ -480,8 +485,8 @@ fn render_filter_icon(
             ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, "?", egui::FontId::proportional(20.0), text_color);
         }
         if response.clicked() {
-            if is_active { active_icons.remove(&icon_id); } 
-            else { active_icons.insert(icon_id); }
+            if is_active { active_icons.remove(icon); } 
+            else { active_icons.insert(icon.clone()); }
         }
     }
 }

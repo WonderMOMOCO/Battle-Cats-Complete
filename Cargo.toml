@@ -1,6 +1,6 @@
 [package]
 name = "Battle_Cats_Complete"
-version = "0.12.5"
+version = "0.12.6"
 edition = "2024"
 
 [features]
@@ -36,6 +36,7 @@ open = "5.1"
 imageproc = "0.25.0"
 ab_glyph = "0.2"
 arboard = "3.4.0"
+indexmap = { version = "2", features = ["serde"] }
 
 [target.'cfg(windows)'.build-dependencies]
 winres = "0.1"

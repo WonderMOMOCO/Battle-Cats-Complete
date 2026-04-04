@@ -1,6 +1,7 @@
 use eframe::egui;
 use crate::features::enemy::logic::scanner::EnemyEntry;
 use crate::features::enemy::logic::state::EnemyDetailTab;
+use crate::features::enemy::registry::Magnification;
 use crate::global::ui::name_box;
 use crate::global::utils::autocrop;
 
@@ -19,7 +20,7 @@ pub fn render(
     enemy: &EnemyEntry, 
     current_tab: &mut EnemyDetailTab, 
     mag_input: &mut String, 
-    magnification: &mut i32, 
+    magnification: &mut Magnification, 
     texture_cache: &mut Option<egui::TextureHandle>, 
     current_key: &mut String
 ) -> ExportAction {
@@ -116,12 +117,11 @@ fn render_enemy_icon(
         let icon_rect = egui::Rect::from_min_size(rect.min + egui::vec2(x_off, y_off), egui::vec2(draw_w, draw_h));
         ui.painter().image(tex.id(), icon_rect, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), egui::Color32::WHITE);
     } else { 
-        // Fallback: Blank rectangle for enemies missing an icon
         ui.painter().rect_filled(rect, 4.0, egui::Color32::from_gray(30)); 
     }
 }
 
-fn render_info_box(ui: &mut egui::Ui, enemy: &EnemyEntry, mag_input: &mut String, magnification: &mut i32) {
+fn render_info_box(ui: &mut egui::Ui, enemy: &EnemyEntry, mag_input: &mut String, magnification: &mut Magnification) {
     ui.vertical(|ui| {
         ui.set_width(name_box::NAME_BOX_WIDTH);
         
@@ -139,8 +139,19 @@ fn render_info_box(ui: &mut egui::Ui, enemy: &EnemyEntry, mag_input: &mut String
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = INPUT_SPACING; 
             ui.label("Magnification:");
-            if ui.add(egui::TextEdit::singleline(mag_input).desired_width(40.0)).changed() {
-                *magnification = mag_input.trim().parse::<i32>().unwrap_or(100);
+            
+            if ui.add(egui::TextEdit::singleline(mag_input).desired_width(30.0)).changed() {
+                let text = mag_input.trim();
+                let parts: Vec<&str> = text.split(|c| c == '/' || c == '|' || c == '\\').collect();
+                
+                if parts.len() >= 2 {
+                    let hp = parts[0].trim().parse::<i32>().unwrap_or(100);
+                    let atk = parts[1].trim().parse::<i32>().unwrap_or(hp);
+                    *magnification = Magnification { hitpoints: hp, attack: atk };
+                } else {
+                    let mag = text.parse::<i32>().unwrap_or(100);
+                    *magnification = Magnification { hitpoints: mag, attack: mag };
+                }
             }
             ui.label("%");
         });

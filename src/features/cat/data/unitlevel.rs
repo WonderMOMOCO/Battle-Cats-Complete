@@ -46,7 +46,7 @@ impl CatLevelCurve {
 pub fn load_level_curves(cats_directory: &Path, priority: &[String]) -> Vec<CatLevelCurve> {
     let mut curves_list = Vec::new();
     
-    let Some(level_file_path) = crate::global::resolver::get(cats_directory, paths::UNIT_LEVEL, priority).into_iter().next() else {
+    let Some(level_file_path) = crate::global::resolver::get(cats_directory, &[paths::UNIT_LEVEL], priority).into_iter().next() else {
         return curves_list;
     };
 

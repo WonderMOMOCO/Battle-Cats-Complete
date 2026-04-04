@@ -209,8 +209,8 @@ impl CatRaw {
             barrier_breaker_chance: get_int(70),
             warp_chance: get_int(71),
             warp_duration: get_int(72),
-            warp_distance_minimum: get_int(73),
-            warp_distance_maximum: get_int(74),
+            warp_distance_minimum: get_int(73) / 4,
+            warp_distance_maximum: get_int(74) / 4,
             warp_immune: get_int(75),
             target_eva: get_int(76),
             eva_killer: get_int(77),
@@ -261,9 +261,9 @@ pub fn load_from_id(cat_id: i32, priority: &[String]) -> Option<Vec<CatRaw>> {
     let path_object = paths::stats(Path::new(paths::DIR_CATS), cat_id as u32);
     
     let base_dir = path_object.parent().unwrap_or(Path::new(""));
-    let file_name = path_object.file_name().unwrap().to_string_lossy();
+    let file_name = path_object.file_name().unwrap().to_string_lossy().to_string();
 
-    if let Some(resolved_path) = crate::global::resolver::get(base_dir, &file_name, priority).into_iter().next() {
+    if let Some(resolved_path) = crate::global::resolver::get(base_dir, &[file_name.as_str()], priority).into_iter().next() {
         
         if let Ok(bytes) = fs::read(resolved_path) {
             let file_content = String::from_utf8_lossy(&bytes);

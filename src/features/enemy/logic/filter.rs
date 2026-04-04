@@ -1,16 +1,16 @@
 use std::collections::{HashSet, HashMap};
-use crate::features::enemy::registry::ENEMY_ABILITY_REGISTRY;
+use crate::features::enemy::registry::{ENEMY_ABILITY_REGISTRY, ENEMY_STATS_REGISTRY, AbilityIcon, Magnification};
 use crate::features::enemy::data::t_unit::EnemyRaw;
 use crate::features::enemy::logic::scanner::EnemyEntry;
-use crate::features::enemy::registry::ENEMY_STATS_REGISTRY;
+use crate::global::game::abilities::CustomIcon;
 use crate::global::game::img015;
 
-pub const ATTACK_TYPE_ICONS: &[usize] = &[
-    img015::ICON_SINGLE_ATTACK,
-    img015::ICON_AREA_ATTACK,
-    img015::ICON_OMNI_STRIKE,
-    img015::ICON_LONG_DISTANCE,
-    img015::ICON_MULTIHIT,
+pub const ATTACK_TYPE_ICONS: &[AbilityIcon] = &[
+    AbilityIcon::Standard(img015::ICON_SINGLE_ATTACK),
+    AbilityIcon::Standard(img015::ICON_AREA_ATTACK),
+    AbilityIcon::Standard(img015::ICON_OMNI_STRIKE),
+    AbilityIcon::Standard(img015::ICON_LONG_DISTANCE),
+    AbilityIcon::Custom(CustomIcon::Multihit),
 ];
 
 #[derive(Clone, Copy, PartialEq, Default)]
@@ -29,9 +29,9 @@ pub struct RangeInput {
 #[derive(Clone, PartialEq)]
 pub struct EnemyFilterState {
     pub is_open: bool,
-    pub active_icons: HashSet<usize>,
+    pub active_icons: HashSet<AbilityIcon>,
     pub match_mode: MatchMode,
-    pub adv_ranges: HashMap<usize, HashMap<&'static str, RangeInput>>,
+    pub adv_ranges: HashMap<AbilityIcon, HashMap<&'static str, RangeInput>>,
     pub mag_input: String,
     pub stat_ranges: HashMap<&'static str, RangeInput>,
 }
@@ -63,17 +63,18 @@ pub fn get_stat_value(s: &EnemyRaw, stat: &str, anim_frames: i32, mag: i32) -> i
     };
     
     if let Some(def) = ENEMY_STATS_REGISTRY.iter().find(|d| d.name == reg_name) {
-        return (def.get_value)(s, anim_frames, mag);
+        let magnification = Magnification { hitpoints: mag, attack: mag };
+        return (def.get_value)(s, anim_frames, magnification);
     }
     0 
 }
 
-pub fn get_icon_name(icon_id: usize) -> String {
-    ENEMY_ABILITY_REGISTRY.iter().find(|d| d.icon_id == icon_id).map(|d| d.name).unwrap_or("Unknown").to_string()
+pub fn get_icon_name(icon: AbilityIcon) -> String {
+    ENEMY_ABILITY_REGISTRY.iter().find(|d| d.icon == icon).map(|d| d.name).unwrap_or("Unknown").to_string()
 }
 
-pub fn has_trait_or_ability(s: &EnemyRaw, icon_id: usize) -> bool {
-    ENEMY_ABILITY_REGISTRY.iter().find(|d| d.icon_id == icon_id).map_or(false, |def| {
+pub fn has_trait_or_ability(s: &EnemyRaw, icon: AbilityIcon) -> bool {
+    ENEMY_ABILITY_REGISTRY.iter().find(|d| d.icon == icon).map_or(false, |def| {
         !(def.get_attributes)(s).is_empty()
     })
 }
@@ -111,23 +112,21 @@ pub fn entity_passes_filter(enemy: &EnemyEntry, filter: &EnemyFilterState) -> bo
     }
 
     if has_icon_filters {
-        for &icon_id in &filter.active_icons {
+        for &ability_icon in &filter.active_icons {
             active_conditions += 1;
 
-            let has_inherent = has_trait_or_ability(stats, icon_id);
+            let has_inherent = has_trait_or_ability(stats, ability_icon);
             let mut icon_passed = false;
 
-            let ability_def = ENEMY_ABILITY_REGISTRY.iter().find(|d| d.icon_id == icon_id);
+            let ability_def = ENEMY_ABILITY_REGISTRY.iter().find(|d| d.icon == ability_icon);
 
             if has_inherent {
-                if let Some(adv_map) = filter.adv_ranges.get(&icon_id) {
+                if let Some(adv_map) = filter.adv_ranges.get(&ability_icon) {
                     let mut build_passed_all_attrs = true;
                     
-                    // Dynamically generates the ability vector
                     let attrs = ability_def.map(|def| (def.get_attributes)(stats)).unwrap_or_default();
                     
                     for (attr, range) in adv_map {
-                        // Blindly pulls the requested stat from the vector
                         let mut val = attrs.iter()
                             .find(|(k, _, _)| k == attr)
                             .map(|(_, v, _)| *v)

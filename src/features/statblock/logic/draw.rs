@@ -53,14 +53,18 @@ pub fn get_icon_image(
 ) -> RgbaImage {
     let mut icon = if item.custom_icon != CustomIcon::None {
         custom_assets.get(&item.custom_icon).cloned().unwrap_or_else(|| RgbaImage::new(export_size, export_size))
-    } else if let Some(cut) = cuts_map.get(&item.icon_id) {
-        let px = (cut.uv_coordinates.min.x * img015_base.width() as f32).round() as u32;
-        let py = (cut.uv_coordinates.min.y * img015_base.height() as f32).round() as u32;
-        let pw = cut.original_size.x.round() as u32;
-        let ph = cut.original_size.y.round() as u32;
-        
-        if px + pw <= img015_base.width() && py + ph <= img015_base.height() {
-            image::imageops::crop_imm(img015_base, px, py, pw, ph).to_image()
+    } else if let Some(icon_id) = item.icon_id {
+        if let Some(cut) = cuts_map.get(&icon_id) {
+            let px = (cut.uv_coordinates.min.x * img015_base.width() as f32).round() as u32;
+            let py = (cut.uv_coordinates.min.y * img015_base.height() as f32).round() as u32;
+            let pw = cut.original_size.x.round() as u32;
+            let ph = cut.original_size.y.round() as u32;
+            
+            if px + pw <= img015_base.width() && py + ph <= img015_base.height() {
+                image::imageops::crop_imm(img015_base, px, py, pw, ph).to_image()
+            } else {
+                RgbaImage::new(export_size, export_size)
+            }
         } else {
             RgbaImage::new(export_size, export_size)
         }

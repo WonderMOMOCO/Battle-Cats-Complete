@@ -121,7 +121,7 @@ impl GlowRenderer {
             let pixels = &image.pixels;
             let mut data: Vec<u8> = Vec::with_capacity(pixels.len() * 4);
             
-            let gamma_value: f32 = 1.883;
+            let gamma_value: f32 = 1.9;
             let inverse_gamma = 1.0 / gamma_value;
             let to_linear = |byte_value: u8| -> f32 { (byte_value as f32 / 255.0).powf(gamma_value) };
             let to_monitor = |value: f32| -> u8 { (value.powf(inverse_gamma) * 255.0 + 0.5).clamp(0.0, 255.0) as u8 };

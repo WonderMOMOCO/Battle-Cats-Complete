@@ -5,15 +5,15 @@
       "extension": "png|imgcut",
       "handling": "Only",
       "languages": {
-        "de": true,
         "en": true,
+        "ja": true,
+        "tw": true,
+        "ko": true,
         "es": true,
+        "de": true,
         "fr": true,
         "it": true,
-        "ja": true,
-        "ko": true,
-        "th": true,
-        "tw": true
+        "th": true
       },
       "locked": false
     },
@@ -22,15 +22,15 @@
       "extension": "csv",
       "handling": "Only",
       "languages": {
-        "de": true,
         "en": true,
+        "ja": true,
+        "tw": true,
+        "ko": true,
         "es": true,
+        "de": true,
         "fr": true,
         "it": true,
-        "ja": true,
-        "ko": true,
-        "th": true,
-        "tw": true
+        "th": true
       },
       "locked": false
     },
@@ -39,100 +39,83 @@
       "extension": "png",
       "handling": "Only",
       "languages": {
-        "de": true,
         "en": true,
+        "ja": true,
+        "tw": true,
+        "ko": true,
         "es": true,
+        "de": true,
         "fr": true,
         "it": true,
-        "ja": true,
-        "ko": true,
-        "th": true,
-        "tw": true
+        "th": true
       },
       "locked": false
     },
     {
-      "pattern": "Enemyname",
+      "pattern": "Enemyname|localizable",
       "extension": "tsv",
       "handling": "Only",
       "languages": {
-        "de": true,
         "en": true,
+        "ja": true,
+        "tw": true,
+        "ko": true,
         "es": true,
+        "de": true,
         "fr": true,
         "it": true,
-        "ja": true,
-        "ko": true,
-        "th": true,
-        "tw": true
+        "th": true
       },
       "locked": false
-    },
-    {
-      "pattern": "enemy_icon_55[5789]",
-      "extension": "png",
-      "handling": "Include",
-      "languages": {
-        "de": false,
-        "en": false,
-        "es": false,
-        "fr": false,
-        "it": false,
-        "ja": false,
-        "ko": false,
-        "th": false,
-        "tw": false
-      },
-      "locked": true
-    },
-    {
-      "pattern": "(057|549)_e",
-      "extension": "png|imgcut|mamodel|maanim",
-      "handling": "Include",
-      "languages": {
-        "de": false,
-        "en": false,
-        "es": false,
-        "fr": false,
-        "it": false,
-        "ja": false,
-        "ko": false,
-        "th": false,
-        "tw": false
-      },
-      "locked": true
     },
     {
       "pattern": "497_[fc](0[0-3])?",
       "extension": "png|imgcut|mamodel|maanim",
       "handling": "Only",
       "languages": {
-        "de": false,
         "en": true,
+        "ja": false,
+        "tw": false,
+        "ko": false,
         "es": false,
+        "de": false,
         "fr": false,
         "it": false,
-        "ja": false,
-        "ko": false,
-        "th": false,
-        "tw": false
+        "th": false
       },
       "locked": false
     },
     {
-      "pattern": "(udi|uni|gatyachara_)?281_[fcz](00)?",
-      "extension": "png|imgcut|mamodel|maanim",
+      "pattern": "(udi|uni|gatyachara_)?(281|347)_[fcsz](00)?",
+      "extension": "png",
       "handling": "Only",
       "languages": {
-        "de": false,
         "en": false,
+        "ja": true,
+        "tw": false,
+        "ko": false,
         "es": false,
+        "de": false,
         "fr": false,
         "it": false,
-        "ja": true,
+        "th": false
+      },
+      "locked": false
+    },
+    {
+      "pattern": "(udi|uni|gatyachara_)?320_[fcsz](0[0-3])?",
+      "extension": "png|mamodel|imgcut|maanim",
+      "handling": "Only",
+      "languages": {
+        "en": false,
+        "ja": false,
+        "tw": true,
         "ko": false,
-        "th": false,
-        "tw": false
+        "es": false,
+        "de": false,
+        "fr": false,
+        "it": false,
+        "th": false
       },
       "locked": false
     },
@@ -141,15 +124,15 @@
       "extension": "png|imgcut|mamodel|maanim",
       "handling": "Only",
       "languages": {
-        "de": false,
         "en": true,
+        "ja": true,
+        "tw": true,
+        "ko": true,
         "es": false,
+        "de": false,
         "fr": false,
         "it": false,
-        "ja": true,
-        "ko": true,
-        "th": false,
-        "tw": true
+        "th": false
       },
       "locked": false
     },
@@ -158,15 +141,15 @@
       "extension": "png",
       "handling": "Include",
       "languages": {
-        "de": false,
         "en": false,
+        "ja": false,
+        "tw": true,
+        "ko": true,
         "es": false,
+        "de": false,
         "fr": false,
         "it": false,
-        "ja": false,
-        "ko": true,
-        "th": false,
-        "tw": true
+        "th": false
       },
       "locked": false
     },
@@ -177,8 +160,13 @@
       "languages": {
         "en": true,
         "ja": true,
+        "tw": true,
         "ko": true,
-        "tw": true
+        "es": false,
+        "de": false,
+        "fr": false,
+        "it": false,
+        "th": false
       },
       "locked": false
     },
@@ -189,8 +177,13 @@
       "languages": {
         "en": true,
         "ja": true,
+        "tw": true,
         "ko": true,
-        "tw": true
+        "es": false,
+        "de": false,
+        "fr": false,
+        "it": false,
+        "th": false
       },
       "locked": false
     },
@@ -199,7 +192,15 @@
       "extension": "png|imgcut",
       "handling": "Include",
       "languages": {
-        "ja": true
+        "en": false,
+        "ja": true,
+        "tw": false,
+        "ko": false,
+        "es": false,
+        "de": false,
+        "fr": false,
+        "it": false,
+        "th": false
       },
       "locked": false
     },
@@ -208,15 +209,15 @@
       "extension": "png|imgcut",
       "handling": "Only",
       "languages": {
-        "de": false,
         "en": false,
+        "ja": true,
+        "tw": false,
+        "ko": false,
         "es": false,
+        "de": false,
         "fr": false,
         "it": false,
-        "ja": true,
-        "ko": false,
-        "th": false,
-        "tw": false
+        "th": false
       },
       "locked": false
     },
@@ -225,15 +226,15 @@
       "extension": "png|imgcut",
       "handling": "Only",
       "languages": {
-        "de": false,
         "en": true,
+        "ja": true,
+        "tw": true,
+        "ko": true,
         "es": false,
+        "de": false,
         "fr": false,
         "it": false,
-        "ja": true,
-        "ko": true,
-        "th": false,
-        "tw": true
+        "th": false
       },
       "locked": false
     },
@@ -242,8 +243,15 @@
       "extension": "png|imgcut|mamodel|maanim",
       "handling": "Include",
       "languages": {
+        "en": false,
         "ja": true,
-        "tw": true
+        "tw": true,
+        "ko": false,
+        "es": false,
+        "de": false,
+        "fr": false,
+        "it": false,
+        "th": false
       },
       "locked": false
     },
@@ -252,10 +260,51 @@
       "extension": "png",
       "handling": "Include",
       "languages": {
+        "en": false,
         "ja": true,
-        "tw": true
+        "tw": true,
+        "ko": false,
+        "es": false,
+        "de": false,
+        "fr": false,
+        "it": false,
+        "th": false
       },
       "locked": false
+    },
+    {
+      "pattern": "enemy_icon_55[5789]",
+      "extension": "png",
+      "handling": "Include",
+      "languages": {
+        "en": false,
+        "ja": false,
+        "tw": false,
+        "ko": false,
+        "es": false,
+        "de": false,
+        "fr": false,
+        "it": false,
+        "th": false
+      },
+      "locked": true
+    },
+    {
+      "pattern": "(057|549)_e",
+      "extension": "png|imgcut|mamodel|maanim",
+      "handling": "Include",
+      "languages": {
+        "en": false,
+        "ja": false,
+        "tw": false,
+        "ko": false,
+        "es": false,
+        "de": false,
+        "fr": false,
+        "it": false,
+        "th": false
+      },
+      "locked": true
     }
   ]
 }

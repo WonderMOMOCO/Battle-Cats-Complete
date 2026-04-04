@@ -5,12 +5,13 @@ use crate::features::cat::logic::abilities;
 use crate::global::formats::imgcut::SpriteSheet;
 use crate::features::settings::logic::Settings;
 use crate::global::ui::shared::{render_fallback_icon, text_with_superscript};
-use crate::global::game::img015;
 use crate::features::cat::data::skillacquisition::TalentRaw;
 use std::collections::HashMap;
 use crate::global::game::abilities::{ABILITY_X, ABILITY_Y, TRAIT_Y};
-use crate::global::game::abilities::AbilityItem;
+use crate::global::game::abilities::{AbilityItem, CustomIcon};
 use crate::global::assets::CustomAssets;
+use crate::features::cat::registry::AbilityIcon;
+use crate::global::game::img015;
 
 pub fn render(
     ui: &mut egui::Ui, 
@@ -101,29 +102,37 @@ fn render_single_icon(
 ) -> egui::Response {
     let size = egui::vec2(stats::ICON_SIZE, stats::ICON_SIZE);
 
-    let custom_texture = item.custom_icon.get_texture(assets);
-
-    if let Some(tex) = custom_texture {
+    // Try Custom Icon first
+    if let Some(tex) = item.custom_icon.get_texture(assets) {
         return ui.add(egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)));
     }
 
-    for sheet in sheets {
-        if let Some(cut) = sheet.cuts_map.get(&item.icon_id) {
-            if let Some(tex) = &sheet.texture_handle {
-                 let response = ui.add(egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)).uv(cut.uv_coordinates));
-                 if let Some(border_id) = item.border_id {
-                     if let Some(b_cut) = sheet.cuts_map.get(&border_id) {
-                         ui.put(response.rect, egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)).uv(b_cut.uv_coordinates));
+    // Cascade through available language sheets for Standard Icons
+    if let Some(icon_id) = item.icon_id {
+        for sheet in sheets {
+            if let Some(cut) = sheet.cuts_map.get(&icon_id) {
+                if let Some(tex) = &sheet.texture_handle {
+                     let response = ui.add(egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)).uv(cut.uv_coordinates));
+                     if let Some(border_id) = item.border_id {
+                         if let Some(b_cut) = sheet.cuts_map.get(&border_id) {
+                             ui.put(response.rect, egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)).uv(b_cut.uv_coordinates));
+                         }
                      }
-                 }
-                 return response;
-            } else if sheet.is_loading_active {
-                 return ui.allocate_response(size, egui::Sense::hover());
+                     return response;
+                } else if sheet.is_loading_active {
+                     return ui.allocate_response(size, egui::Sense::hover());
+                }
             }
         }
     }
 
-    let alt = crate::features::cat::registry::get_fallback_by_icon(item.icon_id);
+    let icon_enum = if item.custom_icon != CustomIcon::None {
+        AbilityIcon::Custom(item.custom_icon)
+    } else {
+        AbilityIcon::Standard(item.icon_id.unwrap_or(9999)) 
+    };
+
+    let alt = crate::features::cat::registry::get_fallback_by_icon(icon_enum);
     render_fallback_icon(ui, alt, border)
 }
 
@@ -140,7 +149,7 @@ pub fn render_list_view(
     border_color: egui::Color32,
 ) {
     for (i, item) in items.iter().enumerate() {
-        let is_conjure = item.icon_id == img015::ICON_CONJURE;
+        let is_conjure = item.icon_id == Some(img015::ICON_CONJURE) && item.custom_icon == CustomIcon::None;
         let id = egui::Id::new(format!("conjure_expand_{}", cat_id));
         
         ui.horizontal(|ui| {
@@ -150,138 +159,18 @@ pub fn render_list_view(
             if !is_conjure {
                 text_with_superscript(ui, &item.text);
             } else {
-                render_conjure_toggle(ui, &item.text, id, settings);
+                crate::features::cat::ui::conjure::render_conjure_toggle(ui, &item.text, id, settings);
             }
         }); 
 
         let expanded = ui.data(|d| d.get_temp::<bool>(id).unwrap_or(settings.cat_data.expand_spirit_details));
         if is_conjure && expanded {
             ui.add_space(ABILITY_Y);
-            render_conjure_details(ui, s, current_level, curve, sheets, assets, settings);
+            crate::features::cat::ui::conjure::render_conjure_details(ui, s, current_level, curve, sheets, assets, settings);
         }
         
         if i < items.len() - 1 {
             ui.add_space(ABILITY_Y);
         }
     }
-}
-
-fn render_conjure_toggle(ui: &mut egui::Ui, text: &str, id: egui::Id, settings: &Settings) {
-    ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-        ui.spacing_mut().item_spacing.x = 7.0;
-        let mut expanded = ui.data(|d| d.get_temp::<bool>(id).unwrap_or(settings.cat_data.expand_spirit_details));
-        text_with_superscript(ui, text);
-        let btn_text = egui::RichText::new("Details").size(11.0);
-        let btn = if expanded {
-            egui::Button::new(btn_text.color(egui::Color32::WHITE)).fill(egui::Color32::from_rgb(0, 100, 200))
-        } else {
-            egui::Button::new(btn_text)
-        };
-
-        if ui.add(btn).clicked() {
-            expanded = !expanded;
-            ui.data_mut(|d| d.insert_temp(id, expanded));
-        }
-    });
-}
-
-fn render_conjure_details(
-    ui: &mut egui::Ui,
-    parent_stats: &CatRaw,
-    level: i32,
-    curve: Option<&stats::CatLevelCurve>,
-    sheets: &[SpriteSheet],
-    assets: &CustomAssets,
-    settings: &Settings
-) {
-    egui::Frame::none()
-        .fill(egui::Color32::from_black_alpha(220)) 
-        .rounding(egui::Rounding { nw: 0.0, ne: 0.0, sw: 8.0, se: 8.0 }) 
-        .inner_margin(8.0)
-        .show(ui, |ui| {
-            ui.spacing_mut().item_spacing.y = 0.0;
-            let spirit_border = egui::Color32::WHITE;
-            
-            let conjure_stats_vec = match stats::load_from_id(parent_stats.conjure_unit_id, &settings.general.language_priority) {
-                Some(s) => s,
-                None => {
-                    ui.label(egui::RichText::new("Spirit data not found").weak());
-                    return;
-                }
-            };
-
-            let conjure_stats = match conjure_stats_vec.first() {
-                Some(s) => s,
-                None => return,
-            };
-
-            let conjure_final = crate::features::cat::logic::stats::get_final_stats(
-                conjure_stats, curve, level, None, None
-            );
-
-            let dmg = conjure_final.attack_1;
-            
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = 8.0;
-                let icon = img015::ICON_AREA_ATTACK;
-                let size = egui::vec2(stats::ICON_SIZE, stats::ICON_SIZE);
-                
-                let mut drawn = false;
-                for sheet in sheets {
-                    if let Some(cut) = sheet.cuts_map.get(&icon) {
-                        if let Some(tex) = &sheet.texture_handle {
-                             ui.add(egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)).uv(cut.uv_coordinates));
-                             drawn = true;
-                             break;
-                        }
-                    }
-                }
-                if !drawn {
-                    let alt = crate::features::cat::registry::get_fallback_by_icon(icon);
-                    render_fallback_icon(ui, alt, spirit_border);
-                }
-                ui.label(format!("Damage: {}\nRange: {}", dmg, conjure_final.standing_range));
-            });
-            
-            ui.add_space(ABILITY_Y);
-
-            let (spirit_traits, spirit_head_1, spirit_head_2, spirit_body_1, spirit_body_2, spirit_footer) = abilities::collect_ability_data(
-                &conjure_final, conjure_stats, level, curve, settings, true, None, None  
-            );
-            
-            let mut prev = false;
-            let mut last_was_trait = false;
-
-            if !spirit_traits.is_empty() { 
-                render_icon_row(ui, &spirit_traits, sheets, settings, spirit_border, assets); 
-                prev = true;
-                last_was_trait = true;
-            }
-
-            if !spirit_head_1.is_empty() { 
-                if prev { ui.add_space(if last_was_trait { TRAIT_Y } else { ABILITY_Y }); last_was_trait = false; }
-                render_icon_row(ui, &spirit_head_1, sheets, settings, spirit_border, assets); 
-                prev = true;
-            }
-
-            if !spirit_head_2.is_empty() { 
-                if prev { ui.add_space(if last_was_trait { TRAIT_Y } else { ABILITY_Y }); last_was_trait = false; }
-                render_icon_row(ui, &spirit_head_2, sheets, settings, spirit_border, assets); 
-                prev = true;
-            }
-            
-            let has_body = !spirit_body_1.is_empty() || !spirit_body_2.is_empty();
-            if has_body {
-                if prev { ui.add_space(if last_was_trait { TRAIT_Y } else { ABILITY_Y }); last_was_trait = false; }
-                render_list_view(ui, &spirit_body_1, sheets, assets, 0, level, curve, &conjure_final, settings, spirit_border);
-                if !spirit_body_1.is_empty() && !spirit_body_2.is_empty() { ui.add_space(ABILITY_Y); }
-                render_list_view(ui, &spirit_body_2, sheets, assets, 0, level, curve, &conjure_final, settings, spirit_border);
-                prev = true;
-            }
-            
-            if !spirit_footer.is_empty() {
-                if prev { ui.add_space(if last_was_trait { TRAIT_Y } else { ABILITY_Y }); }
-                render_icon_row(ui, &spirit_footer, sheets, settings, spirit_border, assets);
-            }
-        });
 }

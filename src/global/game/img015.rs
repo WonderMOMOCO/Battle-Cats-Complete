@@ -100,21 +100,11 @@ pub const ICON_SUPERVILLIAN: usize = 384;
 pub const ICON_RESIST_EXPLOSION: usize = 386;
 pub const ICON_CUT_COOLDOWN: usize = 389;
 
-// Mock IDs For Custom Assets
-pub const ICON_STOP: usize = 9992;
-pub const ICON_DOJO: usize = 9993;
-pub const ICON_STARRED_ALIEN: usize = 9994;
-pub const ICON_BURROW: usize = 9995;
-pub const ICON_REVIVE: usize = 9996;
-pub const ICON_IMMUNE_BOSS_WAVE: usize = 9997;
-pub const ICON_KAMIKAZE: usize = 9998;
-pub const ICON_MULTIHIT: usize = 9999;
-
 pub fn ensure_loaded(ctx: &egui::Context, sheets: &mut Vec<SpriteSheet>, settings: &Settings) {
     let base_dir = paths::img015_folder(std::path::Path::new(""));
     
-    let png_paths = crate::global::resolver::get(&base_dir, "img015.png", &settings.general.language_priority);
-    let cut_paths = crate::global::resolver::get(&base_dir, "img015.imgcut", &settings.general.language_priority);
+    let png_paths = crate::global::resolver::get(&base_dir, &["img015.png"], &settings.general.language_priority);
+    let cut_paths = crate::global::resolver::get(&base_dir, &["img015.imgcut"], &settings.general.language_priority);
 
     if sheets.len() != png_paths.len() {
         sheets.resize_with(png_paths.len(), SpriteSheet::default);

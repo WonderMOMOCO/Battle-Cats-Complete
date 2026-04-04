@@ -50,10 +50,7 @@ pub fn start_scan(config: ScannerConfig) -> Receiver<EnemyEntry> {
         let t_unit_parent = t_unit_p.parent().unwrap();
         let t_unit_name = t_unit_p.file_name().unwrap().to_str().unwrap();
         
-        let resolved_t_unit = crate::global::resolver::get(t_unit_parent, t_unit_name, priority)
-            .into_iter().next();
-
-        let Some(raw_enemies) = resolved_t_unit.and_then(|p| t_unit::load_all(&p)) else { return; };
+        let Some(raw_enemies) = t_unit::load_all(t_unit_parent, t_unit_name, priority) else { return; };
 
         // --- 2. Load Names & Descriptions (VFS Aware) ---
         let names = enemyname::load(root, priority);
@@ -66,7 +63,7 @@ pub fn start_scan(config: ScannerConfig) -> Receiver<EnemyEntry> {
             let icon_p = paths::icon(root, id_u32);
             let mut resolved_icon = None;
             if let (Some(parent), Some(name)) = (icon_p.parent(), icon_p.file_name().and_then(|n| n.to_str())) {
-                resolved_icon = crate::global::resolver::get(parent, name, priority).into_iter().next();
+                resolved_icon = crate::global::resolver::get(parent, &[name], priority).into_iter().next();
             }
 
             if let Some(ref p) = resolved_icon {
@@ -79,7 +76,7 @@ pub fn start_scan(config: ScannerConfig) -> Receiver<EnemyEntry> {
             let mut atk_anim_frames = 0;
             let atk_p = paths::maanim(root, id_u32, 2);
             if let (Some(parent), Some(name)) = (atk_p.parent(), atk_p.file_name().and_then(|n| n.to_str())) {
-                if let Some(resolved_atk) = crate::global::resolver::get(parent, name, priority).into_iter().next() {
+                if let Some(resolved_atk) = crate::global::resolver::get(parent, &[name], priority).into_iter().next() {
                     if let Ok(bytes) = fs::read(&resolved_atk) {
                         let content = String::from_utf8_lossy(&bytes);
                         let duration = Animation::scan_duration(&content);
@@ -107,10 +104,7 @@ pub fn scan_single(id: u32, config: &ScannerConfig) -> Option<EnemyEntry> {
     
     // Resolve t_unit.csv
     let t_unit_p = paths::stats(root);
-    let resolved_t_unit = crate::global::resolver::get(t_unit_p.parent().unwrap(), t_unit_p.file_name().unwrap().to_str().unwrap(), priority)
-        .into_iter().next()?;
-    
-    let raw_enemies = t_unit::load_all(&resolved_t_unit)?;
+    let raw_enemies = t_unit::load_all(t_unit_p.parent().unwrap(), t_unit_p.file_name().unwrap().to_str().unwrap(), priority)?;
     let stats = raw_enemies.get(id as usize)?.clone();
 
     let name = enemyname::load(root, priority).get(id as usize).cloned().unwrap_or_default();
@@ -120,13 +114,13 @@ pub fn scan_single(id: u32, config: &ScannerConfig) -> Option<EnemyEntry> {
     let icon_p = paths::icon(root, id);
     let mut resolved_icon = None;
     if let (Some(parent), Some(name)) = (icon_p.parent(), icon_p.file_name().and_then(|n| n.to_str())) {
-        resolved_icon = crate::global::resolver::get(parent, name, priority).into_iter().next();
+        resolved_icon = crate::global::resolver::get(parent, &[name], priority).into_iter().next();
     }
 
     // Resolve Attack Animations
     let mut atk_anim_frames = 0;
     let atk_p = paths::maanim(root, id, 2);
-    let resolved_atk = crate::global::resolver::get(atk_p.parent().unwrap(), atk_p.file_name().unwrap().to_str().unwrap(), priority).into_iter().next();
+    let resolved_atk = crate::global::resolver::get(atk_p.parent().unwrap(), &[atk_p.file_name().unwrap().to_str().unwrap()], priority).into_iter().next();
     
     if let Some(p) = resolved_atk {
         if let Ok(bytes) = fs::read(&p) {

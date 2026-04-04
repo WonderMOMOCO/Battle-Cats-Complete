@@ -11,6 +11,7 @@ use crate::features::cat::logic::talents;
 use crate::features::cat::paths;
 use crate::features::cat::data::skilllevel::TalentCost;
 use crate::global::ui::shared::render_fallback_icon;
+use crate::global::assets::CustomAssets;
 
 pub const TALENT_NP_ICON_SIZE: f32 = 20.0;
 pub const TALENT_NP_TEXT_SIZE: f32 = 18.0;
@@ -31,6 +32,7 @@ pub fn render(
     talent_levels: &mut HashMap<u8, u8>, 
     cat_id: u32,                         
     talent_costs: &HashMap<u8, TalentCost>,
+    assets: &CustomAssets,
 ) {
     ui.add_space(5.0);
     
@@ -58,7 +60,8 @@ pub fn render(
                         unit_level, 
                         talent_levels, 
                         sidebar_pad,
-                        talent_costs
+                        talent_costs,
+                        assets
                     );
                 }
             });
@@ -81,6 +84,7 @@ fn render_talent_group(
     talent_levels: &mut HashMap<u8, u8>,
     sidebar_pad: f32,
     talent_costs: &HashMap<u8, TalentCost>,
+    assets: &CustomAssets,
 ) {
     let bg_color = if group.limit == 1 {
         egui::Color32::from_rgb(120, 20, 20) 
@@ -102,7 +106,7 @@ fn render_talent_group(
             ui.set_width(target_width.max(10.0));
 
             ui.vertical(|ui| {
-                if render_header(ui, group, sheets, name_cache, settings, expanded) {
+                if render_header(ui, group, sheets, name_cache, settings, expanded, assets) {
                     expanded = !expanded;
                     ui.data_mut(|d| d.insert_temp(id, expanded));
                 }
@@ -132,7 +136,8 @@ fn render_header(
     sheets: &[SpriteSheet],
     name_cache: &mut HashMap<String, egui::TextureHandle>,
     settings: &Settings,
-    expanded: bool
+    expanded: bool,
+    assets: &CustomAssets,
 ) -> bool {
     let mut toggle_clicked = false;
 
@@ -142,17 +147,29 @@ fn render_header(
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 8.0;
             
-            if let Some(def) = crate::features::cat::registry::get_by_talent_id(group.ability_id) {
+            let def_opt = crate::features::cat::registry::get_by_talent_id(group.ability_id);
+            
+            if let Some(def) = &def_opt {
                 let size = egui::vec2(40.0, 40.0);
                 
                 let mut drawn = false;
                 
-                for sheet in sheets {
-                    if let Some(cut) = sheet.cuts_map.get(&def.icon_id) {
-                        if let Some(tex) = &sheet.texture_handle {
-                            ui.add(egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)).uv(cut.uv_coordinates));
+                match &def.icon {
+                    crate::features::cat::registry::AbilityIcon::Custom(custom) => {
+                        if let Some(tex) = custom.get_texture(assets) {
+                            ui.add(egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)));
                             drawn = true;
-                            break;
+                        }
+                    },
+                    crate::features::cat::registry::AbilityIcon::Standard(icon_id) => {
+                        for sheet in sheets {
+                            if let Some(cut) = sheet.cuts_map.get(icon_id) {
+                                if let Some(tex) = &sheet.texture_handle {
+                                    ui.add(egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)).uv(cut.uv_coordinates));
+                                    drawn = true;
+                                    break;
+                                }
+                            }
                         }
                     }
                 }
@@ -161,11 +178,22 @@ fn render_header(
                     render_fallback_icon(ui, def.fallback, egui::Color32::BLACK);
                 }
             } else {
-                ui.label(egui::RichText::new("?").weak());
+                ui.label(egui::RichText::new("?").weak().size(24.0));
             }
 
             if let Some(texture) = get_or_load_skill_name(ui, group, settings, name_cache) {
                 ui.image((texture.id(), texture.size_vec2()));
+            } else {
+                let fallback_text = match &def_opt {
+                    Some(def) => format!("{}", def.name),
+                    None => format!("Unknown Skill (ID: {})", group.ability_id),
+                };
+                ui.label(
+                    egui::RichText::new(fallback_text)
+                        .strong()
+                        .size(18.0)
+                        .color(egui::Color32::WHITE)
+                );
             }
         });
 
@@ -341,5 +369,5 @@ fn get_or_load_skill_name(
 fn find_skill_image_path(image_id: i16, settings: &Settings) -> Option<PathBuf> {
     let dir = Path::new(paths::DIR_SKILL_NAME);
     let base_filename = format!("Skill_name_{:03}.png", image_id);
-    crate::global::get(dir, &base_filename, &settings.general.language_priority).into_iter().next()
+    crate::global::get(dir, &[base_filename.as_str()], &settings.general.language_priority).into_iter().next()
 }

@@ -5,6 +5,7 @@ use crate::features::cat::patterns;
 pub struct CatMatcher {
     universal: Regex,
     skill_desc: Regex,
+    skill_name: Regex,
     stats: Regex,
     icon: Regex,
     upgrade: Regex,
@@ -22,8 +23,9 @@ pub struct CatMatcher {
 impl CatMatcher {
     pub fn new() -> Self {
         Self {
-            universal: Regex::new(patterns::CAT_UNIVERSAL_PATTERN).unwrap(),
+            universal: Regex::new(patterns::CAT_EVOLVE_PATTERN).unwrap(),
             skill_desc: Regex::new(patterns::SKILL_DESC_PATTERN).unwrap(),
+            skill_name: Regex::new(patterns::SKILL_NAME_PATTERN).unwrap(),
             stats: Regex::new(patterns::CAT_STATS_PATTERN).unwrap(),
             icon: Regex::new(patterns::CAT_ICON_PATTERN).unwrap(),
             upgrade: Regex::new(patterns::CAT_UPGRADE_PATTERN).unwrap(),
@@ -51,6 +53,9 @@ impl CatMatcher {
     pub fn get_dest(&self, name: &str, cats_dir: &Path) -> Option<PathBuf> {
         if self.skill_desc.is_match(name) {
             return Some(cats_dir.join("SkillDescriptions"));
+        }
+        if self.skill_name.is_match(name) {
+            return Some(cats_dir.join("Skill_name"));
         }
         if self.universal.is_match(name) {
             return Some(cats_dir.join("unitevolve"));

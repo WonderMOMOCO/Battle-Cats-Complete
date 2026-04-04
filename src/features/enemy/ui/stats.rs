@@ -1,9 +1,9 @@
 use eframe::egui;
 use crate::features::enemy::logic::scanner::EnemyEntry;
 use crate::global::ui::stat_grid::{grid_cell, grid_cell_custom, render_frames};
-use crate::features::enemy::registry::{get_enemy_stat, format_enemy_stat};
+use crate::features::enemy::registry::{get_enemy_stat, format_enemy_stat, Magnification};
 
-pub fn render(ui: &mut egui::Ui, enemy: &EnemyEntry, magnification: i32) {
+pub fn render(ui: &mut egui::Ui, enemy: &EnemyEntry, magnification: Magnification) {
     let stats = &enemy.stats;
     let frames = enemy.atk_anim_frames;
 

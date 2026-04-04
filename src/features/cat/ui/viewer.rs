@@ -32,7 +32,7 @@ pub fn show(
         let parent = p.parent().unwrap();
         let name = p.file_name().and_then(|n| n.to_str()).unwrap();
 
-        if let Some(resolved) = crate::global::get(parent, name, priority).into_iter().next() {
+        if let Some(resolved) = crate::global::get(parent, &[name], priority).into_iter().next() {
             available_anims.push((idx, resolved));
         }
     }
@@ -40,7 +40,7 @@ pub fn show(
     let resolve = |p: PathBuf| {
         let parent = p.parent()?;
         let name = p.file_name()?.to_str()?;
-        crate::global::get(parent, name, priority).into_iter().next()
+        crate::global::get(parent, &[name], priority).into_iter().next()
     };
     
     let primary_assets = (|| {

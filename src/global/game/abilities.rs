@@ -35,7 +35,7 @@ impl CustomIcon {
 
 #[derive(Clone, Debug)]
 pub struct AbilityItem {
-    pub icon_id: usize,
+    pub icon_id: Option<usize>,
     pub text: String,
     pub custom_icon: CustomIcon,
     pub border_id: Option<usize>,

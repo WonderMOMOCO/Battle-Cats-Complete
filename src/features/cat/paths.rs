@@ -13,7 +13,7 @@ pub const DIR_ANIM: &str = "anim";
 pub const DIR_LANG: &str = "lang";
 pub const DIR_UNIT_EVOLVE: &str = "unitevolve";
 pub const DIR_SKILL_DESCRIPTIONS: &str = "SkillDescriptions";
-pub const DIR_SKILL_NAME: &str = "game/assets/Skill_name"; 
+pub const DIR_SKILL_NAME: &str = "game/cats/Skill_name"; 
 
 // Asset Constants
 pub const FALLBACK_ICON: &str = "game/cats/uni.png"; 

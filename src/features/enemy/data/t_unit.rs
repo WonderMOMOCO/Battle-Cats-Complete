@@ -71,8 +71,8 @@ pub struct EnemyRaw {
     pub barrier_hitpoints: i32,
     pub warp_chance: i32,
     pub warp_duration: i32,
-    pub warp_distance_min: i32,
-    pub warp_distance_max: i32,
+    pub warp_distance_minimum: i32,
+    pub warp_distance_maximum: i32,
     pub type_starred_alien: i32,
     pub warp_immune: i32,
     pub type_eva: i32,
@@ -136,12 +136,10 @@ impl EnemyRaw {
     }
 }
 
-pub fn load_all(t_unit_path: &Path) -> Option<Vec<EnemyRaw>> {
-    if !t_unit_path.exists() {
-        return None;
-    }
-
-    let file_content = fs::read_to_string(t_unit_path).ok()?;
+pub fn load_all(dir: &Path, filename: &str, priority: &[String]) -> Option<Vec<EnemyRaw>> {
+    let path = crate::global::resolver::get(dir, &[filename], priority).into_iter().next()?;
+    
+    let file_content = fs::read_to_string(path).ok()?;
     let mut enemies = Vec::new();
 
     for line in file_content.lines().skip(2) {
@@ -224,8 +222,8 @@ pub fn load_all(t_unit_path: &Path) -> Option<Vec<EnemyRaw>> {
             barrier_hitpoints: get_int(64),
             warp_chance: get_int(65),
             warp_duration: get_int(66),
-            warp_distance_min: get_int(67),
-            warp_distance_max: get_int(68),
+            warp_distance_minimum: get_int(67) / 4,
+            warp_distance_maximum: get_int(68) / 4,
             type_starred_alien: get_int(69),
             warp_immune: get_int(70),
             type_eva: get_int(71),

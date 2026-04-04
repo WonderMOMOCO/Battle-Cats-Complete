@@ -10,22 +10,32 @@ pub fn set_active_mod(mod_name: Option<String>) {
     }
 }
 
-// Finds every valid version of a file in priority order.
-pub fn get(dir: &Path, filename: &str, priority: &[String]) -> Vec<PathBuf> {
+// Finds every valid version of the provided filenames in priority order
+// Accepts a single string, an array of strings, a Vec of strings, etc.
+pub fn get<I, S>(dir: &Path, filenames: I, priority: &[String]) -> Vec<PathBuf> 
+where 
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    // Collect the generic iterator into a Vec so we can loop over it multiple times safely
+    let names: Vec<String> = filenames.into_iter().map(|s| s.as_ref().to_string()).collect();
+    
     let mut targets = Vec::new();
     for code in priority {
         if code == "--" { break; }
         
-        if code.is_empty() {
-            targets.push(filename.to_string());
-        } else if let Some(name) = build_regional_name(filename, code) {
-            targets.push(name);
+        for filename in &names {
+            if code.is_empty() {
+                targets.push(filename.clone());
+            } else if let Some(name) = build_regional_name(filename, code) {
+                targets.push(name);
+            }
         }
     }
 
     let mut paths = Vec::new();
 
-    // Check ALL Mod variants in priority order
+    // Check ALL Mod variants in priority order BEFORE touching base files
     for target in &targets {
         if let Some(p) = check_mod_override(target) {
             paths.push(p);

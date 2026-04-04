@@ -80,8 +80,8 @@ pub fn start_scan(config: ScannerConfig) -> Receiver<CatEntry> {
         let priority = &config.language_priority;
 
         // --- GLOBAL EXISTENCE CHECK ---
-        let unitbuy_resolved = crate::global::resolver::get(cats_directory, paths::UNIT_BUY, priority).into_iter().next();
-        let unitlevel_resolved = crate::global::resolver::get(cats_directory, paths::UNIT_LEVEL, priority).into_iter().next();
+        let unitbuy_resolved = crate::global::resolver::get(cats_directory, &[paths::UNIT_BUY], priority).into_iter().next();
+        let unitlevel_resolved = crate::global::resolver::get(cats_directory, &[paths::UNIT_LEVEL], priority).into_iter().next();
         
         if unitbuy_resolved.is_none() || unitlevel_resolved.is_none() {
             // Essential base files missing. Abort entirely.
@@ -128,8 +128,8 @@ pub fn scan_single(id: u32, config: &ScannerConfig) -> Option<CatEntry> {
     let cats_directory = Path::new(paths::DIR_CATS);
     let priority = &config.language_priority;
 
-    let unitbuy_resolved = crate::global::resolver::get(cats_directory, paths::UNIT_BUY, priority).into_iter().next();
-    let unitlevel_resolved = crate::global::resolver::get(cats_directory, paths::UNIT_LEVEL, priority).into_iter().next();
+    let unitbuy_resolved = crate::global::resolver::get(cats_directory, &[paths::UNIT_BUY], priority).into_iter().next();
+    let unitlevel_resolved = crate::global::resolver::get(cats_directory, &[paths::UNIT_LEVEL], priority).into_iter().next();
     if unitbuy_resolved.is_none() || unitlevel_resolved.is_none() { return None; }
 
     let curves = unitlevel::load_level_curves(cats_directory, priority);
@@ -165,7 +165,7 @@ pub fn process_cat_entry(
     let stats_path = paths::stats(cats_root_dir, cat_id);
     let stats_parent = stats_path.parent().unwrap();
     let stats_name = stats_path.file_name().unwrap().to_str().unwrap();
-    let resolved_stats = crate::global::resolver::get(stats_parent, stats_name, priority).into_iter().next();
+    let resolved_stats = crate::global::resolver::get(stats_parent, &[stats_name], priority).into_iter().next();
 
     if !config.show_invalid && resolved_stats.is_none() {
         return None;
@@ -185,23 +185,23 @@ pub fn process_cat_entry(
         // Resolve Banner (udi)
         let banner_stem = paths::image_stem(paths::AssetType::Banner, cat_id, form_idx, egg_ids);
         let banner_name = format!("{}.png", banner_stem);
-        let mut resolved_banner = crate::global::resolver::get(&dir, &banner_name, priority).into_iter().next();
+        let mut resolved_banner = crate::global::resolver::get(&dir, &[banner_name.as_str()], priority).into_iter().next();
         
         if resolved_banner.is_none() && form_idx == 1 && egg_ids.1 != -1 {
             let fallback_stem = format!("udi{:03}_m00", egg_ids.1);
             let fallback_name = format!("{}.png", fallback_stem);
-            resolved_banner = crate::global::resolver::get(&dir, &fallback_name, priority).into_iter().next();
+            resolved_banner = crate::global::resolver::get(&dir, &[fallback_name.as_str()], priority).into_iter().next();
         }
 
         // Resolve Icon (uni) - Loaded for UI, but does not dictate existence
         let icon_stem = paths::image_stem(paths::AssetType::Icon, cat_id, form_idx, egg_ids);
         let icon_name = format!("{}.png", icon_stem);
-        let mut resolved_icon = crate::global::resolver::get(&dir, &icon_name, priority).into_iter().next();
+        let mut resolved_icon = crate::global::resolver::get(&dir, &[icon_name.as_str()], priority).into_iter().next();
 
         if resolved_icon.is_none() && form_idx == 1 && egg_ids.1 != -1 {
             let fallback_stem = format!("uni{:03}_m00", egg_ids.1);
             let fallback_name = format!("{}.png", fallback_stem);
-            resolved_icon = crate::global::resolver::get(&dir, &fallback_name, priority).into_iter().next();
+            resolved_icon = crate::global::resolver::get(&dir, &[fallback_name.as_str()], priority).into_iter().next();
         }
 
         let mut form_valid = false;
@@ -232,12 +232,12 @@ pub fn process_cat_entry(
             let dir = paths::folder(cats_root_dir, cat_id, form_idx, egg_ids);
             let banner_stem = paths::image_stem(paths::AssetType::Banner, cat_id, form_idx, egg_ids);
             let banner_name = format!("{}.png", banner_stem);
-            let mut b = crate::global::resolver::get(&dir, &banner_name, priority).into_iter().next();
+            let mut b = crate::global::resolver::get(&dir, &[banner_name.as_str()], priority).into_iter().next();
             
             if b.is_none() && form_idx == 1 && egg_ids.1 != -1 {
                 let fallback_stem = format!("udi{:03}_m00", egg_ids.1);
                 let fallback_name = format!("{}.png", fallback_stem);
-                b = crate::global::resolver::get(&dir, &fallback_name, priority).into_iter().next();
+                b = crate::global::resolver::get(&dir, &[fallback_name.as_str()], priority).into_iter().next();
             }
             final_image_path_opt = b;
             break;
@@ -252,7 +252,7 @@ pub fn process_cat_entry(
         let parent = p.parent().unwrap();
         let name = p.file_name().and_then(|n| n.to_str()).unwrap();
 
-        if let Some(resolved) = crate::global::resolver::get(parent, name, priority).into_iter().next() {
+        if let Some(resolved) = crate::global::resolver::get(parent, &[name], priority).into_iter().next() {
             if let Ok(bytes) = fs::read(&resolved) {
                 let content = String::from_utf8_lossy(&bytes);
                 let duration = Animation::scan_duration(&content);
@@ -284,7 +284,7 @@ pub fn process_cat_entry(
     if lang_directory.exists() { search_dirs.insert(0, lang_directory); }
 
     for dir in search_dirs {
-        let resolved_paths = crate::global::resolver::get(&dir, &base_filename, priority);
+        let resolved_paths = crate::global::resolver::get(&dir, &[base_filename.as_str()], priority);
         for name_file_path in resolved_paths {
             if let Some(explanation) = unitexplanation::UnitExplanation::load(&name_file_path) {
                 for i in 0..4 {

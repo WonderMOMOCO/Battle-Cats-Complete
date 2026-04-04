@@ -134,7 +134,7 @@ fn build_statblock_image(
         }
         let mut w = 8.0 + 40.0 + 8.0 + max_line_w + 8.0; 
         
-        if item.icon_id == crate::global::game::img015::ICON_CONJURE {
+        if item.icon_id == Some(crate::global::game::img015::ICON_CONJURE) {
             if let Some(spirit) = &data.spirit_data {
                 let mut spirit_max = 0.0_f32;
                 
@@ -187,15 +187,15 @@ fn build_statblock_image(
 
     let img015_folder = crate::global::io::paths::img015_folder(Path::new(""));
         let mut img015_base = RgbaImage::new(1024, 1024);
-        if let Some(p) = crate::global::resolver::get(&img015_folder, "img015.png", priority).into_iter().next() {
+        if let Some(p) = crate::global::resolver::get(&img015_folder, &["img015.png"], priority).into_iter().next() {
             if let Ok(loaded) = image::open(&p) { img015_base = loaded.to_rgba8(); }
         }    
 
     // --- LOAD ALL CUSTOM ASSETS INTO A HASHMAP ---
     let mut custom_assets = HashMap::new();
     for (variant, bytes) in assets::CUSTOM_ICON_DATA {
-        if let Ok(img) = image::load_from_memory(bytes) {
-            custom_assets.insert(variant.clone(), img.to_rgba8());
+        if let Ok(loaded_img) = image::load_from_memory(bytes) {
+            custom_assets.insert(variant.clone(), loaded_img.to_rgba8());
         }
     }
     // === HEADER ===
@@ -403,7 +403,7 @@ fn build_statblock_image(
             y += (export_icon_size as i32).max(total_text_h);
 
             // --- SPIRIT CARD RENDER BLOCK ---
-            if item.icon_id == crate::global::game::img015::ICON_CONJURE {
+            if item.icon_id == Some(crate::global::game::img015::ICON_CONJURE) {
                 if let Some(spirit) = &data.spirit_data {
                     y += icon_gap_y; 
 
@@ -471,7 +471,7 @@ fn build_statblock_image(
                     let mut sy = y + 8 * scale;
                     let sx_abs = padding as i32 + 8 * scale;
 
-                    let area_item = AbilityItem { icon_id: crate::global::game::img015::ICON_AREA_ATTACK, border_id: None, custom_icon: CustomIcon::None, text: String::new() };
+                    let area_item = AbilityItem { icon_id: Some(crate::global::game::img015::ICON_AREA_ATTACK), border_id: None, custom_icon: CustomIcon::None, text: String::new() };
                     let area_icon = get_icon_image(&area_item, &cuts_map, &img015_base, &custom_assets, export_icon_size as u32);
                     image::imageops::overlay(img, &area_icon, sx_abs as i64, sy as i64);
 

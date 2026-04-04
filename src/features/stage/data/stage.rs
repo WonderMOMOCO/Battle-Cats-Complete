@@ -29,7 +29,7 @@ pub struct EnemyLine {
 }
 
 pub fn load(dir: &Path, filename: &str, priority: &[String]) -> Option<StageRaw> {
-    let paths = resolver::get(dir, filename, priority);
+    let paths = resolver::get(dir, &[filename], priority);
     let path = paths.first()?;
     let content = fs::read_to_string(path).ok()?;
     

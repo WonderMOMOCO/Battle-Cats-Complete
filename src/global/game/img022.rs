@@ -9,8 +9,8 @@ pub const ICON_NP_COST: usize = 97;
 pub fn ensure_loaded(ctx: &egui::Context, sheets: &mut Vec<SpriteSheet>, settings: &Settings) {
     let base_dir = paths::img022_folder(std::path::Path::new(""));
     
-    let png_paths = crate::global::resolver::get(&base_dir, "img022.png", &settings.general.language_priority);
-    let cut_paths = crate::global::resolver::get(&base_dir, "img022.imgcut", &settings.general.language_priority);
+    let png_paths = crate::global::resolver::get(&base_dir, &["img022.png"], &settings.general.language_priority);
+    let cut_paths = crate::global::resolver::get(&base_dir, &["img022.imgcut"], &settings.general.language_priority);
 
     if sheets.len() != png_paths.len() {
         sheets.resize_with(png_paths.len(), SpriteSheet::default);

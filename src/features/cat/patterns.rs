@@ -11,7 +11,7 @@ pub const CAT_CODE: &str = concat!(r"(\d{3})_", r"([fcsu])");
 
 // Cat file strings
 pub const CAT_STATS_PATTERN: &str = concat!(r"^unit", r"(\d{3})", r"\.csv$");
-pub const CAT_ICON_PATTERN: &str = concat!(r"^uni", r"(\d{3})_", r"([fcsu])", r"00\.png$");
+pub const CAT_ICON_PATTERN: &str = concat!(r"^uni", r"(\d{3})_", r"([fcsud])", r"00\.png$");
 pub const CAT_UPGRADE_PATTERN: &str = concat!(r"^udi", r"(\d{3})_", r"([fcsu])", r"\.png$");
 pub const CAT_GACHA_PATTERN: &str = concat!(r"^gatyachara_", r"(\d{3})", r"_[fz]\.png$");
 pub const CAT_ANIM_PATTERN: &str = concat!(r"^", r"(\d{3})_", r"([fcsu])", r"\.(imgcut|mamodel|png)$");
@@ -27,8 +27,9 @@ pub const EGG_MAANIM_PATTERN: &str = r"^(\d{3})_m(0[0-3]|_zombie0[0-2])\.maanim$
 
 // Skill patterns
 pub const SKILL_DESC_PATTERN: &str = r"^SkillDescriptions\.csv$";
+pub const SKILL_NAME_PATTERN: &str = r"^Skill_name_\d{3}(?:_([a-z]{2}))?\.png$";
 
-pub const CAT_UNIVERSAL_PATTERN: &str = r"^unitevolve\.csv$";
+pub const CAT_EVOLVE_PATTERN: &str = r"^unitevolve\.csv$";
 
 // Master files for Cat Data
 pub const CAT_UNIVERSAL_FILES: &[&str] = &[

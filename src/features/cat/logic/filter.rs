@@ -1,17 +1,17 @@
 use std::collections::{HashSet, HashMap};
-use crate::features::cat::registry::CAT_ABILITY_REGISTRY;
+use crate::features::cat::registry::{CAT_ABILITY_REGISTRY, CAT_STATS_REGISTRY, AbilityIcon};
 use crate::features::cat::logic::stats::CatRaw;
 use crate::features::cat::logic::scanner::CatEntry;
 use crate::features::cat::logic::talents::apply_talent_stats;
-use crate::features::cat::registry::CAT_STATS_REGISTRY;
 use crate::global::game::img015;
+use crate::global::game::abilities::CustomIcon;
 
-pub const ATTACK_TYPE_ICONS: &[usize] = &[
-    img015::ICON_SINGLE_ATTACK,
-    img015::ICON_AREA_ATTACK,
-    img015::ICON_OMNI_STRIKE,
-    img015::ICON_LONG_DISTANCE,
-    img015::ICON_MULTIHIT,
+pub const ATTACK_TYPE_ICONS: &[AbilityIcon] = &[
+    AbilityIcon::Standard(img015::ICON_SINGLE_ATTACK),
+    AbilityIcon::Standard(img015::ICON_AREA_ATTACK),
+    AbilityIcon::Standard(img015::ICON_OMNI_STRIKE),
+    AbilityIcon::Standard(img015::ICON_LONG_DISTANCE),
+    AbilityIcon::Custom(CustomIcon::Multihit),
 ];
 
 #[derive(Clone, Copy, PartialEq, Default)]
@@ -48,13 +48,13 @@ pub struct RangeInput {
 #[derive(Clone, PartialEq)]
 pub struct CatFilterState {
     pub is_open: bool,
-    pub active_icons: HashSet<usize>,
+    pub active_icons: HashSet<AbilityIcon>,
     pub rarities: [bool; 6], 
     pub forms: [bool; 4],    
     pub match_mode: MatchMode,
     pub talent_mode: TalentFilterMode,
     pub ultra_talent_mode: TalentFilterMode,
-    pub adv_ranges: HashMap<usize, HashMap<&'static str, RangeInput>>,
+    pub adv_ranges: HashMap<AbilityIcon, HashMap<&'static str, RangeInput>>,
     pub level_input: String,
     pub stat_ranges: HashMap<&'static str, RangeInput>,
 }
@@ -100,12 +100,12 @@ pub fn get_stat_value(s: &CatRaw, stat: &str, anim_frames: i32) -> i32 {
     0 
 }
 
-pub fn get_icon_name(icon_id: usize) -> String {
-    CAT_ABILITY_REGISTRY.iter().find(|d| d.icon_id == icon_id).map(|d| d.name).unwrap_or("Unknown").to_string()
+pub fn get_icon_name(icon: &AbilityIcon) -> String {
+    CAT_ABILITY_REGISTRY.iter().find(|d| &d.icon == icon).map(|d| d.name).unwrap_or("Unknown").to_string()
 }
 
-pub fn has_trait_or_ability(s: &CatRaw, icon_id: usize) -> bool {
-    CAT_ABILITY_REGISTRY.iter().find(|d| d.icon_id == icon_id).map_or(false, |def| {
+pub fn has_trait_or_ability(s: &CatRaw, icon: &AbilityIcon) -> bool {
+    CAT_ABILITY_REGISTRY.iter().find(|d| &d.icon == icon).map_or(false, |def| {
         !(def.get_attributes)(s).is_empty()
     })
 }
@@ -229,7 +229,7 @@ pub fn entity_passes_filter(cat: &CatEntry, filter: &CatFilterState) -> bool {
                         ultra_map.insert(idx as u8, g.max_level);
                     } else {
                         norm_map.insert(idx as u8, g.max_level);
-                        ultra_map.insert(idx as u8, g.max_level); // Ultra includes normal
+                        ultra_map.insert(idx as u8, g.max_level);
                     }
                 }
                 
@@ -266,11 +266,11 @@ pub fn entity_passes_filter(cat: &CatEntry, filter: &CatFilterState) -> bool {
             }
 
             if has_icon_filters {
-                for &icon_id in &filter.active_icons {
+                for icon in &filter.active_icons {
                     active_conditions += 1;
 
-                    let has_inherent = has_trait_or_ability(stats, icon_id);
-                    let ability_def = CAT_ABILITY_REGISTRY.iter().find(|d| d.icon_id == icon_id);
+                    let has_inherent = has_trait_or_ability(stats, icon);
+                    let ability_def = CAT_ABILITY_REGISTRY.iter().find(|d| &d.icon == icon);
                     
                     let mut has_normal = false;
                     let mut has_ultra = false;
@@ -294,7 +294,7 @@ pub fn entity_passes_filter(cat: &CatEntry, filter: &CatFilterState) -> bool {
                     let mut icon_passed = false;
 
                     if valid_inherent || valid_normal || valid_ultra {
-                        if let Some(adv_map) = filter.adv_ranges.get(&icon_id) {
+                        if let Some(adv_map) = filter.adv_ranges.get(icon) {
                             
                             let mut test_builds = Vec::new();
                             if valid_inherent { test_builds.push(&base_leveled); }

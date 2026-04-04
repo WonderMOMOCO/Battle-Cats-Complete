@@ -7,5 +7,6 @@ pub mod list;
 pub mod viewer;
 pub mod master;
 pub mod filter;
+pub mod conjure;
 
 pub use master::show;

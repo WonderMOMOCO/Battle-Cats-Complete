@@ -3,7 +3,7 @@ use crate::features::settings::logic::Settings;
 use super::stats::{self, CatRaw};
 use crate::features::cat::data::skillacquisition::TalentRaw;
 use std::collections::HashMap;
-use crate::features::cat::registry::{self, DisplayGroup, AttrUnit};
+use crate::features::cat::registry::{self, DisplayGroup, AttrUnit, AbilityIcon};
 use crate::global::game::abilities::{AbilityItem, CustomIcon};
 
 pub fn collect_ability_data(
@@ -75,13 +75,15 @@ pub fn collect_ability_data(
             let text = (def.formatter)(val, final_stats, target_label, dur);
             let border = get_talent_border(def.talent_id);
 
-            let custom_icon = def.custom_icon;
+            let (mut final_icon, final_custom) = match def.icon {
+                AbilityIcon::Standard(id) => (Some(id), CustomIcon::None),
+                AbilityIcon::Custom(c) => (None, c),
+            };
 
-            let mut final_icon = def.icon_id;
-            if def.name == "Wave Attack" && final_stats.mini_wave_flag > 0 { final_icon = img015::ICON_MINI_WAVE; }
-            else if def.name == "Surge Attack" && final_stats.mini_surge_flag > 0 { final_icon = img015::ICON_MINI_SURGE; }
+            if def.name == "Wave Attack" && final_stats.mini_wave_flag > 0 { final_icon = Some(img015::ICON_MINI_WAVE); }
+            else if def.name == "Surge Attack" && final_stats.mini_surge_flag > 0 { final_icon = Some(img015::ICON_MINI_SURGE); }
 
-            let item = AbilityItem { icon_id: final_icon, text, custom_icon, border_id: border };
+            let item = AbilityItem { icon_id: final_icon, text, custom_icon: final_custom, border_id: border };
 
             match def.group {
                 DisplayGroup::Trait => group_trait.push(item),
@@ -104,11 +106,17 @@ pub fn collect_ability_data(
             if lv == 0 { continue; }
 
             if let Some(def) = registry::get_by_talent_id(group.ability_id) {
+                
+                let (final_icon, final_custom) = match def.icon {
+                    AbilityIcon::Standard(id) => (Some(id), CustomIcon::None),
+                    AbilityIcon::Custom(c) => (None, c),
+                };
+
                 match group.ability_id {
                     // Stat Buffs: Leverage the dynamic Diff Engine
                     25 | 26 | 27 | 31 | 32 | 61 | 82 => { 
                         if let Some(text) = crate::features::cat::logic::talents::calculate_talent_display(group, base_stats, lv, level_curve, current_level) {
-                            let item = AbilityItem { icon_id: def.icon_id, text, custom_icon: CustomIcon::None, border_id: get_talent_border(def.talent_id) };
+                            let item = AbilityItem { icon_id: final_icon, text, custom_icon: final_custom, border_id: get_talent_border(def.talent_id) };
                             talent_headline.push(item);
                         }
                     },
@@ -116,7 +124,7 @@ pub fn collect_ability_data(
                     18 | 19 | 20 | 21 | 22 | 24 | 30 | 52 | 54 => { 
                         let val = crate::features::cat::logic::talents::calculate_talent_value(group.min_1, group.max_1, lv, group.max_level);
                         let text = (def.formatter)(val, final_stats, target_label, 0);
-                        let item = AbilityItem { icon_id: def.icon_id, text, custom_icon: CustomIcon::None, border_id: get_talent_border(def.talent_id) };
+                        let item = AbilityItem { icon_id: final_icon, text, custom_icon: final_custom, border_id: get_talent_border(def.talent_id) };
                         group_footer.push(item);
                     },
                     _ => {}

@@ -13,6 +13,7 @@ use crate::features::animation::ui::viewer::AnimViewer;
 use crate::global::assets::CustomAssets;
 use crate::global::ui::shared::DragGuard;
 use crate::features::enemy::ui::filter::EnemyFilterState; 
+use crate::features::enemy::registry::Magnification;
 use super::loader;
 
 pub const TOP_PANEL_PADDING: f32 = 2.5;
@@ -42,7 +43,7 @@ pub struct EnemyListState {
     pub search_query: String,
     pub selected_tab: EnemyDetailTab,
     pub mag_input: String,
-    pub magnification: i32,
+    pub magnification: Magnification,
     #[serde(skip)] pub enemy_list: EnemyList, 
     #[serde(skip)] pub initialized: bool,
     #[serde(skip)] pub active_scan_ids: HashSet<u32>,
@@ -69,7 +70,7 @@ impl Default for EnemyListState {
             search_query: String::new(),
             selected_tab: EnemyDetailTab::default(),
             mag_input: "100".to_string(),
-            magnification: 100,
+            magnification: Magnification::default(),
             enemy_list: EnemyList::default(),
             initialized: false,
             active_scan_ids: HashSet::new(),

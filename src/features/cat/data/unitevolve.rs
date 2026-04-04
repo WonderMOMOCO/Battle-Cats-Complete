@@ -8,7 +8,7 @@ pub fn load(cats_directory: &Path, priority: &[String]) -> HashMap<u32, [Vec<Str
     let mut final_map: HashMap<u32, [Vec<String>; 4]> = HashMap::new();
     let base_directory = cats_directory.join(paths::DIR_UNIT_EVOLVE);
 
-    for file_path in crate::global::get(&base_directory, "unitevolve.csv", priority) {
+    for file_path in crate::global::get(&base_directory, &["unitevolve.csv"], priority) {
         let Ok(file_content) = fs::read_to_string(&file_path) else { 
             continue; 
         };

@@ -6,7 +6,7 @@ use crate::features::cat::paths;
 pub fn load(cats_directory: &Path, priority: &[String]) -> Vec<String> {
     let base_dir = cats_directory.join(paths::DIR_SKILL_DESCRIPTIONS);
 
-    let Some(file_path) = crate::global::get(&base_dir, "SkillDescriptions.csv", priority).into_iter().next() else {
+    let Some(file_path) = crate::global::get(&base_dir, &["SkillDescriptions.csv"], priority).into_iter().next() else {
         return Vec::new();
     };
 

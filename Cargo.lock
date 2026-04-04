@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "Battle_Cats_Complete"
-version = "0.12.5"
+version = "0.12.6"
 dependencies = [
  "ab_glyph",
  "aes",
@@ -20,6 +20,7 @@ dependencies = [
  "hex",
  "image",
  "imageproc",
+ "indexmap",
  "md5",
  "notify",
  "notify-debouncer-mini",
@@ -2442,6 +2443,8 @@ checksum = "0ad4bb2b565bca0645f4d68c5c9af97fba094e9791da685bf83cb5f3ce74acf2"
 dependencies = [
  "equivalent",
  "hashbrown 0.16.1",
+ "serde",
+ "serde_core",
 ]
 
 [[package]]

@@ -29,19 +29,8 @@ pub fn show(
         let name = p.file_name()?.to_str()?;
         let iname = format!("i{}", name);
 
-        // Check for "i" prefix as well as base because of Ms. Sign (021_e)
-        for code in priority {
-            if code == "--" { break; }
-            let slice = [code.clone()];
-            
-            if let Some(found) = crate::global::get(parent, name, &slice).into_iter().next() {
-                return Some(found);
-            }
-            if let Some(found) = crate::global::get(parent, &iname, &slice).into_iter().next() {
-                return Some(found);
-            }
-        }
-        None
+        // Pass the array of fallback names directly to the unified get function
+        crate::global::get(parent, &[name, &iname], priority).into_iter().next()
     };
 
     // Standard anims

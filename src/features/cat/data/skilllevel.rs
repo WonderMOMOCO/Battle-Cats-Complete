@@ -12,7 +12,7 @@ pub struct TalentCost {
 
 pub fn load(cats_directory: &Path, priority: &[String]) -> HashMap<u8, TalentCost> {
     let mut map = HashMap::new();
-    let Some(file_path) = crate::global::resolver::get(cats_directory, paths::SKILL_LEVEL, priority).into_iter().next() else {
+    let Some(file_path) = crate::global::resolver::get(cats_directory, &[paths::SKILL_LEVEL], priority).into_iter().next() else {
         return map;
     };
     

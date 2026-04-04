@@ -1,6 +1,7 @@
 use eframe::egui;
 use std::collections::HashSet;
 use std::path::Path;
+use std::sync::atomic::Ordering;
 use crate::global::ui::shared; 
 use crate::updater;
 use crate::features::home;
@@ -354,7 +355,9 @@ impl BattleCatsApp {
         }
 
         if paths.is_empty() { return; }
-        if self.import_state.rx.is_some() || self.import_state.is_adb_busy { return; }
+        
+        if self.import_state.import_rx.is_some() || self.import_state.import_job_status.load(Ordering::Relaxed) == 1 { return; }
+        if self.import_state.export_rx.is_some() || self.import_state.export_job_status.load(Ordering::Relaxed) == 1 { return; }
 
         let mut cat_ids_to_refresh = HashSet::new();
         let mut enemy_ids_to_refresh = HashSet::new(); 
@@ -388,14 +391,19 @@ impl BattleCatsApp {
                 self.enemy_list_state.img015_sheets.clear();
             }
 
-            if path_str.contains("assets") || path_str.contains("gatyaitem") {
+            if path_str.contains("ui") || path_str.contains("gatyaitem") || path_str.contains("sheets") {
                 self.cat_list_state.gatya_item_textures.clear();
                 self.cat_list_state.sprite_sheet = crate::global::formats::imgcut::SpriteSheet::default(); 
                 self.cat_list_state.texture_cache_version += 1; 
             }
 
-            let is_cat_global_file = crate::features::cat::patterns::CAT_UNIVERSAL_FILES.contains(&file_name) 
-                                   || crate::global::io::patterns::CHECK_LINE_FILES.contains(&file_name);
+            if path_str.contains("tables") {
+                global_cat_refresh = true;
+                global_enemy_refresh = true;
+                global_stage_refresh = true;
+            }
+
+            let is_cat_global_file = crate::features::cat::patterns::CAT_UNIVERSAL_FILES.contains(&file_name);
             
             if is_cat_global_file {
                 global_cat_refresh = true;

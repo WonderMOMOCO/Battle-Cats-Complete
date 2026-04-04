@@ -1,6 +1,19 @@
 use crate::global::game::img015;
 use crate::features::enemy::data::t_unit::EnemyRaw;
 use crate::global::game::abilities::CustomIcon;
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Magnification {
+    pub hitpoints: i32,
+    pub attack: i32,
+}
+
+impl Default for Magnification {
+    fn default() -> Self {
+        Self { hitpoints: 100, attack: 100 }
+    }
+}
 
 #[derive(PartialEq, Clone, Copy)]
 pub enum DisplayGroup {
@@ -21,15 +34,20 @@ pub enum AttrUnit {
     Range,      // For Distances
 }
 
+#[derive(PartialEq, Eq, Hash, Clone, Copy)]
+pub enum AbilityIcon {
+    Standard(usize),
+    Custom(CustomIcon),
+}
+
 pub struct EnemyAbilityDef {
     pub name: &'static str,
     pub fallback: &'static str,
-    pub icon_id: usize,
+    pub icon: AbilityIcon,
     pub group: DisplayGroup,
-    pub custom_icon: CustomIcon,
     pub schema: &'static [(&'static str, AttrUnit)],
     pub get_attributes: fn(&EnemyRaw) -> Vec<(&'static str, i32, AttrUnit)>,
-    pub formatter: fn(value_1: i32, stats: &EnemyRaw, duration_frames: i32, magnification: i32) -> String,
+    pub formatter: fn(primary_value: i32, stats: &EnemyRaw, duration_frames: i32, magnification: Magnification) -> String,
     pub minus_one_is_inf: bool,
 }
 
@@ -42,11 +60,15 @@ fn fmt_range(min_range: i32, max_range: i32) -> String {
     if min_range == max_range { format!("at {}", min_range) } else { format!("between {}~{}", min_range, max_range) }
 }
 
-fn fmt_count(value_1: i32) -> String {
-    match value_1 {
+fn fmt_compress(min_val: i32, max_val: i32) -> String {
+    if min_val == max_val { format!("{}", min_val) } else { format!("{}~{}", min_val, max_val) }
+}
+
+fn fmt_count(count: i32) -> String {
+    match count {
         -1 => "infinitely".to_string(),
         1 => "1 time".to_string(),
-        _ => format!("{} times", value_1),
+        _ => format!("{} times", count),
     }
 }
 
@@ -118,9 +140,8 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
     EnemyAbilityDef {
         name: "Single Attack",
         fallback: "Sngl",
-        icon_id: img015::ICON_SINGLE_ATTACK,
+        icon: AbilityIcon::Standard(img015::ICON_SINGLE_ATTACK),
         group: DisplayGroup::Hidden,
-        custom_icon: CustomIcon::None,
         schema: &[],
         get_attributes: |stats| if stats.area_attack == 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_, _, _, _| "".into(),
@@ -129,9 +150,8 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
     EnemyAbilityDef {
         name: "Area Attack",
         fallback: "Area",
-        icon_id: img015::ICON_AREA_ATTACK,
+        icon: AbilityIcon::Standard(img015::ICON_AREA_ATTACK),
         group: DisplayGroup::Hidden,
-        custom_icon: CustomIcon::None,
         schema: &[],
         get_attributes: |stats| if stats.area_attack == 1 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_, _, _, _| "".into(),
@@ -142,9 +162,8 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
     EnemyAbilityDef {
         name: "Red",
         fallback: "Red",
-        icon_id: img015::ICON_TRAIT_RED,
+        icon: AbilityIcon::Standard(img015::ICON_TRAIT_RED),
         group: DisplayGroup::Type,
-        custom_icon: CustomIcon::None,
         schema: &[],
         get_attributes: |stats| if stats.type_red > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_, _, _, _| "Red".into(),
@@ -153,9 +172,8 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
     EnemyAbilityDef {
         name: "Floating",
         fallback: "Float",
-        icon_id: img015::ICON_TRAIT_FLOATING,
+        icon: AbilityIcon::Standard(img015::ICON_TRAIT_FLOATING),
         group: DisplayGroup::Type,
-        custom_icon: CustomIcon::None,
         schema: &[],
         get_attributes: |stats| if stats.type_floating > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_, _, _, _| "Floating".into(),
@@ -164,9 +182,8 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
     EnemyAbilityDef {
         name: "Black",
         fallback: "Black",
-        icon_id: img015::ICON_TRAIT_BLACK,
+        icon: AbilityIcon::Standard(img015::ICON_TRAIT_BLACK),
         group: DisplayGroup::Type,
-        custom_icon: CustomIcon::None,
         schema: &[],
         get_attributes: |stats| if stats.type_black > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_, _, _, _| "Black".into(),
@@ -175,9 +192,8 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
     EnemyAbilityDef {
         name: "Metal",
         fallback: "Metal",
-        icon_id: img015::ICON_TRAIT_METAL,
+        icon: AbilityIcon::Standard(img015::ICON_TRAIT_METAL),
         group: DisplayGroup::Type,
-        custom_icon: CustomIcon::None,
         schema: &[],
         get_attributes: |stats| if stats.type_metal > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_, _, _, _| "Metal".into(),
@@ -186,9 +202,8 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
     EnemyAbilityDef {
         name: "Angel",
         fallback: "Angel",
-        icon_id: img015::ICON_TRAIT_ANGEL,
+        icon: AbilityIcon::Standard(img015::ICON_TRAIT_ANGEL),
         group: DisplayGroup::Type,
-        custom_icon: CustomIcon::None,
         schema: &[],
         get_attributes: |stats| if stats.type_angel > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_, _, _, _| "Angel".into(),
@@ -197,9 +212,8 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
     EnemyAbilityDef {
         name: "Alien",
         fallback: "Alien",
-        icon_id: img015::ICON_TRAIT_ALIEN,
+        icon: AbilityIcon::Standard(img015::ICON_TRAIT_ALIEN),
         group: DisplayGroup::Type,
-        custom_icon: CustomIcon::None,
         schema: &[],
         get_attributes: |stats| if stats.type_alien > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_, _, _, _| "Alien".into(),
@@ -208,9 +222,8 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
     EnemyAbilityDef {
         name: "Zombie",
         fallback: "Zomb",
-        icon_id: img015::ICON_TRAIT_ZOMBIE,
+        icon: AbilityIcon::Standard(img015::ICON_TRAIT_ZOMBIE),
         group: DisplayGroup::Type,
-        custom_icon: CustomIcon::None,
         schema: &[],
         get_attributes: |stats| if stats.type_zombie > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_, _, _, _| "Zombie".into(),
@@ -219,9 +232,8 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
     EnemyAbilityDef {
         name: "Relic",
         fallback: "Relic",
-        icon_id: img015::ICON_TRAIT_RELIC,
+        icon: AbilityIcon::Standard(img015::ICON_TRAIT_RELIC),
         group: DisplayGroup::Type,
-        custom_icon: CustomIcon::None,
         schema: &[],
         get_attributes: |stats| if stats.type_relic > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_, _, _, _| "Relic".into(),
@@ -230,9 +242,8 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
     EnemyAbilityDef {
         name: "Aku",
         fallback: "Aku",
-        icon_id: img015::ICON_TRAIT_AKU,
+        icon: AbilityIcon::Standard(img015::ICON_TRAIT_AKU),
         group: DisplayGroup::Type,
-        custom_icon: CustomIcon::None,
         schema: &[],
         get_attributes: |stats| if stats.type_aku > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_, _, _, _| "Aku".into(),
@@ -241,9 +252,8 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
     EnemyAbilityDef {
         name: "Traitless",
         fallback: "White",
-        icon_id: img015::ICON_TRAIT_TRAITLESS,
+        icon: AbilityIcon::Standard(img015::ICON_TRAIT_TRAITLESS),
         group: DisplayGroup::Type,
-        custom_icon: CustomIcon::None,
         schema: &[],
         get_attributes: |stats| if stats.type_traitless > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_, _, _, _| "Traitless".into(),
@@ -254,9 +264,8 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
     EnemyAbilityDef {
         name: "Dojo",
         fallback: "Dojo",
-        icon_id: img015::ICON_DOJO,
+        icon: AbilityIcon::Custom(CustomIcon::Dojo),
         group: DisplayGroup::Headline1,
-        custom_icon: CustomIcon::Dojo,
         schema: &[],
         get_attributes: |stats| if stats.type_dojo > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_, _, _, _| "Dojo".into(),
@@ -265,9 +274,8 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
     EnemyAbilityDef {
         name: "Starred Alien",
         fallback: "Star",
-        icon_id: img015::ICON_STARRED_ALIEN, 
+        icon: AbilityIcon::Custom(CustomIcon::StarredAlien),
         group: DisplayGroup::Headline1,
-        custom_icon: CustomIcon::StarredAlien,
         schema: &[],
         get_attributes: |stats| if stats.type_starred_alien > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_, _, _, _| "Starred Alien".into(),
@@ -276,9 +284,8 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
     EnemyAbilityDef {
         name: "Colossus",
         fallback: "Colos",
-        icon_id: img015::ICON_COLOSSUS,
+        icon: AbilityIcon::Standard(img015::ICON_COLOSSUS),
         group: DisplayGroup::Headline1,
-        custom_icon: CustomIcon::None,
         schema: &[],
         get_attributes: |stats| if stats.type_colossus > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_, _, _, _| "Colossus Enemy".into(),
@@ -287,9 +294,8 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
     EnemyAbilityDef {
         name: "Behemoth",
         fallback: "Behem",
-        icon_id: img015::ICON_BEHEMOTH,
+        icon: AbilityIcon::Standard(img015::ICON_BEHEMOTH),
         group: DisplayGroup::Headline1,
-        custom_icon: CustomIcon::None,
         schema: &[],
         get_attributes: |stats| if stats.type_behemoth > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_, _, _, _| "Behemoth Enemy".into(),
@@ -298,9 +304,8 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
     EnemyAbilityDef {
         name: "Sage",
         fallback: "Sage",
-        icon_id: img015::ICON_SAGE,
+        icon: AbilityIcon::Standard(img015::ICON_SAGE),
         group: DisplayGroup::Headline1,
-        custom_icon: CustomIcon::None,
         schema: &[],
         get_attributes: |stats| if stats.type_sage > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_, _, _, _| "Sage Enemy".into(),
@@ -309,9 +314,8 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
     EnemyAbilityDef {
         name: "Supervillain",
         fallback: "Villn",
-        icon_id: img015::ICON_SUPERVILLIAN,
+        icon: AbilityIcon::Standard(img015::ICON_SUPERVILLIAN),
         group: DisplayGroup::Headline1,
-        custom_icon: CustomIcon::None,
         schema: &[],
         get_attributes: |stats| if stats.type_supervillain > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_, _, _, _| "Supervillain Enemy".into(),
@@ -320,9 +324,8 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
     EnemyAbilityDef {
         name: "Witch",
         fallback: "Witch",
-        icon_id: img015::ICON_WITCH,
+        icon: AbilityIcon::Standard(img015::ICON_WITCH),
         group: DisplayGroup::Headline1,
-        custom_icon: CustomIcon::None,
         schema: &[],
         get_attributes: |stats| if stats.type_witch > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_, _, _, _| "Witch Enemy".into(),
@@ -331,9 +334,8 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
     EnemyAbilityDef {
         name: "EVA Angel",
         fallback: "EVA",
-        icon_id: img015::ICON_EVA,
+        icon: AbilityIcon::Standard(img015::ICON_EVA),
         group: DisplayGroup::Headline1,
-        custom_icon: CustomIcon::None,
         schema: &[],
         get_attributes: |stats| if stats.type_eva > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_, _, _, _| "EVA Angel".into(),
@@ -342,9 +344,8 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
     EnemyAbilityDef {
         name: "Kamikaze", 
         fallback: "Kamik", 
-        icon_id: img015::ICON_KAMIKAZE,
+        icon: AbilityIcon::Custom(CustomIcon::Kamikaze),
         group: DisplayGroup::Headline2,
-        custom_icon: CustomIcon::Kamikaze, 
         schema: &[
             ("Attacks", AttrUnit::None)
         ],
@@ -355,8 +356,8 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |value_1, _, _, _| {
-            let limit_suffix = match value_1 {
+        formatter: |attacks, _, _, _| {
+            let limit_suffix = match attacks {
                 0 => "immediately".to_string(),
                 1 => "after 1 attack".to_string(),
                 n => format!("after {} attacks", n),
@@ -368,9 +369,8 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
     EnemyAbilityDef {
         name: "Stop", 
         fallback: "Stop", 
-        icon_id: img015::ICON_STOP,
+        icon: AbilityIcon::Custom(CustomIcon::Stop),
         group: DisplayGroup::Headline2,
-        custom_icon: CustomIcon::Stop, 
         schema: &[
             ("Attacks", AttrUnit::None)
         ],
@@ -381,8 +381,8 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |value_1, _, _, _| {
-            let limit_suffix = match value_1 {
+        formatter: |attacks, _, _, _| {
+            let limit_suffix = match attacks {
                 0 => "immediately".to_string(),
                 1 => "after 1 attack".to_string(),
                 n => format!("after {} attacks", n),
@@ -396,9 +396,8 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
     EnemyAbilityDef {
         name: "Base Destroyer",
         fallback: "BaseD",
-        icon_id: img015::ICON_BASE_DESTROYER,
+        icon: AbilityIcon::Standard(img015::ICON_BASE_DESTROYER),
         group: DisplayGroup::Headline2,
-        custom_icon: CustomIcon::None,
         schema: &[],
         get_attributes: |stats| if stats.base_destroyer > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_, _, _, _| "Deals 4× Damage to the Cat Base".into(),
@@ -407,9 +406,8 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
     EnemyAbilityDef {
         name: "Wave Block",
         fallback: "W-Blk",
-        icon_id: img015::ICON_WAVE_BLOCK,
+        icon: AbilityIcon::Standard(img015::ICON_WAVE_BLOCK),
         group: DisplayGroup::Headline2,
-        custom_icon: CustomIcon::None,
         schema: &[],
         get_attributes: |stats| {
             if stats.wave_blocker > 0 {
@@ -428,9 +426,8 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
     EnemyAbilityDef {
         name: "Multi-Hit",
         fallback: "Multi",
-        icon_id: img015::ICON_MULTIHIT,
+        icon: AbilityIcon::Custom(CustomIcon::Multihit),
         group: DisplayGroup::Body1,
-        custom_icon: CustomIcon::Multihit,
         schema: &[],
         get_attributes: |stats| if stats.attack_2 > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_, stats, _, _| fmt_multihit(stats),
@@ -439,9 +436,8 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
     EnemyAbilityDef {
         name: "Long Distance",
         fallback: "LD",
-        icon_id: img015::ICON_LONG_DISTANCE,
+        icon: AbilityIcon::Standard(img015::ICON_LONG_DISTANCE),
         group: DisplayGroup::Body1,
-        custom_icon: CustomIcon::None,
         schema: &[],
         get_attributes: |stats| {
             // Check if ANY hit is Omni
@@ -463,9 +459,8 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
     EnemyAbilityDef {
         name: "Omni Strike",
         fallback: "Omni",
-        icon_id: img015::ICON_OMNI_STRIKE,
+        icon: AbilityIcon::Standard(img015::ICON_OMNI_STRIKE),
         group: DisplayGroup::Body1,
-        custom_icon: CustomIcon::None,
         schema: &[],
         get_attributes: |stats| {
             // Check if ANY hit is Omni
@@ -481,9 +476,8 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
     EnemyAbilityDef {
         name: "Wave Attack",
         fallback: "Wave",
-        icon_id: img015::ICON_WAVE,
+        icon: AbilityIcon::Standard(img015::ICON_WAVE),
         group: DisplayGroup::Body1,
-        custom_icon: CustomIcon::None,
         schema: &[
             ("Chance", AttrUnit::Percent), 
             ("Level", AttrUnit::None), 
@@ -500,18 +494,17 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |value_1, stats, _, _| {
+        formatter: |chance, stats, _, _| {
             let maximum_reach = 467.5 + ((stats.wave_level - 1) as f32 * 200.0);
-            format!("{}% Chance to create a Level {} Wave\nWave reaches {} Range", value_1, stats.wave_level, maximum_reach)
+            format!("{}% Chance to create a Level {} Wave\nWave reaches {} Range", chance, stats.wave_level, maximum_reach)
         },
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
         name: "Mini-Wave",
         fallback: "MiniW",
-        icon_id: img015::ICON_MINI_WAVE,
+        icon: AbilityIcon::Standard(img015::ICON_MINI_WAVE),
         group: DisplayGroup::Body1,
-        custom_icon: CustomIcon::None,
         schema: &[
             ("Chance", AttrUnit::Percent), 
             ("Level", AttrUnit::None), 
@@ -528,18 +521,17 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |value_1, stats, _, _| {
+        formatter: |chance, stats, _, _| {
             let maximum_reach = 467.5 + ((stats.wave_level - 1) as f32 * 200.0);
-            format!("{}% Chance to create a Level {} Mini-Wave\nMini-Wave reaches {} Range", value_1, stats.wave_level, maximum_reach)
+            format!("{}% Chance to create a Level {} Mini-Wave\nMini-Wave reaches {} Range", chance, stats.wave_level, maximum_reach)
         },
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
         name: "Surge Attack",
         fallback: "Surge",
-        icon_id: img015::ICON_SURGE,
+        icon: AbilityIcon::Standard(img015::ICON_SURGE),
         group: DisplayGroup::Body1,
-        custom_icon: CustomIcon::None,
         schema: &[
             ("Chance", AttrUnit::Percent), 
             ("Level", AttrUnit::None), 
@@ -559,20 +551,19 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |value_1, stats, _, _| {
+        formatter: |chance, stats, _, _| {
             let start_bound = stats.surge_spawn_min;
             let end_bound = stats.surge_spawn_min + stats.surge_spawn_max;
             let (minimum_range, maximum_range) = if start_bound < end_bound { (start_bound, end_bound) } else { (end_bound, start_bound) };
-            format!("{}% Chance to create a Level {} Surge\n{} Range", value_1, stats.surge_level, fmt_range(minimum_range, maximum_range))
+            format!("{}% Chance to create a Level {} Surge\n{} Range", chance, stats.surge_level, fmt_range(minimum_range, maximum_range))
         },
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
         name: "Mini-Surge",
         fallback: "MiniS",
-        icon_id: img015::ICON_MINI_SURGE,
+        icon: AbilityIcon::Standard(img015::ICON_MINI_SURGE),
         group: DisplayGroup::Body1,
-        custom_icon: CustomIcon::None,
         schema: &[
             ("Chance", AttrUnit::Percent), 
             ("Level", AttrUnit::None), 
@@ -592,20 +583,19 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |value_1, stats, _, _| {
+        formatter: |chance, stats, _, _| {
             let start_bound = stats.surge_spawn_min;
             let end_bound = stats.surge_spawn_min + stats.surge_spawn_max;
             let (minimum_range, maximum_range) = if start_bound < end_bound { (start_bound, end_bound) } else { (end_bound, start_bound) };
-            format!("{}% Chance to create a Level {} Mini-Surge\n{} Range", value_1, stats.surge_level, fmt_range(minimum_range, maximum_range))
+            format!("{}% Chance to create a Level {} Mini-Surge\n{} Range", chance, stats.surge_level, fmt_range(minimum_range, maximum_range))
         },
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
         name: "Death Surge",
         fallback: "DSurg",
-        icon_id: img015::ICON_DEATH_SURGE,
+        icon: AbilityIcon::Standard(img015::ICON_DEATH_SURGE),
         group: DisplayGroup::Body1,
-        custom_icon: CustomIcon::None,
         schema: &[
             ("Chance", AttrUnit::Percent), 
             ("Level", AttrUnit::None), 
@@ -625,20 +615,19 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |value_1, stats, _, _| {
+        formatter: |chance, stats, _, _| {
             let start_bound = stats.death_surge_spawn_min;
             let end_bound = stats.death_surge_spawn_min + stats.death_surge_spawn_max;
             let (minimum_range, maximum_range) = if start_bound < end_bound { (start_bound, end_bound) } else { (end_bound, start_bound) };
-            format!("{}% Chance to create a Level {} Surge\n{} Range upon death", value_1, stats.death_surge_level, fmt_range(minimum_range, maximum_range))
+            format!("{}% Chance to create a Level {} Surge\n{} Range upon death", chance, stats.death_surge_level, fmt_range(minimum_range, maximum_range))
         },
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
         name: "Explosion",
         fallback: "Expl",
-        icon_id: img015::ICON_EXPLOSION,
+        icon: AbilityIcon::Standard(img015::ICON_EXPLOSION),
         group: DisplayGroup::Body1,
-        custom_icon: CustomIcon::None,
         schema: &[
             ("Chance", AttrUnit::Percent), 
             ("Min Range", AttrUnit::Range), 
@@ -656,20 +645,19 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |value_1, stats, _, _| {
+        formatter: |chance, stats, _, _| {
             let start_bound = stats.explosion_anchor;
             let end_bound = stats.explosion_anchor + stats.explosion_span;
             let (minimum_range, maximum_range) = if start_bound < end_bound { (start_bound, end_bound) } else { (end_bound, start_bound) };
-            format!("{}% Chance to create an Explosion {} Range", value_1, fmt_range(minimum_range, maximum_range))
+            format!("{}% Chance to create an Explosion {} Range", chance, fmt_range(minimum_range, maximum_range))
         },
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
         name: "Critical Hit",
         fallback: "Crit",
-        icon_id: img015::ICON_CRITICAL_HIT,
+        icon: AbilityIcon::Standard(img015::ICON_CRITICAL_HIT),
         group: DisplayGroup::Body1,
-        custom_icon: CustomIcon::None,
         schema: &[
             ("Chance", AttrUnit::Percent)
         ],
@@ -682,15 +670,14 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |value_1, _, _, _| format!("{}% Chance to Critical Hit dealing +100% Damage\nCritcal Hits bypass Metal resistance", value_1),
+        formatter: |chance, _, _, _| format!("{}% Chance to Critical Hit dealing +100% Damage\nCritcal Hits bypass Metal resistance", chance),
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
         name: "Savage Blow",
         fallback: "Savge",
-        icon_id: img015::ICON_SAVAGE_BLOW,
+        icon: AbilityIcon::Standard(img015::ICON_SAVAGE_BLOW),
         group: DisplayGroup::Body1,
-        custom_icon: CustomIcon::None,
         schema: &[
             ("Chance", AttrUnit::Percent), 
             ("Boost", AttrUnit::Percent)
@@ -705,17 +692,16 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |value_1, stats, _, _| {
-            format!("{}% Chance to Savage Blow\ndealing +{}% Damage", value_1, stats.savage_blow_boost)
+        formatter: |chance, stats, _, _| {
+            format!("{}% Chance to Savage Blow\ndealing +{}% Damage", chance, stats.savage_blow_boost)
         },
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
         name: "Strengthen",
         fallback: "Str+",
-        icon_id: img015::ICON_STRENGTHEN,
+        icon: AbilityIcon::Standard(img015::ICON_STRENGTHEN),
         group: DisplayGroup::Body1,
-        custom_icon: CustomIcon::None,
         schema: &[
             ("HP", AttrUnit::Percent), 
             ("Boost", AttrUnit::Percent)
@@ -736,9 +722,8 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
     EnemyAbilityDef {
         name: "Survive",
         fallback: "Surv",
-        icon_id: img015::ICON_SURVIVE,
+        icon: AbilityIcon::Standard(img015::ICON_SURVIVE),
         group: DisplayGroup::Body1,
-        custom_icon: CustomIcon::None,
         schema: &[
             ("Chance", AttrUnit::Percent)
         ],
@@ -751,7 +736,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |value_1, _, _, _| format!("{}% Chance to Survive a lethal strike", value_1),
+        formatter: |chance, _, _, _| format!("{}% Chance to Survive a lethal strike", chance),
         minus_one_is_inf: false,
     },
 
@@ -759,9 +744,8 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
     EnemyAbilityDef {
         name: "Barrier",
         fallback: "Barri",
-        icon_id: img015::ICON_BARRIER,
+        icon: AbilityIcon::Standard(img015::ICON_BARRIER),
         group: DisplayGroup::Body2,
-        custom_icon: CustomIcon::None,
         schema: &[
             ("Hitpoints", AttrUnit::None)
         ],
@@ -774,15 +758,14 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |value_1, _, _, _| format!("Has a Barrier with {} HP", value_1),
+        formatter: |hp, _, _, _| format!("Has a Barrier with {} HP", hp),
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
         name: "Aku Shield",
         fallback: "Shiel",
-        icon_id: img015::ICON_SHIELD,
+        icon: AbilityIcon::Standard(img015::ICON_SHIELD),
         group: DisplayGroup::Body2,
-        custom_icon: CustomIcon::None,
         schema: &[
             ("Hitpoints", AttrUnit::None), 
             ("Regen", AttrUnit::Percent)
@@ -797,8 +780,8 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |value_1, stats, _, magnification| {
-            let scaled_hp = (value_1 as f32 * (magnification as f32 / 100.0)).round() as i32;
+        formatter: |hp, stats, _, magnification| {
+            let scaled_hp = (hp as f32 * (magnification.hitpoints as f32 / 100.0)).round() as i32;
             if stats.shield_regen > 0 {
                 format!("Has a Shield with {} HP\nShield regenerates {}% HP when knocked back", scaled_hp, stats.shield_regen)
             } else {
@@ -810,9 +793,8 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
     EnemyAbilityDef {
         name: "Burrow",
         fallback: "Burro",
-        icon_id: img015::ICON_BURROW, 
+        icon: AbilityIcon::Custom(CustomIcon::Burrow), 
         group: DisplayGroup::Body2,
-        custom_icon: CustomIcon::Burrow,
         schema: &[
             ("Count", AttrUnit::None), 
             ("Distance", AttrUnit::Range)
@@ -827,15 +809,14 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |value_1, stats, _, _| format!("Burrows {} Range {}", stats.burrow_distance, fmt_count(value_1)),
+        formatter: |count, stats, _, _| format!("Burrows {} Range {}", stats.burrow_distance, fmt_count(count)),
         minus_one_is_inf: true,
     },
     EnemyAbilityDef {
         name: "Revive",
         fallback: "Reviv",
-        icon_id: img015::ICON_REVIVE, 
+        icon: AbilityIcon::Custom(CustomIcon::Revive), 
         group: DisplayGroup::Body2,
-        custom_icon: CustomIcon::Revive,
         schema: &[
             ("Count", AttrUnit::None), 
             ("Duration", AttrUnit::Frames), 
@@ -852,15 +833,14 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |value_1, stats, _, _| format!("Revives {} with {}% HP after {} \nDoesn't revive if Z-Killed", fmt_count(value_1), stats.revive_hp, fmt_time(stats.revive_time)),
+        formatter: |count, stats, _, _| format!("Revives {} with {}% HP after {} \nDoesn't revive if Z-Killed", fmt_count(count), stats.revive_hp, fmt_time(stats.revive_time)),
         minus_one_is_inf: true,
     },
     EnemyAbilityDef {
         name: "Toxic",
         fallback: "Toxic",
-        icon_id: img015::ICON_TOXIC,
+        icon: AbilityIcon::Standard(img015::ICON_TOXIC),
         group: DisplayGroup::Body2,
-        custom_icon: CustomIcon::None,
         schema: &[
             ("Chance", AttrUnit::Percent), 
             ("Damage", AttrUnit::Percent)
@@ -875,15 +855,14 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |value_1, stats, _, _| format!("{}% Chance to deal {}% of a\nCat's Max HP in additional damage", value_1, stats.toxic_damage),
+        formatter: |chance, stats, _, _| format!("{}% Chance to deal {}% of a\nCat's Max HP in additional damage", chance, stats.toxic_damage),
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
         name: "Cut Cooldown",
         fallback: "CDown",
-        icon_id: img015::ICON_CUT_COOLDOWN,
+        icon: AbilityIcon::Standard(img015::ICON_CUT_COOLDOWN),
         group: DisplayGroup::Body2,
-        custom_icon: CustomIcon::None,
         schema: &[
             ("Chance", AttrUnit::Percent), 
             ("Amount", AttrUnit::Percent)
@@ -898,17 +877,16 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |value_1, stats, _, _| {
-            format!("{}% Chance to cut\nongoing Cat cooldown by {}%", value_1, stats.cut_cooldown_percent)
+        formatter: |chance, stats, _, _| {
+            format!("{}% Chance to cut\nongoing Cat cooldown by {}%", chance, stats.cut_cooldown_percent)
         },
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
         name: "Dodge",
         fallback: "Dodge",
-        icon_id: img015::ICON_DODGE,
+        icon: AbilityIcon::Standard(img015::ICON_DODGE),
         group: DisplayGroup::Body2,
-        custom_icon: CustomIcon::None,
         schema: &[
             ("Chance", AttrUnit::Percent), 
             ("Duration", AttrUnit::Frames)
@@ -923,15 +901,14 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |value_1, _, duration_frames, _| format!("{}% Chance to Dodge attacks for {}", value_1, fmt_time(duration_frames)),
+        formatter: |chance, _, duration_frames, _| format!("{}% Chance to Dodge attacks for {}", chance, fmt_time(duration_frames)),
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
         name: "Weaken",
         fallback: "Weak",
-        icon_id: img015::ICON_WEAKEN,
+        icon: AbilityIcon::Standard(img015::ICON_WEAKEN),
         group: DisplayGroup::Body2,
-        custom_icon: CustomIcon::None,
         schema: &[
             ("Chance", AttrUnit::Percent), 
             ("Reduced To", AttrUnit::Percent), 
@@ -948,15 +925,14 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |value_1, stats, duration_frames, _| format!("{}% Chance to weaken Cats\nto {}% Attack Power for {}", value_1, stats.weaken_percent, fmt_time(duration_frames)),
+        formatter: |chance, stats, duration_frames, _| format!("{}% Chance to weaken Cats\nto {}% Attack Power for {}", chance, stats.weaken_percent, fmt_time(duration_frames)),
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
         name: "Freeze",
         fallback: "Freez",
-        icon_id: img015::ICON_FREEZE,
+        icon: AbilityIcon::Standard(img015::ICON_FREEZE),
         group: DisplayGroup::Body2,
-        custom_icon: CustomIcon::None,
         schema: &[
             ("Chance", AttrUnit::Percent), 
             ("Duration", AttrUnit::Frames)
@@ -971,15 +947,14 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |value_1, _, duration_frames, _| format!("{}% Chance to Freeze Cats for {}", value_1, fmt_time(duration_frames)),
+        formatter: |chance, _, duration_frames, _| format!("{}% Chance to Freeze Cats for {}", chance, fmt_time(duration_frames)),
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
         name: "Slow",
         fallback: "Slow",
-        icon_id: img015::ICON_SLOW,
+        icon: AbilityIcon::Standard(img015::ICON_SLOW),
         group: DisplayGroup::Body2,
-        custom_icon: CustomIcon::None,
         schema: &[
             ("Chance", AttrUnit::Percent), 
             ("Duration", AttrUnit::Frames)
@@ -994,15 +969,14 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |value_1, _, duration_frames, _| format!("{}% Chance to Slow Cats for {}", value_1, fmt_time(duration_frames)),
+        formatter: |chance, _, duration_frames, _| format!("{}% Chance to Slow Cats for {}", chance, fmt_time(duration_frames)),
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
         name: "Knockback",
         fallback: "KB",
-        icon_id: img015::ICON_KNOCKBACK,
+        icon: AbilityIcon::Standard(img015::ICON_KNOCKBACK),
         group: DisplayGroup::Body2,
-        custom_icon: CustomIcon::None,
         schema: &[
             ("Chance", AttrUnit::Percent)
         ],
@@ -1015,15 +989,14 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |value_1, _, _, _| format!("{}% Chance to Knockback Cats", value_1),
+        formatter: |chance, _, _, _| format!("{}% Chance to Knockback Cats", chance),
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
         name: "Curse",
         fallback: "Curse",
-        icon_id: img015::ICON_CURSE,
+        icon: AbilityIcon::Standard(img015::ICON_CURSE),
         group: DisplayGroup::Body2,
-        custom_icon: CustomIcon::None,
         schema: &[
             ("Chance", AttrUnit::Percent), 
             ("Duration", AttrUnit::Frames)
@@ -1038,15 +1011,14 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |value_1, _, duration_frames, _| format!("{}% Chance to Curse Cats for {}", value_1, fmt_time(duration_frames)),
+        formatter: |chance, _, duration_frames, _| format!("{}% Chance to Curse Cats for {}", chance, fmt_time(duration_frames)),
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
         name: "Warp",
         fallback: "Warp",
-        icon_id: img015::ICON_WARP,
+        icon: AbilityIcon::Standard(img015::ICON_WARP),
         group: DisplayGroup::Body2,
-        custom_icon: CustomIcon::None,
         schema: &[
             ("Chance", AttrUnit::Percent), 
             ("Duration", AttrUnit::Frames), 
@@ -1058,14 +1030,14 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![
                     ("Chance", stats.warp_chance, AttrUnit::Percent), 
                     ("Duration", stats.warp_duration, AttrUnit::Frames), 
-                    ("Min Distance", stats.warp_distance_min, AttrUnit::Range), 
-                    ("Max Distance", stats.warp_distance_max, AttrUnit::Range),
+                    ("Min Distance", stats.warp_distance_minimum, AttrUnit::Range), 
+                    ("Max Distance", stats.warp_distance_maximum, AttrUnit::Range),
                 ] 
             } else { 
                 vec![] 
             }
         },
-        formatter: |value_1, stats, duration_frames, _| format!("{}% Chance to Warp Cats {}~{} Range for {}", value_1, stats.warp_distance_min, stats.warp_distance_max, fmt_time(duration_frames)),
+        formatter: |chance, stats, duration_frames, _| format!("{}% Chance to Warp Cats\n{} Range for {}", chance, fmt_compress(stats.warp_distance_minimum, stats.warp_distance_maximum), fmt_time(duration_frames)),
         minus_one_is_inf: false,
     },
     
@@ -1073,9 +1045,8 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
     EnemyAbilityDef { 
         name: "Immune Wave", 
         fallback: "NoWav", 
-        icon_id: img015::ICON_IMMUNE_WAVE, 
+        icon: AbilityIcon::Standard(img015::ICON_IMMUNE_WAVE), 
         group: DisplayGroup::Footer, 
-        custom_icon: CustomIcon::None,
         schema: &[],
         get_attributes: |stats| if stats.wave_immune > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_, _, _, _| "Immune to Wave Attacks".into(),
@@ -1084,9 +1055,8 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
     EnemyAbilityDef { 
         name: "Immune Surge", 
         fallback: "NoSrg", 
-        icon_id: img015::ICON_IMMUNE_SURGE, 
+        icon: AbilityIcon::Standard(img015::ICON_IMMUNE_SURGE), 
         group: DisplayGroup::Footer, 
-        custom_icon: CustomIcon::None,
         schema: &[],
         get_attributes: |stats| if stats.surge_immune > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_, _, _, _| "Immune to Surge Attacks".into(), 
@@ -1095,9 +1065,8 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
     EnemyAbilityDef { 
         name: "Immune Explosion", 
         fallback: "NoExp", 
-        icon_id: img015::ICON_IMMUNE_EXPLOSION, 
+        icon: AbilityIcon::Standard(img015::ICON_IMMUNE_EXPLOSION), 
         group: DisplayGroup::Footer, 
-        custom_icon: CustomIcon::None,
         schema: &[],
         get_attributes: |stats| if stats.explosion_immune > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_, _, _, _| "Immune to Explosions".into(), 
@@ -1106,9 +1075,8 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
     EnemyAbilityDef { 
         name: "Immune Weaken", 
         fallback: "NoWk", 
-        icon_id: img015::ICON_IMMUNE_WEAKEN, 
+        icon: AbilityIcon::Standard(img015::ICON_IMMUNE_WEAKEN), 
         group: DisplayGroup::Footer, 
-        custom_icon: CustomIcon::None,
         schema: &[],
         get_attributes: |stats| if stats.weaken_immune > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_, _, _, _| "Immune to Weaken".into(), 
@@ -1117,9 +1085,8 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
     EnemyAbilityDef { 
         name: "Immune Freeze", 
         fallback: "NoFrz", 
-        icon_id: img015::ICON_IMMUNE_FREEZE, 
+        icon: AbilityIcon::Standard(img015::ICON_IMMUNE_FREEZE), 
         group: DisplayGroup::Footer, 
-        custom_icon: CustomIcon::None,
         schema: &[],
         get_attributes: |stats| if stats.freeze_immune > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_, _, _, _| "Immune to Freeze".into(), 
@@ -1128,9 +1095,8 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
     EnemyAbilityDef { 
         name: "Immune Slow", 
         fallback: "NoSlw", 
-        icon_id: img015::ICON_IMMUNE_SLOW, 
+        icon: AbilityIcon::Standard(img015::ICON_IMMUNE_SLOW), 
         group: DisplayGroup::Footer, 
-        custom_icon: CustomIcon::None,
         schema: &[],
         get_attributes: |stats| if stats.slow_immune > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_, _, _, _| "Immune to Slow".into(), 
@@ -1139,9 +1105,8 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
     EnemyAbilityDef { 
         name: "Immune Knockback", 
         fallback: "NoKB", 
-        icon_id: img015::ICON_IMMUNE_KNOCKBACK, 
+        icon: AbilityIcon::Standard(img015::ICON_IMMUNE_KNOCKBACK), 
         group: DisplayGroup::Footer, 
-        custom_icon: CustomIcon::None,
         schema: &[],
         get_attributes: |stats| if stats.knockback_immune > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_, _, _, _| "Immune to Knockback".into(), 
@@ -1150,9 +1115,8 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
     EnemyAbilityDef { 
         name: "Immune Curse", 
         fallback: "NoCur", 
-        icon_id: img015::ICON_IMMUNE_CURSE, 
+        icon: AbilityIcon::Standard(img015::ICON_IMMUNE_CURSE), 
         group: DisplayGroup::Footer, 
-        custom_icon: CustomIcon::None,
         schema: &[],
         get_attributes: |stats| if stats.curse_immune > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_, _, _, _| "Immune to Curse".into(), 
@@ -1161,9 +1125,8 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
     EnemyAbilityDef { 
         name: "Immune Warp", 
         fallback: "NoWrp", 
-        icon_id: img015::ICON_IMMUNE_WARP, 
+        icon: AbilityIcon::Standard(img015::ICON_IMMUNE_WARP), 
         group: DisplayGroup::Footer, 
-        custom_icon: CustomIcon::None,
         schema: &[],
         get_attributes: |stats| if stats.warp_immune > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_, _, _, _| "Immune to Warp".into(), 
@@ -1172,9 +1135,8 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
     EnemyAbilityDef {
         name: "Counter Surge",
         fallback: "C-Srg",
-        icon_id: img015::ICON_COUNTER_SURGE,
+        icon: AbilityIcon::Standard(img015::ICON_COUNTER_SURGE),
         group: DisplayGroup::Headline2,
-        custom_icon: CustomIcon::None,
         schema: &[],
         get_attributes: |stats| if stats.counter_surge > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
         formatter: |_,_,_, _| "When hit with a Surge Attack, create a Surge of equal Type, Level, and Range".into(),
@@ -1186,7 +1148,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
 pub struct EnemyStatsDef {
     pub name: &'static str,
     pub display_name: &'static str,
-    pub get_value: fn(&EnemyRaw, i32, i32) -> i32, 
+    pub get_value: fn(&EnemyRaw, i32, Magnification) -> i32, 
     pub formatter: fn(i32) -> String,       
 }
 
@@ -1194,44 +1156,44 @@ pub const ENEMY_STATS_REGISTRY: &[EnemyStatsDef] = &[
     EnemyStatsDef {
         name: "Hitpoints",
         display_name: "Hitpoints",
-        get_value: |stats, _, magnification| (stats.hitpoints as f32 * (magnification as f32 / 100.0)).round() as i32,
-        formatter: |value_1| format!("{}", value_1),
+        get_value: |stats, _, magnification| (stats.hitpoints as f32 * (magnification.hitpoints as f32 / 100.0)).round() as i32,
+        formatter: |hp| format!("{}", hp),
     },
     EnemyStatsDef {
         name: "Knockbacks",
         display_name: "Knockback",
         get_value: |stats, _, _| stats.knockbacks,
-        formatter: |value_1| format!("{}", value_1),
+        formatter: |kbs| format!("{}", kbs),
     },
     EnemyStatsDef {
         name: "Speed",
         display_name: "Speed",
         get_value: |stats, _, _| stats.speed,
-        formatter: |value_1| format!("{}", value_1),
+        formatter: |speed| format!("{}", speed),
     },
     EnemyStatsDef {
         name: "Range",
         display_name: "Range",
         get_value: |stats, _, _| stats.standing_range,
-        formatter: |value_1| format!("{}", value_1),
+        formatter: |range| format!("{}", range),
     },
     EnemyStatsDef {
         name: "Attack",
         display_name: "Attack",
         get_value: |stats, _, magnification| {
-            let magnification_factor = magnification as f32 / 100.0;
+            let magnification_factor = magnification.attack as f32 / 100.0;
             let damage_hit_1 = (stats.attack_1 as f32 * magnification_factor).round() as i32;
             let damage_hit_2 = (stats.attack_2 as f32 * magnification_factor).round() as i32;
             let damage_hit_3 = (stats.attack_3 as f32 * magnification_factor).round() as i32;
             damage_hit_1 + damage_hit_2 + damage_hit_3
         },
-        formatter: |value_1| format!("{}", value_1),
+        formatter: |attack| format!("{}", attack),
     },
     EnemyStatsDef {
         name: "Dps",
         display_name: "DPS",
         get_value: |stats, animation_frames, magnification| {
-            let magnification_factor = magnification as f32 / 100.0;
+            let magnification_factor = magnification.attack as f32 / 100.0;
             let damage_hit_1 = (stats.attack_1 as f32 * magnification_factor).round() as i32;
             let damage_hit_2 = (stats.attack_2 as f32 * magnification_factor).round() as i32;
             let damage_hit_3 = (stats.attack_3 as f32 * magnification_factor).round() as i32;
@@ -1248,7 +1210,7 @@ pub const ENEMY_STATS_REGISTRY: &[EnemyStatsDef] = &[
 
             if attack_cycle > 0 { ((total_attack_damage as f32 * 30.0) / attack_cycle as f32).round() as i32 } else { 0 }
         },
-        formatter: |value_1| format!("{}", value_1),
+        formatter: |dps| format!("{}", dps),
     },
     EnemyStatsDef {
         name: "Atk Cycle",
@@ -1263,28 +1225,28 @@ pub const ENEMY_STATS_REGISTRY: &[EnemyStatsDef] = &[
             let cooldown_frames = stats.time_before_attack_1.saturating_sub(1);
             (effective_foreswing + cooldown_frames).max(animation_frames)
         },
-        formatter: |value_1| format!("{}f", value_1), 
+        formatter: |cycle| format!("{}f", cycle), 
     },
     EnemyStatsDef {
         name: "Atk Type",
         display_name: "Atk Type",
         get_value: |stats, _, _| stats.area_attack,
-        formatter: |value_1| if value_1 == 0 { "Single".to_string() } else { "Area".to_string() },
+        formatter: |atk_type| if atk_type == 0 { "Single".to_string() } else { "Area".to_string() },
     },
     EnemyStatsDef {
         name: "Endure",
         display_name: "Endure",
         get_value: |stats, _, magnification| {
-            let hp = (stats.hitpoints as f32 * (magnification as f32 / 100.0)).round() as i32;
+            let hp = (stats.hitpoints as f32 * (magnification.hitpoints as f32 / 100.0)).round() as i32;
             if stats.knockbacks > 0 { (hp as f32 / stats.knockbacks as f32).round() as i32 } else { hp }
         },
-        formatter: |value_1| format!("{}", value_1),
+        formatter: |endure| format!("{}", endure),
     },
     EnemyStatsDef {
         name: "Cash Drop",
         display_name: "Cash Drop",
         get_value: |stats, _, _| (stats.cash_drop as f32 * 3.95).floor() as i32,
-        formatter: |value_1| format!("{}¢", value_1),
+        formatter: |cash| format!("{}¢", cash),
     },
 ];
 
@@ -1293,11 +1255,17 @@ pub fn get_enemy_stat(name: &str) -> &'static EnemyStatsDef {
     ENEMY_STATS_REGISTRY.iter().find(|s| s.name == name).expect("Stat not found in registry")
 }
 
-pub fn format_enemy_stat(name: &str, stats: &EnemyRaw, animation_frames: i32, magnification: i32) -> String {
+pub fn format_enemy_stat(name: &str, stats: &EnemyRaw, animation_frames: i32, magnification: Magnification) -> String {
     let def = get_enemy_stat(name);
     (def.formatter)((def.get_value)(stats, animation_frames, magnification))
 }
 
 pub fn get_fallback_by_icon(icon_id: usize) -> &'static str {
-    ENEMY_ABILITY_REGISTRY.iter().find(|def| def.icon_id == icon_id).map(|def| def.fallback).unwrap_or("???")
+    ENEMY_ABILITY_REGISTRY.iter().find(|def| {
+        if let AbilityIcon::Standard(id) = def.icon {
+            id == icon_id
+        } else {
+            false
+        }
+    }).map(|def| def.fallback).unwrap_or("???")
 }

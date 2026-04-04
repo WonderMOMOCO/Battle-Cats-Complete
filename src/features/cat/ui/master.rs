@@ -10,10 +10,10 @@ use crate::global::formats::mamodel::Model;
 use crate::features::animation::ui::viewer::AnimViewer;
 use crate::features::cat::data::skilllevel::TalentCost;
 use crate::global::assets::CustomAssets;
-use crate::features::statblock::logic::builder::{StatblockData, SpiritData, generate_and_copy, generate_and_save};
-use crate::features::cat::registry::{get_cat_stat, format_cat_stat};
+use crate::features::statblock::logic::builder::{generate_and_copy, generate_and_save};
 use super::{header, stats, abilities, talents, details, viewer};
 use super::header::ExportAction;
+use crate::features::cat::logic::statblock::build_cat_statblock;
 
 pub fn show(
     ctx: &egui::Context, 
@@ -46,7 +46,7 @@ pub fn show(
         ctx, ui, cat_entry, current_form, current_tab, current_level, level_input, texture_cache, current_key, settings, talent_levels, talent_costs, img022_sheets
     );
 
-    // --- VFS SYNC: Bypass scanner cache and fetch modded stats dynamically ---
+    // Bypass scanner cache and fetch modded stats dynamically
     let dynamic_stats = crate::features::cat::logic::stats::load_from_id(cat_entry.id as i32, &settings.general.language_priority);
     let base_stats = dynamic_stats.as_ref().and_then(|v| v.get(*current_form));
     let form_allows_talents = *current_form >= 2;
@@ -68,61 +68,17 @@ pub fn show(
                 let expand_id = egui::Id::new(format!("conjure_expand_{}", cat_entry.id));
                 let is_conjure_expanded = ctx.data(|d| d.get_temp::<bool>(expand_id).unwrap_or(settings.cat_data.expand_spirit_details));
 
-                let (traits, h1, h2, b1, b2, footer) = crate::features::cat::logic::abilities::collect_ability_data(
-                    final_s, base_s, *current_level, cat_entry.curve.as_ref(), settings, false,
-                    if form_allows_talents { cat_entry.talent_data.as_ref() } else { None },
-                    if form_allows_talents { Some(&*talent_levels) } else { None }
+                let data = build_cat_statblock(
+                    cat_entry,
+                    *current_form,
+                    final_s,
+                    base_s,
+                    *current_level,
+                    level_input.clone(),
+                    settings,
+                    talent_levels,
+                    is_conjure_expanded,
                 );
-
-                let mut spirit_data = None;
-                if is_conjure_expanded && base_s.conjure_unit_id > 0 {
-                    if let Some(c_vec) = crate::features::cat::logic::stats::load_from_id(base_s.conjure_unit_id, &settings.general.language_priority) {
-                        if let Some(c_stats) = c_vec.first() {
-                            let conjure_final = crate::features::cat::logic::stats::get_final_stats(c_stats, cat_entry.curve.as_ref(), *current_level, None, None);
-                            let (s_traits, s_h1, s_h2, s_b1, s_b2, s_footer) = crate::features::cat::logic::abilities::collect_ability_data(
-                                &conjure_final, c_stats, *current_level, cat_entry.curve.as_ref(), settings, true, None, None
-                            );
-                            
-                            spirit_data = Some(SpiritData {
-                                dmg_text: format!("Damage: {}\nRange: {}", conjure_final.attack_1, conjure_final.standing_range),
-                                traits: s_traits,
-                                h1: s_h1,
-                                h2: s_h2,
-                                b1: s_b1,
-                                b2: s_b2,
-                                footer: s_footer,
-                            });
-                        }
-                    }
-                }
-
-                let anim_frames = cat_entry.atk_anim_frames[*current_form];
-                let cycle = (get_cat_stat("Atk Cycle").get_value)(final_s, anim_frames);
-                let atk_type = if final_s.area_attack == 0 { "Single" } else { "Area" };
-
-                let data = StatblockData {
-                    is_cat: true,
-                    id_str: cat_entry.id_str(*current_form),
-                    name: cat_entry.display_name(*current_form),
-                    icon_path: cat_entry.deploy_icon_paths[*current_form].clone(),
-                    top_label: "Level:".to_string(),
-                    top_value: level_input.clone(),
-                    hp: final_s.hitpoints.to_string(),
-                    kb: final_s.knockbacks.to_string(),
-                    speed: final_s.speed.to_string(),
-                    cd_label: get_cat_stat("Cooldown").display_name.to_string(),
-                    cd_value: format_cat_stat("Cooldown", final_s, anim_frames),
-                    is_cd_time: true, 
-                    cd_frames: (get_cat_stat("Cooldown").get_value)(final_s, anim_frames),
-                    cost_label: get_cat_stat("Cost").display_name.to_string(),
-                    cost_value: format_cat_stat("Cost", final_s, anim_frames),
-                    atk: format_cat_stat("Attack", final_s, anim_frames),
-                    dps: format_cat_stat("Dps", final_s, anim_frames),
-                    range: final_s.standing_range.to_string(),
-                    atk_cycle: cycle,
-                    atk_type: atk_type.to_string(),
-                    traits, h1, h2, b1, b2, footer, spirit_data,
-                };
 
                 let priority_clone = settings.general.language_priority.clone();
                 let mut cuts_clone = std::collections::HashMap::new();
@@ -175,7 +131,7 @@ pub fn show(
         },
         DetailTab::Talents => {
              if let Some(raw) = &cat_entry.talent_data {
-                talents::render(ui, raw, img015_sheets, img022_sheets, talent_name_cache, skill_descriptions, settings, base_stats, cat_entry.curve.as_ref(), *current_level, talent_levels, cat_entry.id, talent_costs);
+                talents::render(ui, raw, img015_sheets, img022_sheets, talent_name_cache, skill_descriptions, settings, base_stats, cat_entry.curve.as_ref(), *current_level, talent_levels, cat_entry.id, talent_costs, assets);
              }
         },
         DetailTab::Details => {

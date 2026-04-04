@@ -6,7 +6,7 @@ pub fn load(lang_dir: &Path, priority: &[String]) -> Vec<Vec<String>> {
     let mut descriptions: Vec<Vec<String>> = Vec::new();
     let base_dir = lang_dir.join("EnemyPictureBook");
     
-    for file_path in crate::global::get(&base_dir, "EnemyPictureBook.csv", priority) {
+    for file_path in crate::global::get(&base_dir, &["EnemyPictureBook.csv"], priority) {
         let Ok(content) = fs::read_to_string(&file_path) else { continue };
         let sep = if content.contains('\t') { '\t' } else { utils::detect_csv_separator(&content) };
 
