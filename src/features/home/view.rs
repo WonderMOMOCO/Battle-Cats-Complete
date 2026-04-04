@@ -1,6 +1,7 @@
 use eframe::egui;
 use crate::global::ui::shared::DragGuard;
 use super::changelog;
+use super::notice; 
 
 pub fn show(ctx: &egui::Context, drag_guard: &mut DragGuard) {
     egui::CentralPanel::default().show(ctx, |ui| {
@@ -57,4 +58,5 @@ pub fn show(ctx: &egui::Context, drag_guard: &mut DragGuard) {
         });
 
     changelog::window(ctx, drag_guard);
+    notice::check_and_show(ctx, drag_guard);
 }

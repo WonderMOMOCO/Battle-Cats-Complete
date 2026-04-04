@@ -3,16 +3,14 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Instant;
 use self_update;
-use regex::Regex;
 use crate::global::ui::shared::DragGuard;
+use crate::global::utils::process_markdown;
 
-// --- UI TUNING VARIABLES ---
 const HEADER_TEXT_SIZE: f32 = 22.0;
 const DROPDOWN_ITEM_SIZE: f32 = 15.0;
 const HEADER_SPACING_X: f32 = 6.0;
 const HEADER_SPACING_Y: f32 = 6.0;
-const LABEL_OFFSET_Y: f32 = 7.0; // Nudge the title down manually
-// ---------------------------
+const LABEL_OFFSET_Y: f32 = 7.0;
 
 #[derive(Clone)]
 struct ChangelogState {
@@ -84,7 +82,7 @@ pub fn link(ui: &mut egui::Ui, ctx: &egui::Context) {
                             
                             if !clean_version.is_empty() && clean_version.chars().all(|c| c.is_ascii_digit() || c == '.') {
                                 let raw_body = r.body.unwrap_or_else(|| "No notes.".to_string());
-                                formatted_releases.push((clean_version, strip_markdown(&raw_body)));
+                                formatted_releases.push((clean_version, raw_body));
                             }
                         }
                         locked_thread.releases = formatted_releases;
@@ -191,33 +189,8 @@ pub fn window(ctx: &egui::Context, drag_guard: &mut DragGuard) {
                                 .auto_shrink([false, true]) 
                                 .show(ui, |ui| {
                                     ui.spacing_mut().item_spacing.y = 0.0;
-
-                                    for line in content.lines() {
-                                        let leading_spaces = line.chars().take_while(|c| c.is_whitespace()).count();
-                                        let trimmed = line.trim();
-
-                                        if trimmed.is_empty() {
-                                            ui.add_space(10.0);
-                                            continue;
-                                        }
-
-                                        ui.horizontal_top(|ui| {
-                                            if leading_spaces > 0 {
-                                                ui.add_space(leading_spaces as f32 * 6.0); 
-                                            }
-
-                                            if trimmed.starts_with("•") {
-                                                ui.spacing_mut().item_spacing.x = 3.0;
-                                                ui.label("•");    
-
-                                                let text = trimmed.trim_start_matches('•').trim();
-                                                ui.add(egui::Label::new(text).wrap());
-                                            } else {
-                                                ui.spacing_mut().item_spacing.x = 3.0;
-                                                ui.add(egui::Label::new(trimmed).wrap());
-                                            }
-                                        });
-                                    }
+                                    
+                                    process_markdown(ui, content);
                                 });
                         }
                     });
@@ -228,28 +201,4 @@ pub fn window(ctx: &egui::Context, drag_guard: &mut DragGuard) {
             }
         }
     }
-}
-
-fn strip_markdown(text: &str) -> String {
-    let mut text = text.to_string();
-
-    if let Ok(re_link) = Regex::new(r"\[([^\]]+)\]\([^\)]+\)") {
-        text = re_link.replace_all(&text, "$1").to_string();
-    }
-
-    if let Ok(re_list) = Regex::new(r"(?m)^(\s*)[\*\-]\s+") {
-        text = re_list.replace_all(&text, "${1}• ").to_string();
-    }
-    
-    if let Ok(re_header) = Regex::new(r"(?m)^#+\s*") {
-        text = re_header.replace_all(&text, "").to_string();
-    }
-
-    text = text.replace("**", "");
-    text = text.replace("__", "");
-    text = text.replace("*", ""); 
-    text = text.replace("_", "");
-    text = text.replace("`", "");
-
-    text
 }
