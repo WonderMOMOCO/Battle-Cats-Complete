@@ -445,7 +445,7 @@ fn render_filter_icon(
     
     match icon {
         AbilityIcon::Custom(custom_variant) => {
-            if let Some(tex) = custom_variant.get_texture(assets) {
+            if let Some(tex) = assets.get_icon_texture(*custom_variant) {
                 let img = egui::Image::new(tex).fit_to_exact_size(egui::vec2(32.0, 32.0)).tint(tint);
                 let response = ui.add(egui::ImageButton::new(img).frame(false));
                 if response.clicked() {

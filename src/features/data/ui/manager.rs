@@ -1,8 +1,8 @@
 use eframe::egui;
 use std::sync::atomic::Ordering;
-use crate::features::import::logic::{ImportState, DataTab};
+use crate::features::data::logic::{ImportState, DataTab};
 use crate::features::settings::logic::Settings;
-use crate::features::import::ui::{import_view, export_view};
+use crate::features::data::ui::{import_view, export_view};
 
 pub fn show(ui: &mut egui::Ui, state: &mut ImportState, settings: &mut Settings) {
     ui.vertical(|ui| {

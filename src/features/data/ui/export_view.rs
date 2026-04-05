@@ -2,8 +2,8 @@ use eframe::egui;
 use std::sync::atomic::Ordering;
 use std::sync::mpsc;
 use std::thread;
-use crate::features::import::logic::ImportState;
-use crate::features::import::archive;
+use crate::features::data::logic::ImportState;
+use crate::features::data::archive;
 use crate::features::settings::logic::Settings;
 use crate::features::settings::ui::tabs::toggle_ui;
 

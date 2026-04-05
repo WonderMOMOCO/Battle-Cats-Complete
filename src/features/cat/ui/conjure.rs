@@ -1,13 +1,13 @@
 use eframe::egui;
-use crate::features::cat::logic::stats::{self, CatRaw, CatLevelCurve};
+use crate::features::cat::logic::stats;
 use crate::features::cat::logic::abilities;
 use crate::global::formats::imgcut::SpriteSheet;
 use crate::features::settings::logic::Settings;
 use crate::global::ui::shared::{render_fallback_icon, text_with_superscript};
 use crate::global::game::img015;
 use crate::global::game::abilities::ABILITY_Y;
-use crate::global::assets::CustomAssets;
 use crate::features::statblock::logic::builder::SpiritData;
+use crate::features::cat::logic::context::CatRenderContext;
 
 pub fn render_conjure_toggle(ui: &mut egui::Ui, text: &str, id: egui::Id, settings: &Settings) {
     ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
@@ -30,12 +30,8 @@ pub fn render_conjure_toggle(ui: &mut egui::Ui, text: &str, id: egui::Id, settin
 
 pub fn render_conjure_details(
     ui: &mut egui::Ui,
-    parent_stats: &CatRaw,
-    level: i32,
-    curve: Option<&CatLevelCurve>,
+    ctx: &CatRenderContext,
     sheets: &[SpriteSheet],
-    assets: &CustomAssets,
-    settings: &Settings
 ) {
     egui::Frame::none()
         .fill(egui::Color32::from_black_alpha(220)) 
@@ -45,7 +41,7 @@ pub fn render_conjure_details(
             ui.spacing_mut().item_spacing.y = 0.0;
             let spirit_border = egui::Color32::WHITE;
             
-            let conjure_stats_vec = match stats::load_from_id(parent_stats.conjure_unit_id, &settings.general.language_priority) {
+            let conjure_stats_vec = match stats::load_from_id(ctx.base_stats.conjure_unit_id, &ctx.global.settings.general.language_priority) {
                 Some(s) => s,
                 None => {
                     ui.label(egui::RichText::new("Spirit data not found").weak());
@@ -59,8 +55,19 @@ pub fn render_conjure_details(
             };
 
             let conjure_final = stats::get_final_stats(
-                conjure_stats, curve, level, None, None
+                conjure_stats, ctx.level_curve, ctx.current_level, None, None
             );
+
+            let spirit_ctx = CatRenderContext {
+                global: ctx.global,
+                base_stats: conjure_stats,
+                final_stats: &conjure_final,
+                current_level: ctx.current_level,
+                level_curve: ctx.level_curve,
+                talent_data: None,
+                talent_levels: None,
+                is_conjure_unit: true,
+            };
 
             let dmg = conjure_final.attack_1;
             
@@ -88,60 +95,65 @@ pub fn render_conjure_details(
             
             ui.add_space(ABILITY_Y);
 
-            let (spirit_traits, spirit_head_1, spirit_head_2, spirit_body_1, spirit_body_2, spirit_footer) = abilities::collect_ability_data(
-                &conjure_final, conjure_stats, level, curve, settings, true, None, None  
-            );
+            let (spirit_traits, spirit_head_1, spirit_head_2, spirit_body_1, spirit_body_2, spirit_footer) = abilities::collect_ability_data(&spirit_ctx);
             
             let mut prev = false;
             let mut last_was_trait = false;
 
             if !spirit_traits.is_empty() { 
-                crate::features::cat::ui::abilities::render_icon_row(ui, &spirit_traits, sheets, settings, spirit_border, assets); 
+                crate::features::cat::ui::abilities::render_icon_row(ui, &spirit_traits, sheets, &spirit_ctx.global, spirit_border); 
                 prev = true;
                 last_was_trait = true;
             }
 
             if !spirit_head_1.is_empty() { 
                 if prev { ui.add_space(if last_was_trait { crate::global::game::abilities::TRAIT_Y } else { ABILITY_Y }); last_was_trait = false; }
-                crate::features::cat::ui::abilities::render_icon_row(ui, &spirit_head_1, sheets, settings, spirit_border, assets); 
+                crate::features::cat::ui::abilities::render_icon_row(ui, &spirit_head_1, sheets, &spirit_ctx.global, spirit_border); 
                 prev = true;
             }
 
             if !spirit_head_2.is_empty() { 
                 if prev { ui.add_space(if last_was_trait { crate::global::game::abilities::TRAIT_Y } else { ABILITY_Y }); last_was_trait = false; }
-                crate::features::cat::ui::abilities::render_icon_row(ui, &spirit_head_2, sheets, settings, spirit_border, assets); 
+                crate::features::cat::ui::abilities::render_icon_row(ui, &spirit_head_2, sheets, &spirit_ctx.global, spirit_border); 
                 prev = true;
             }
             
             let has_body = !spirit_body_1.is_empty() || !spirit_body_2.is_empty();
             if has_body {
                 if prev { ui.add_space(if last_was_trait { crate::global::game::abilities::TRAIT_Y } else { ABILITY_Y }); last_was_trait = false; }
-                crate::features::cat::ui::abilities::render_list_view(ui, &spirit_body_1, sheets, assets, 0, level, curve, &conjure_final, settings, spirit_border);
+                crate::features::cat::ui::abilities::render_list_view(ui, &spirit_body_1, sheets, 0, &spirit_ctx, spirit_border);
                 if !spirit_body_1.is_empty() && !spirit_body_2.is_empty() { ui.add_space(ABILITY_Y); }
-                crate::features::cat::ui::abilities::render_list_view(ui, &spirit_body_2, sheets, assets, 0, level, curve, &conjure_final, settings, spirit_border);
+                crate::features::cat::ui::abilities::render_list_view(ui, &spirit_body_2, sheets, 0, &spirit_ctx, spirit_border);
                 prev = true;
             }
             
             if !spirit_footer.is_empty() {
                 if prev { ui.add_space(if last_was_trait { crate::global::game::abilities::TRAIT_Y } else { ABILITY_Y }); }
-                crate::features::cat::ui::abilities::render_icon_row(ui, &spirit_footer, sheets, settings, spirit_border, assets);
+                crate::features::cat::ui::abilities::render_icon_row(ui, &spirit_footer, sheets, &spirit_ctx.global, spirit_border);
             }
         });
 }
 
 pub fn build_spirit_data(
-    base_s: &CatRaw,
-    current_level: i32,
-    curve: Option<&CatLevelCurve>,
-    settings: &Settings,
+    ctx: &CatRenderContext
 ) -> Option<SpiritData> {
-    if base_s.conjure_unit_id > 0 {
-        if let Some(c_vec) = stats::load_from_id(base_s.conjure_unit_id, &settings.general.language_priority) {
+    if ctx.base_stats.conjure_unit_id > 0 {
+        if let Some(c_vec) = stats::load_from_id(ctx.base_stats.conjure_unit_id, &ctx.global.settings.general.language_priority) {
             if let Some(c_stats) = c_vec.first() {
-                let conjure_final = stats::get_final_stats(c_stats, curve, current_level, None, None);
-                let (s_traits, s_h1, s_h2, s_b1, s_b2, s_footer) = abilities::collect_ability_data(
-                    &conjure_final, c_stats, current_level, curve, settings, true, None, None
-                );
+                let conjure_final = stats::get_final_stats(c_stats, ctx.level_curve, ctx.current_level, None, None);
+                
+                let spirit_ctx = CatRenderContext {
+                    global: ctx.global,
+                    base_stats: c_stats,
+                    final_stats: &conjure_final,
+                    current_level: ctx.current_level,
+                    level_curve: ctx.level_curve,
+                    talent_data: None,
+                    talent_levels: None,
+                    is_conjure_unit: true,
+                };
+                
+                let (s_traits, s_h1, s_h2, s_b1, s_b2, s_footer) = abilities::collect_ability_data(&spirit_ctx);
                 
                 return Some(SpiritData {
                     dmg_text: format!("Damage: {}\nRange: {}", conjure_final.attack_1, conjure_final.standing_range),

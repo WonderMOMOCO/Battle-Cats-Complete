@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 use std::fs;
 use std::path::Path;
+use std::cell::Cell;
 
 #[derive(Debug, Clone, Default)]
 pub struct EnemyRaw {
@@ -117,6 +118,7 @@ pub struct EnemyRaw {
     pub type_supervillain: i32,
     pub cut_cooldown_chance: i32,
     pub cut_cooldown_percent: i32,
+    pub has_unknown_abilities: i32,
 }
 
 impl EnemyRaw {
@@ -146,15 +148,19 @@ pub fn load_all(dir: &Path, filename: &str, priority: &[String]) -> Option<Vec<E
         let cols: Vec<&str> = line.split(',').collect();
         if cols.len() < 10 { continue; } 
 
+        let max_read = Cell::new(0);
+
         let get_int = |idx: usize| -> i32 {
+            max_read.set(max_read.get().max(idx));
             cols.get(idx).and_then(|s| s.trim().parse::<i32>().ok()).unwrap_or(0)
         };
         
         let get_int_neg = |idx: usize| -> i32 {
+            max_read.set(max_read.get().max(idx));
             cols.get(idx).and_then(|s| s.trim().parse::<i32>().ok()).unwrap_or(-1)
         };
 
-        enemies.push(EnemyRaw {
+        let mut raw = EnemyRaw {
             hitpoints: get_int(0),
             knockbacks: get_int(1),
             speed: get_int(2),
@@ -196,7 +202,7 @@ pub fn load_all(dir: &Path, filename: &str, priority: &[String]) -> Option<Vec<E
             wave_blocker: get_int(38),
             knockback_immune: get_int(39),
             freeze_immune: get_int(40),
-            slow_immune: get_int(41),
+            slow_immune: get_int(41), 
             weaken_immune: get_int(42),
             burrow_amount: get_int(43),
             burrow_distance: get_int(44) / 4,
@@ -268,7 +274,17 @@ pub fn load_all(dir: &Path, filename: &str, priority: &[String]) -> Option<Vec<E
             type_supervillain: get_int(110),
             cut_cooldown_chance: get_int(111),
             cut_cooldown_percent: get_int(112),
-        });
+            has_unknown_abilities: 0,
+        };
+
+        for col in cols.iter().skip(max_read.get() + 1) {
+            if col.trim().parse::<i32>().unwrap_or(0) != 0 {
+                raw.has_unknown_abilities = 1;
+                break;
+            }
+        }
+
+        enemies.push(raw);
     }
     
     Some(enemies)

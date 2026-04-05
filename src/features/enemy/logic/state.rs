@@ -14,6 +14,7 @@ use crate::global::assets::CustomAssets;
 use crate::global::ui::shared::DragGuard;
 use crate::features::enemy::ui::filter::EnemyFilterState; 
 use crate::features::enemy::registry::Magnification;
+use crate::global::game::param::Param;
 use super::loader;
 
 pub const TOP_PANEL_PADDING: f32 = 2.5;
@@ -98,7 +99,7 @@ impl EnemyListState {
     }
 }
 
-pub fn show(ctx: &egui::Context, state: &mut EnemyListState, settings: &mut Settings) {
+pub fn show(ctx: &egui::Context, state: &mut EnemyListState, settings: &mut Settings, param: &Param) {
     if state.custom_assets.is_none() {
         state.custom_assets = Some(CustomAssets::new(ctx));
     }
@@ -198,7 +199,7 @@ pub fn show(ctx: &egui::Context, state: &mut EnemyListState, settings: &mut Sett
             ctx, ui, enemy_entry, &mut state.selected_tab, &mut state.mag_input,
             &mut state.magnification, settings, &mut state.img015_sheets,
             &mut state.anim_sheet, &mut state.model_data, &mut state.anim_viewer,
-            &assets, &mut state.detail_texture, &mut state.detail_key,
+            &assets, &mut state.detail_texture, &mut state.detail_key, param,
         );
     });
 

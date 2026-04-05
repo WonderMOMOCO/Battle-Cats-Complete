@@ -3,11 +3,11 @@ use std::sync::atomic::Ordering;
 use std::sync::mpsc;
 use std::thread;
 use std::path::{Path, PathBuf};
-use crate::features::import::logic::{ImportState, ImportSubTab, AdbImportType, AdbRegion, ImportMode, decrypt};
+use crate::features::data::logic::{ImportState, ImportSubTab, AdbImportType, AdbRegion, ImportMode, decrypt};
 use crate::features::settings::logic::Settings;
 use crate::features::addons::toolpaths::{self, Presence};
 use crate::features::addons::adb::bridge;
-use crate::features::import::{archive, sort};
+use crate::features::data::{archive, sort};
 
 pub fn show(ui: &mut egui::Ui, state: &mut ImportState, settings: &mut Settings) {
     let current_status = state.import_job_status.load(Ordering::Relaxed);
@@ -133,7 +133,7 @@ pub fn show(ui: &mut egui::Ui, state: &mut ImportState, settings: &mut Settings)
                     if ui.button("Select Folder").clicked() {
                         if let Some(path) = rfd::FileDialog::new().pick_folder() {
                             state.decrypt_path = path.to_string_lossy().to_string();
-                            state.decrypt_censored = crate::features::import::logic::censor_path(&state.decrypt_path);
+                            state.decrypt_censored = crate::features::data::logic::censor_path(&state.decrypt_path);
                         }
                     }
                     ui.label(if state.decrypt_censored.is_empty() { "None selected" } else { &state.decrypt_censored });
@@ -185,7 +185,7 @@ pub fn show(ui: &mut egui::Ui, state: &mut ImportState, settings: &mut Settings)
                         };
                         if let Some(path) = res {
                             state.import_path = path.to_string_lossy().to_string();
-                            state.import_censored = crate::features::import::logic::censor_path(&state.import_path);
+                            state.import_censored = crate::features::data::logic::censor_path(&state.import_path);
                         }
                     }
                     ui.label(if state.import_censored.is_empty() { "None selected" } else { &state.import_censored });

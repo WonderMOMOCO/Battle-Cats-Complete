@@ -1,57 +1,45 @@
 use eframe::egui;
 use crate::features::cat::logic::scanner::CatEntry;
-use crate::features::cat::logic::stats::{self, CatRaw};
+use crate::features::cat::logic::stats;
 use crate::features::cat::logic::abilities;
 use crate::global::formats::imgcut::SpriteSheet;
-use crate::features::settings::logic::Settings;
 use crate::global::ui::shared::{render_fallback_icon, text_with_superscript};
-use crate::features::cat::data::skillacquisition::TalentRaw;
-use std::collections::HashMap;
+use crate::global::context::GlobalContext;
 use crate::global::game::abilities::{ABILITY_X, ABILITY_Y, TRAIT_Y};
 use crate::global::game::abilities::{AbilityItem, CustomIcon};
-use crate::global::assets::CustomAssets;
 use crate::features::cat::registry::AbilityIcon;
 use crate::global::game::img015;
+use crate::features::cat::logic::context::CatRenderContext;
 
 pub fn render(
     ui: &mut egui::Ui, 
-    final_stats: &CatRaw, 
-    base_stats: &CatRaw,
+    ctx: &CatRenderContext,
     cat: &CatEntry, 
-    level: i32,
     sheets: &[SpriteSheet], 
-    assets: &CustomAssets,
-    settings: &Settings, 
-    talent_data: Option<&TalentRaw>,
-    talent_levels: Option<&HashMap<u8, u8>>
 ) {
     ui.spacing_mut().item_spacing.y = 0.0;
-
-    let curve = cat.curve.as_ref();
     
-    let (grp_trait, grp_hl1, grp_hl2, grp_b1, grp_b2, grp_footer) = abilities::collect_ability_data(
-        final_stats, base_stats, level, curve, settings, false, talent_data, talent_levels
-    );
+    let (grp_trait, grp_hl1, grp_hl2, grp_b1, grp_b2, grp_footer) = abilities::collect_ability_data(ctx);
     
     let mut previous_content = false;
     let mut last_was_trait = false;
     let main_border = egui::Color32::BLACK;
 
     if !grp_trait.is_empty() {
-        render_icon_row(ui, &grp_trait, sheets, settings, main_border, assets);
+        render_icon_row(ui, &grp_trait, sheets, &ctx.global, main_border);
         previous_content = true;
         last_was_trait = true;
     }
 
     if !grp_hl1.is_empty() { 
         if previous_content { ui.add_space(if last_was_trait { TRAIT_Y } else { ABILITY_Y }); last_was_trait = false; }
-        render_icon_row(ui, &grp_hl1, sheets, settings, main_border, assets); 
+        render_icon_row(ui, &grp_hl1, sheets, &ctx.global, main_border); 
         previous_content = true;
     }
     
     if !grp_hl2.is_empty() { 
         if previous_content { ui.add_space(if last_was_trait { TRAIT_Y } else { ABILITY_Y }); last_was_trait = false; }
-        render_icon_row(ui, &grp_hl2, sheets, settings, main_border, assets); 
+        render_icon_row(ui, &grp_hl2, sheets, &ctx.global, main_border); 
         previous_content = true;
     }
 
@@ -59,17 +47,17 @@ pub fn render(
     if has_body {
        if previous_content { ui.add_space(if last_was_trait { TRAIT_Y } else { ABILITY_Y }); last_was_trait = false; }
        
-       render_list_view(ui, &grp_b1, sheets, assets, cat.id, level, curve, final_stats, settings, main_border);
+       render_list_view(ui, &grp_b1, sheets, cat.id, ctx, main_border);
        
        if !grp_b1.is_empty() && !grp_b2.is_empty() { ui.add_space(ABILITY_Y); }
 
-       render_list_view(ui, &grp_b2, sheets, assets, cat.id, level, curve, final_stats, settings, main_border);
+       render_list_view(ui, &grp_b2, sheets, cat.id, ctx, main_border);
        previous_content = true;
     }
 
     if !grp_footer.is_empty() {
         if previous_content { ui.add_space(if last_was_trait { TRAIT_Y } else { ABILITY_Y }); }
-        render_icon_row(ui, &grp_footer, sheets, settings, main_border, assets); 
+        render_icon_row(ui, &grp_footer, sheets, &ctx.global, main_border); 
     }
 }
 
@@ -77,15 +65,14 @@ pub fn render_icon_row(
     ui: &mut egui::Ui, 
     items: &Vec<AbilityItem>, 
     sheets: &[SpriteSheet], 
-    settings: &Settings, 
+    global_ctx: &GlobalContext, 
     border_color: egui::Color32,
-    assets: &CustomAssets,
 ) {
     ui.scope(|ui| {
         ui.spacing_mut().item_spacing = egui::vec2(ABILITY_X, ABILITY_Y);
         ui.horizontal_wrapped(|ui| {
             for item in items {
-                let r = render_single_icon(ui, item, sheets, settings, border_color, assets);
+                let r = render_single_icon(ui, item, sheets, global_ctx, border_color);
                 r.on_hover_ui(|ui| text_with_superscript(ui, &item.text));
             }
         });
@@ -96,14 +83,13 @@ fn render_single_icon(
     ui: &mut egui::Ui, 
     item: &AbilityItem, 
     sheets: &[SpriteSheet], 
-    _settings: &Settings, 
+    global_ctx: &GlobalContext, 
     border: egui::Color32,
-    assets: &CustomAssets,
 ) -> egui::Response {
     let size = egui::vec2(stats::ICON_SIZE, stats::ICON_SIZE);
 
     // Try Custom Icon first
-    if let Some(tex) = item.custom_icon.get_texture(assets) {
+    if let Some(tex) = global_ctx.assets.get_icon_texture(item.custom_icon) {
         return ui.add(egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)));
     }
 
@@ -140,12 +126,8 @@ pub fn render_list_view(
     ui: &mut egui::Ui, 
     items: &Vec<AbilityItem>, 
     sheets: &[SpriteSheet],
-    assets: &CustomAssets,
     cat_id: u32,
-    current_level: i32,
-    curve: Option<&stats::CatLevelCurve>,
-    s: &CatRaw,
-    settings: &Settings, 
+    ctx: &CatRenderContext, 
     border_color: egui::Color32,
 ) {
     for (i, item) in items.iter().enumerate() {
@@ -154,19 +136,19 @@ pub fn render_list_view(
         
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 8.0; 
-            render_single_icon(ui, item, sheets, settings, border_color, assets); 
+            render_single_icon(ui, item, sheets, &ctx.global, border_color); 
 
             if !is_conjure {
                 text_with_superscript(ui, &item.text);
             } else {
-                crate::features::cat::ui::conjure::render_conjure_toggle(ui, &item.text, id, settings);
+                crate::features::cat::ui::conjure::render_conjure_toggle(ui, &item.text, id, ctx.global.settings);
             }
         }); 
 
-        let expanded = ui.data(|d| d.get_temp::<bool>(id).unwrap_or(settings.cat_data.expand_spirit_details));
+        let expanded = ui.data(|d| d.get_temp::<bool>(id).unwrap_or(ctx.global.settings.cat_data.expand_spirit_details));
         if is_conjure && expanded {
             ui.add_space(ABILITY_Y);
-            crate::features::cat::ui::conjure::render_conjure_details(ui, s, current_level, curve, sheets, assets, settings);
+            crate::features::cat::ui::conjure::render_conjure_details(ui, ctx, sheets);
         }
         
         if i < items.len() - 1 {

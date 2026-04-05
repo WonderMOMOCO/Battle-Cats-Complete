@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 use std::fs;
 use std::path::Path;
+use std::cell::Cell;
 use crate::global::utils;
 use crate::features::cat::paths;
 
@@ -125,17 +126,27 @@ pub struct CatRaw {
     pub explosion_spawn_anchor: i32,     
     pub explosion_spawn_span: i32, 
     pub explosion_immune: i32,
+    pub has_unknown_abilities: i32,
 }
 
 impl CatRaw {
     pub fn from_csv_line(csv_line: &str, delimiter: char) -> Option<Self> {
         let line_parts: Vec<&str> = csv_line.split(delimiter).collect();
-        let get_int = |index: usize| line_parts.get(index).and_then(|s: &&str| s.trim().parse::<i32>().ok()).unwrap_or(0);
-        let get_int_neg = |index: usize| line_parts.get(index).and_then(|s: &&str| s.trim().parse::<i32>().ok()).unwrap_or(-1);
-
         if line_parts.len() < 10 { return None; }
 
-        Some(Self {
+        let max_read = Cell::new(0);
+
+        let get_int = |index: usize| {
+            max_read.set(max_read.get().max(index));
+            line_parts.get(index).and_then(|s: &&str| s.trim().parse::<i32>().ok()).unwrap_or(0)
+        };
+        
+        let get_int_neg = |index: usize| {
+            max_read.set(max_read.get().max(index));
+            line_parts.get(index).and_then(|s: &&str| s.trim().parse::<i32>().ok()).unwrap_or(-1)
+        };
+
+        let mut raw = Self {
             hitpoints: get_int(0),
             knockbacks: get_int(1),
             speed: get_int(2),
@@ -253,7 +264,17 @@ impl CatRaw {
             explosion_spawn_anchor: get_int(114) / 4,
             explosion_spawn_span: get_int(115) / 4,
             explosion_immune: get_int(116),
-        })
+            has_unknown_abilities: 0,
+        };
+
+        for val in line_parts.iter().skip(max_read.get() + 1) {
+            if val.trim().parse::<i32>().unwrap_or(0) != 0 {
+                raw.has_unknown_abilities = 1;
+                break;
+            }
+        }
+
+        Some(raw)
     }
 }
 

@@ -156,7 +156,7 @@ fn render_header(
                 
                 match &def.icon {
                     crate::features::cat::registry::AbilityIcon::Custom(custom) => {
-                        if let Some(tex) = custom.get_texture(assets) {
+                        if let Some(tex) = assets.get_icon_texture(*custom) {
                             ui.add(egui::Image::new(egui::load::SizedTexture::new(tex.id(), size)));
                             drawn = true;
                         }

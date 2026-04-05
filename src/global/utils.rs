@@ -1,13 +1,6 @@
-#![allow(dead_code)]
 use image::imageops;
 use regex::Regex;
 use eframe::egui;
-
-pub trait SoftReset {
-    fn reset(&mut self);
-}
-
-pub const LANGUAGE_PRIORITY: &[&str] = &["en", "ja", "tw", "ko", "es", "de", "fr", "it", "th", ""];
 
 pub fn autocrop(img: image::RgbaImage) -> image::RgbaImage {
     let (width, height) = img.dimensions();

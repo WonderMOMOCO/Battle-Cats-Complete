@@ -1,5 +1,5 @@
 use std::sync::mpsc::Receiver;
-use crate::features::import::logic::ImportSubTab;
+use crate::features::data::logic::ImportSubTab;
 use crate::global::ui::shared::DragGuard;
 use crate::features::mods::logic::bridge::ModAdbEvent;
 use crate::features::mods::logic::metadata::ModMetadata;
