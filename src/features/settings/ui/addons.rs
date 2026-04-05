@@ -46,7 +46,7 @@ pub fn show(ui: &mut egui::Ui, drag_guard: &mut DragGuard) -> bool {
             .show(ui, |ui| {
                 ui.heading("Android Bridge");
                 ui.add_space(5.0);
-                ui.label("Enables \"Android\" option for Game Data Import allowing Android Device & Emulator game rips\nMake sure you have \"USB Debugging\" or \"Wireless Debugging\" Enabled on your Android Device");
+                ui.label("Enables \"Android\" option for Game Data Import allowing Android Device & Emulator imports\nMake sure you have \"USB Debugging\" or \"Wireless Debugging\" Enabled on your Android Device");
                 ui.add_space(8.0);
                 
                 let adb_status = adb_manager.status.clone(); 

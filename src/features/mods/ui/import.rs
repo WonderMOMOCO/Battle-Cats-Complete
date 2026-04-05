@@ -2,7 +2,7 @@ use eframe::egui;
 use std::path::PathBuf;
 use crate::features::mods::logic::state::{ModState, ModPackType};
 use crate::features::settings::logic::Settings;
-use crate::features::import::logic::ImportSubTab;
+use crate::features::data::logic::ImportSubTab;
 use crate::features::addons::toolpaths::{self, Presence};
 use crate::features::mods::logic::manager;
 
@@ -202,7 +202,7 @@ fn show_raw_view(ui: &mut egui::Ui, state: &mut ModState) {
                 }
             }
             let label_text = if let Some(p) = &selected_path { 
-                crate::features::import::logic::censor_path(&p.to_string_lossy()) 
+                crate::features::data::logic::censor_path(&p.to_string_lossy()) 
             } else { 
                 "No source selected".to_string() 
             };
@@ -312,5 +312,5 @@ fn render_pack_selection_label(
         return;
     } 
     
-    ui.label(crate::features::import::logic::censor_path(&p.to_string_lossy()));
+    ui.label(crate::features::data::logic::censor_path(&p.to_string_lossy()));
 }

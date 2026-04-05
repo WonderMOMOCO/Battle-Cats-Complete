@@ -1,7 +1,7 @@
 pub mod cat;
 pub mod enemy;
 pub mod animation;
-pub mod import;
+pub mod data;
 pub mod settings;
 pub mod statblock;
 pub mod addons;

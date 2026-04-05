@@ -1,20 +1,10 @@
 use crate::global::game::img015;
-use crate::features::settings::logic::Settings;
-use super::stats::{self, CatRaw};
-use crate::features::cat::data::skillacquisition::TalentRaw;
-use std::collections::HashMap;
+use crate::features::cat::logic::context::CatRenderContext;
 use crate::features::cat::registry::{self, DisplayGroup, AttrUnit, AbilityIcon};
 use crate::global::game::abilities::{AbilityItem, CustomIcon};
 
 pub fn collect_ability_data(
-    final_stats: &CatRaw,
-    base_stats: &CatRaw,
-    current_level: i32,
-    level_curve: Option<&stats::CatLevelCurve>,
-    _settings: &Settings, 
-    is_conjure_unit: bool,
-    talent_data: Option<&TalentRaw>,
-    talent_levels: Option<&HashMap<u8, u8>>
+    ctx: &CatRenderContext
 ) -> (Vec<AbilityItem>, Vec<AbilityItem>, Vec<AbilityItem>, Vec<AbilityItem>, Vec<AbilityItem>, Vec<AbilityItem>) {
     
     let mut group_trait = Vec::new();
@@ -26,7 +16,7 @@ pub fn collect_ability_data(
 
     let get_talent_border = |ability_id: u8| -> Option<usize> {
         if ability_id == 0 { return None; }
-        if let (Some(data), Some(levels)) = (talent_data, talent_levels) {
+        if let (Some(data), Some(levels)) = (ctx.talent_data, ctx.talent_levels) {
             let check_id = |target_id: u8| -> Option<usize> {
                 if let Some((idx, group)) = data.groups.iter().enumerate().find(|(_, g)| g.ability_id == target_id) {
                     let lv = *levels.get(&(idx as u8)).unwrap_or(&0);
@@ -55,24 +45,24 @@ pub fn collect_ability_data(
         None
     };
 
-    let target_label = if is_conjure_unit { "Enemies" } else { "Target Traits" };
+    let target_label = if ctx.is_conjure_unit { "Enemies" } else { "Target Traits" };
 
     // --- STANDARD ABILITIES LOOP ---
     for def in registry::CAT_ABILITY_REGISTRY {
         if def.group == DisplayGroup::Hidden { continue; }
         
-        if is_conjure_unit {
+        if ctx.is_conjure_unit {
             if def.group == DisplayGroup::Trait || def.group == DisplayGroup::Headline1 { continue; } 
             if def.name == "Dodge" || def.name == "Immune Boss Wave" || def.name == "Conjure / Spirit" || def.name == "Kamikaze" { continue; }
         }
 
-        let attrs = (def.get_attributes)(final_stats);
+        let attrs = (def.get_attributes)(ctx.final_stats);
         
         if !attrs.is_empty() {
             let val = attrs.first().map(|(_, v, _)| *v).unwrap_or(0);
             let dur = attrs.iter().find(|(_, _, u)| *u == AttrUnit::Frames).map(|(_, v, _)| *v).unwrap_or(0);
             
-            let text = (def.formatter)(val, final_stats, target_label, dur);
+            let text = (def.formatter)(val, ctx.final_stats, target_label, dur, ctx.global.param);
             let border = get_talent_border(def.talent_id);
 
             let (mut final_icon, final_custom) = match def.icon {
@@ -80,8 +70,8 @@ pub fn collect_ability_data(
                 AbilityIcon::Custom(c) => (None, c),
             };
 
-            if def.name == "Wave Attack" && final_stats.mini_wave_flag > 0 { final_icon = Some(img015::ICON_MINI_WAVE); }
-            else if def.name == "Surge Attack" && final_stats.mini_surge_flag > 0 { final_icon = Some(img015::ICON_MINI_SURGE); }
+            if def.name == "Wave Attack" && ctx.final_stats.mini_wave_flag > 0 { final_icon = Some(img015::ICON_MINI_WAVE); }
+            else if def.name == "Surge Attack" && ctx.final_stats.mini_surge_flag > 0 { final_icon = Some(img015::ICON_MINI_SURGE); }
 
             let item = AbilityItem { icon_id: final_icon, text, custom_icon: final_custom, border_id: border };
 
@@ -98,7 +88,7 @@ pub fn collect_ability_data(
     }
 
     // --- TALENT-ONLY STATS LOOP ---
-    if let (Some(t_data), Some(levels)) = (talent_data, talent_levels) {
+    if let (Some(t_data), Some(levels)) = (ctx.talent_data, ctx.talent_levels) {
         let mut talent_headline = Vec::new();
 
         for (idx, group) in t_data.groups.iter().enumerate() {
@@ -115,7 +105,7 @@ pub fn collect_ability_data(
                 match group.ability_id {
                     // Stat Buffs: Leverage the dynamic Diff Engine
                     25 | 26 | 27 | 31 | 32 | 61 | 82 => { 
-                        if let Some(text) = crate::features::cat::logic::talents::calculate_talent_display(group, base_stats, lv, level_curve, current_level) {
+                        if let Some(text) = crate::features::cat::logic::talents::calculate_talent_display(group, ctx.base_stats, lv, ctx.level_curve, ctx.current_level) {
                             let item = AbilityItem { icon_id: final_icon, text, custom_icon: final_custom, border_id: get_talent_border(def.talent_id) };
                             talent_headline.push(item);
                         }
@@ -123,7 +113,7 @@ pub fn collect_ability_data(
                     // Resistances: Calculate the value and use the registry's base formatter
                     18 | 19 | 20 | 21 | 22 | 24 | 30 | 52 | 54 => { 
                         let val = crate::features::cat::logic::talents::calculate_talent_value(group.min_1, group.max_1, lv, group.max_level);
-                        let text = (def.formatter)(val, final_stats, target_label, 0);
+                        let text = (def.formatter)(val, ctx.final_stats, target_label, 0, ctx.global.param);
                         let item = AbilityItem { icon_id: final_icon, text, custom_icon: final_custom, border_id: get_talent_border(def.talent_id) };
                         group_footer.push(item);
                     },

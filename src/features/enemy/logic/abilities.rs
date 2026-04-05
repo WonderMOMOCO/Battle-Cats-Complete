@@ -1,12 +1,9 @@
-use crate::features::settings::logic::Settings;
-use crate::features::enemy::data::t_unit::EnemyRaw;
-use crate::features::enemy::registry::{self, DisplayGroup, AttrUnit, AbilityIcon, Magnification};
+use crate::features::enemy::registry::{self, DisplayGroup, AttrUnit, AbilityIcon};
 use crate::global::game::abilities::{AbilityItem, CustomIcon};
+use crate::features::enemy::logic::context::EnemyRenderContext;
 
 pub fn collect_ability_data(
-    stats: &EnemyRaw,
-    _settings: &Settings,
-    magnification: Magnification,
+    ctx: &EnemyRenderContext,
 ) -> (Vec<AbilityItem>, Vec<AbilityItem>, Vec<AbilityItem>, Vec<AbilityItem>, Vec<AbilityItem>, Vec<AbilityItem>) {
     
     let mut group_trait = Vec::new();
@@ -19,19 +16,16 @@ pub fn collect_ability_data(
     for def in registry::ENEMY_ABILITY_REGISTRY {
         if def.group == DisplayGroup::Hidden { continue; } 
 
-        let attrs = (def.get_attributes)(stats);
+        let attrs = (def.get_attributes)(ctx.stats);
         
         if !attrs.is_empty() {
             let val = attrs.first().map(|(_, v, _)| *v).unwrap_or(0);
             let dur = attrs.iter().find(|(_, _, u)| *u == AttrUnit::Frames).map(|(_, v, _)| *v).unwrap_or(0);
-            
-            let text = (def.formatter)(val, stats, dur, magnification);
-
+            let text = (def.formatter)(val, ctx.stats, dur, ctx.magnification, ctx.global.param);
             let (final_icon, custom_icon) = match def.icon {
                 AbilityIcon::Standard(id) => (Some(id), CustomIcon::None),
                 AbilityIcon::Custom(icon) => (None, icon),
             };
-
             let item = AbilityItem { icon_id: final_icon, text, custom_icon, border_id: None };
 
             match def.group {

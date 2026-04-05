@@ -16,6 +16,7 @@ use crate::features::animation::ui::viewer::AnimViewer;
 use crate::features::settings::logic::state::ScannerConfig;
 use crate::features::settings::logic::Settings;
 use crate::global::ui::shared::DragGuard; 
+use crate::global::game::param::Param;
 
 pub const TOP_PANEL_PADDING: f32 = 2.5;
 pub const SEARCH_FILTER_GAP: f32 = 5.0;
@@ -118,7 +119,7 @@ impl CatListState {
     }
 }
 
-pub fn show(ctx: &egui::Context, state: &mut CatListState, settings: &mut Settings) {
+pub fn show(ctx: &egui::Context, state: &mut CatListState, settings: &mut Settings, param: &Param) {
     if state.custom_assets.is_none() {
         state.custom_assets = Some(CustomAssets::new(ctx));
     }
@@ -286,6 +287,7 @@ pub fn show(ctx: &egui::Context, state: &mut CatListState, settings: &mut Settin
             Some(cat_entry.skill_descriptions.as_ref()), settings, talent_map,
             cat_entry.talent_costs.as_ref(),
             state.texture_cache_version,
+            param,
         );
 
         let mut current_ultra_state = state.selected_form == 3;

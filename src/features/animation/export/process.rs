@@ -102,7 +102,7 @@ pub fn start_export(state: &mut ExporterState) {
         start_frame: state.frame_start, end_frame: state.frame_end, interpolation: state.interpolation,
         output_path,
         base_name, 
-        background: state.background, // ADDED THIS
+        background: state.background,
     };
 
     let (sender, receiver) = mpsc::channel();
@@ -154,7 +154,22 @@ pub fn process_frame(
             (start + (state.current_progress * step)) as f32
         };
         
-        let frame_to_render = if state.loop_supported {
+        let frame_to_render = if state.export_mode == ExportMode::Showcase {
+            let natively_loops = animation.curves.iter().any(|c| c.loop_count != 1);
+            if natively_loops {
+                raw_frame
+            } else {
+                let effective_max = animation.curves.iter()
+                    .filter_map(|c| c.keyframes.last().map(|k| k.frame))
+                    .max()
+                    .unwrap_or(0);
+                if effective_max > 0 {
+                    raw_frame.rem_euclid(effective_max as f32 + 1.0)
+                } else {
+                    raw_frame
+                }
+            }
+        } else if state.loop_supported {
             raw_frame
         } else if state.max_frame > 0 { 
             raw_frame.rem_euclid(state.max_frame as f32 + 1.0) 

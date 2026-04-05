@@ -1,5 +1,5 @@
 use eframe::egui;
-use crate::features::enemy::logic::scanner::EnemyEntry;
+use crate::features::enemy::logic::scanner::{self, EnemyEntry};
 use crate::features::enemy::logic::state::EnemyDetailTab;
 use crate::features::settings::logic::Settings;
 use crate::features::enemy::registry::Magnification;
@@ -8,10 +8,11 @@ use crate::global::game::img015;
 use crate::global::formats::mamodel::Model;
 use crate::features::animation::ui::viewer::AnimViewer;
 use crate::global::assets::CustomAssets;
-
+use crate::global::game::param::Param;
+use crate::global::context::GlobalContext;
+use crate::features::enemy::logic::context::EnemyRenderContext;
 use crate::features::statblock::logic::builder::{generate_and_copy, generate_and_save};
 use crate::features::enemy::logic::statblock::build_enemy_statblock;
-
 use super::{header, stats, abilities, details, viewer}; 
 use super::header::ExportAction;
 
@@ -30,6 +31,7 @@ pub fn show(
     assets: &CustomAssets, 
     detail_texture: &mut Option<egui::TextureHandle>,
     detail_key: &mut String,
+    param: &Param,
 ) {
     img015::ensure_loaded(ctx, img015_sheets, settings);
 
@@ -37,13 +39,24 @@ pub fn show(
         ctx, ui, enemy_entry, current_tab, mag_input, magnification, detail_texture, detail_key,
     );
 
-    let dynamic_entry = crate::features::enemy::logic::scanner::scan_single(enemy_entry.id, &settings.scanner_config());
+    let dynamic_entry = scanner::scan_single(enemy_entry.id, &settings.scanner_config());
     let stats = dynamic_entry.as_ref().map(|e| &e.stats).unwrap_or(&enemy_entry.stats);
+
+    let global_ctx = GlobalContext {
+        settings: &*settings,
+        param,
+        assets,
+    };
+
+    let enemy_ctx = EnemyRenderContext {
+        global: global_ctx,
+        stats,
+        magnification: *magnification,
+    };
 
     match export_action {
         ExportAction::Copy | ExportAction::Save => {
-            
-            let data = build_enemy_statblock(enemy_entry, stats, settings, *magnification);
+            let data = build_enemy_statblock(&enemy_ctx, enemy_entry);
 
             let priority_clone = settings.general.language_priority.clone();
             let mut cuts_clone = std::collections::HashMap::new();
@@ -84,11 +97,8 @@ pub fn show(
                 .show(ui, |ui| {
                     abilities::render(
                         ui, 
-                        enemy_entry, 
+                        &enemy_ctx,
                         img015_sheets, 
-                        assets,
-                        settings,
-                        *magnification
                     );
                 });
         },

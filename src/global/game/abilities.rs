@@ -1,5 +1,3 @@
-use eframe::egui;
-use crate::global::assets::CustomAssets;
 use crate::global::game::img015::*;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Default, Debug)]
@@ -14,23 +12,8 @@ pub enum CustomIcon {
     Revive,
     Stop,
     DeathTimer,
-}
-
-impl CustomIcon {
-    pub fn get_texture<'a>(&self, assets: &'a CustomAssets) -> Option<&'a egui::TextureHandle> {
-        match self {
-            CustomIcon::Multihit => Some(&assets.multihit),
-            CustomIcon::Kamikaze => Some(&assets.kamikaze),
-            CustomIcon::BossWave => Some(&assets.boss_wave),
-            CustomIcon::Dojo => Some(&assets.dojo),
-            CustomIcon::StarredAlien => Some(&assets.starred_alien),
-            CustomIcon::Burrow => Some(&assets.burrow),
-            CustomIcon::Revive => Some(&assets.revive),
-            CustomIcon::Stop => Some(&assets.stop),
-            CustomIcon::DeathTimer => Some(&assets.death_timer),
-            CustomIcon::None => None,
-        }
-    }
+    God,
+    Unknown,
 }
 
 #[derive(Clone, Debug)]

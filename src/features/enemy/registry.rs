@@ -1,7 +1,9 @@
 use crate::global::game::img015;
 use crate::features::enemy::data::t_unit::EnemyRaw;
 use crate::global::game::abilities::CustomIcon;
+use crate::global::game::param::Param;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Magnification {
@@ -47,7 +49,7 @@ pub struct EnemyAbilityDef {
     pub group: DisplayGroup,
     pub schema: &'static [(&'static str, AttrUnit)],
     pub get_attributes: fn(&EnemyRaw) -> Vec<(&'static str, i32, AttrUnit)>,
-    pub formatter: fn(primary_value: i32, stats: &EnemyRaw, duration_frames: i32, magnification: Magnification) -> String,
+    pub formatter: fn(primary_value: i32, stats: &EnemyRaw, duration_frames: i32, magnification: Magnification, param: &Param) -> String,
     pub minus_one_is_inf: bool,
 }
 
@@ -135,6 +137,44 @@ fn fmt_multihit(stats: &EnemyRaw) -> String {
     format!("Damage split {}\nAbility split {} / {}{}", damage_string, ability_flag_1, ability_flag_2, ability_flag_3)
 }
 
+fn fmt_sage(param: &Param) -> String {
+    let mut resistance_groups_by_percentage: HashMap<i32, Vec<&str>> = HashMap::new();
+
+    let to_percentage = |multiplier: f32| (multiplier * 100.0).round() as i32;
+
+    resistance_groups_by_percentage.entry(to_percentage(param.sage_type_resist_weaken)).or_default().push("Weaken");
+    resistance_groups_by_percentage.entry(to_percentage(param.sage_type_resist_freeze)).or_default().push("Freeze");
+    resistance_groups_by_percentage.entry(to_percentage(param.sage_type_resist_slow)).or_default().push("Slow");
+    resistance_groups_by_percentage.entry(to_percentage(param.sage_type_resist_curse)).or_default().push("Curse");
+    resistance_groups_by_percentage.entry(to_percentage(param.sage_type_resist_knockback)).or_default().push("Knockback");
+
+    let base_description = "Crowd Control effects inflicted upon Sage Enemies are reduced by";
+
+    if resistance_groups_by_percentage.len() == 1 {
+        let (percentage, _) = resistance_groups_by_percentage.into_iter().next().unwrap();
+        format!("{} {}%", base_description, percentage)
+    } else {
+        let mut formatted_resistance_lines = Vec::new();
+        let mut sorted_resistance_groups: Vec<_> = resistance_groups_by_percentage.into_iter().collect();
+        
+        // Sort highest percentage first
+        sorted_resistance_groups.sort_by(|group_a, group_b| group_b.0.cmp(&group_a.0)); 
+
+        for (percentage, effect_names) in sorted_resistance_groups {
+            let formatted_effect_list = match effect_names.len() {
+                1 => effect_names[0].to_string(),
+                2 => format!("{} and {}", effect_names[0], effect_names[1]),
+                _ => {
+                    let all_effects_except_last = effect_names[..effect_names.len() - 1].join(", ");
+                    format!("{}, and {}", all_effects_except_last, effect_names.last().unwrap())
+                }
+            };
+            formatted_resistance_lines.push(format!("{}% for {}", percentage, formatted_effect_list));
+        }
+        format!("{}\n{}", base_description, formatted_resistance_lines.join("\n"))
+    }
+}
+
 pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
     // --- SPECIAL HIDDEN ---
     EnemyAbilityDef {
@@ -144,7 +184,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
         group: DisplayGroup::Hidden,
         schema: &[],
         get_attributes: |stats| if stats.area_attack == 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
-        formatter: |_, _, _, _| "".into(),
+        formatter: |_,_,_,_,_| "".into(),
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
@@ -154,7 +194,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
         group: DisplayGroup::Hidden,
         schema: &[],
         get_attributes: |stats| if stats.area_attack == 1 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
-        formatter: |_, _, _, _| "".into(),
+        formatter: |_,_,_,_,_| "".into(),
         minus_one_is_inf: false,
     },
 
@@ -166,7 +206,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
         group: DisplayGroup::Type,
         schema: &[],
         get_attributes: |stats| if stats.type_red > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
-        formatter: |_, _, _, _| "Red".into(),
+        formatter: |_,_,_,_,_| "Red".into(),
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
@@ -176,7 +216,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
         group: DisplayGroup::Type,
         schema: &[],
         get_attributes: |stats| if stats.type_floating > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
-        formatter: |_, _, _, _| "Floating".into(),
+        formatter: |_,_,_,_,_| "Floating".into(),
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
@@ -186,7 +226,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
         group: DisplayGroup::Type,
         schema: &[],
         get_attributes: |stats| if stats.type_black > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
-        formatter: |_, _, _, _| "Black".into(),
+        formatter: |_,_,_,_,_| "Black".into(),
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
@@ -196,7 +236,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
         group: DisplayGroup::Type,
         schema: &[],
         get_attributes: |stats| if stats.type_metal > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
-        formatter: |_, _, _, _| "Metal".into(),
+        formatter: |_,_,_,_,_| "Metal".into(),
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
@@ -206,7 +246,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
         group: DisplayGroup::Type,
         schema: &[],
         get_attributes: |stats| if stats.type_angel > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
-        formatter: |_, _, _, _| "Angel".into(),
+        formatter: |_,_,_,_,_| "Angel".into(),
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
@@ -216,7 +256,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
         group: DisplayGroup::Type,
         schema: &[],
         get_attributes: |stats| if stats.type_alien > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
-        formatter: |_, _, _, _| "Alien".into(),
+        formatter: |_,_,_,_,_| "Alien".into(),
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
@@ -226,7 +266,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
         group: DisplayGroup::Type,
         schema: &[],
         get_attributes: |stats| if stats.type_zombie > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
-        formatter: |_, _, _, _| "Zombie".into(),
+        formatter: |_,_,_,_,_| "Zombie".into(),
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
@@ -236,7 +276,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
         group: DisplayGroup::Type,
         schema: &[],
         get_attributes: |stats| if stats.type_relic > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
-        formatter: |_, _, _, _| "Relic".into(),
+        formatter: |_,_,_,_,_| "Relic".into(),
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
@@ -246,7 +286,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
         group: DisplayGroup::Type,
         schema: &[],
         get_attributes: |stats| if stats.type_aku > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
-        formatter: |_, _, _, _| "Aku".into(),
+        formatter: |_,_,_,_,_| "Aku".into(),
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
@@ -256,7 +296,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
         group: DisplayGroup::Type,
         schema: &[],
         get_attributes: |stats| if stats.type_traitless > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
-        formatter: |_, _, _, _| "Traitless".into(),
+        formatter: |_,_,_,_,_| "Traitless".into(),
         minus_one_is_inf: false,
     },
 
@@ -268,7 +308,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
         group: DisplayGroup::Headline1,
         schema: &[],
         get_attributes: |stats| if stats.type_dojo > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
-        formatter: |_, _, _, _| "Dojo".into(),
+        formatter: |_,_,_,_,_| "Dojo".into(),
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
@@ -277,8 +317,26 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
         icon: AbilityIcon::Custom(CustomIcon::StarredAlien),
         group: DisplayGroup::Headline1,
         schema: &[],
-        get_attributes: |stats| if stats.type_starred_alien > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
-        formatter: |_, _, _, _| "Starred Alien".into(),
+        get_attributes: |stats| if stats.type_starred_alien == 1 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
+        formatter: |_,_,_,_,_| "Starred Alien".into(),
+        minus_one_is_inf: false,
+    },
+    EnemyAbilityDef {
+        name: "Cat God",
+        fallback: "God",
+        icon: AbilityIcon::Custom(CustomIcon::God),
+        group: DisplayGroup::Headline1,
+        schema: &[
+            ("Type", AttrUnit::None)
+        ],
+        get_attributes: |stats| {
+            if stats.type_starred_alien >= 2 && stats.type_starred_alien <= 4 { 
+                vec![("Type", stats.type_starred_alien, AttrUnit::None)] 
+            } else { 
+                vec![] 
+            }
+        },
+        formatter: |type_val,_,_,_,_| format!("CotC {} Cat God", type_val - 1),
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
@@ -288,7 +346,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
         group: DisplayGroup::Headline1,
         schema: &[],
         get_attributes: |stats| if stats.type_colossus > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
-        formatter: |_, _, _, _| "Colossus Enemy".into(),
+        formatter: |_,_,_,_,_| "Colossus Enemy".into(),
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
@@ -298,7 +356,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
         group: DisplayGroup::Headline1,
         schema: &[],
         get_attributes: |stats| if stats.type_behemoth > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
-        formatter: |_, _, _, _| "Behemoth Enemy".into(),
+        formatter: |_,_,_,_,_| "Behemoth Enemy".into(),
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
@@ -308,7 +366,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
         group: DisplayGroup::Headline1,
         schema: &[],
         get_attributes: |stats| if stats.type_sage > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
-        formatter: |_, _, _, _| "Sage Enemy".into(),
+        formatter: |_,_,_,_,param| fmt_sage(param),
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
@@ -318,7 +376,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
         group: DisplayGroup::Headline1,
         schema: &[],
         get_attributes: |stats| if stats.type_supervillain > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
-        formatter: |_, _, _, _| "Supervillain Enemy".into(),
+        formatter: |_,_,_,_,_| "Supervillain Enemy".into(),
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
@@ -328,7 +386,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
         group: DisplayGroup::Headline1,
         schema: &[],
         get_attributes: |stats| if stats.type_witch > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
-        formatter: |_, _, _, _| "Witch Enemy".into(),
+        formatter: |_,_,_,_,_| "Witch Enemy".into(),
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
@@ -338,7 +396,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
         group: DisplayGroup::Headline1,
         schema: &[],
         get_attributes: |stats| if stats.type_eva > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
-        formatter: |_, _, _, _| "EVA Angel".into(),
+        formatter: |_,_,_,_,_| "EVA Angel".into(),
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
@@ -356,7 +414,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |attacks, _, _, _| {
+        formatter: |attacks,_,_,_,_| {
             let limit_suffix = match attacks {
                 0 => "immediately".to_string(),
                 1 => "after 1 attack".to_string(),
@@ -381,7 +439,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |attacks, _, _, _| {
+        formatter: |attacks,_,_,_,_| {
             let limit_suffix = match attacks {
                 0 => "immediately".to_string(),
                 1 => "after 1 attack".to_string(),
@@ -400,7 +458,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
         group: DisplayGroup::Headline2,
         schema: &[],
         get_attributes: |stats| if stats.base_destroyer > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
-        formatter: |_, _, _, _| "Deals 4× Damage to the Cat Base".into(),
+        formatter: |_,_,_,_,_| "Deals 4× Damage to the Cat Base".into(),
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
@@ -416,7 +474,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![]
             }
         },
-        formatter: |_, _, _, _| {
+        formatter: |_,_,_,_,_| {
             "When hit with a Wave Attack, nullifies its Damage and prevents its advancement".into()
         },
         minus_one_is_inf: false,
@@ -430,7 +488,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
         group: DisplayGroup::Body1,
         schema: &[],
         get_attributes: |stats| if stats.attack_2 > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
-        formatter: |_, stats, _, _| fmt_multihit(stats),
+        formatter: |_,stats,_,_,_| fmt_multihit(stats),
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
@@ -440,20 +498,17 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
         group: DisplayGroup::Body1,
         schema: &[],
         get_attributes: |stats| {
-            // Check if ANY hit is Omni
             let has_omni = (stats.long_distance_span_1 < 0 || (stats.long_distance_span_1 == 0 && stats.long_distance_anchor_1 != 0)) ||
                            (stats.long_distance_2_flag > 0 && (stats.long_distance_2_span < 0 || (stats.long_distance_2_span == 0 && stats.long_distance_2_anchor != 0))) ||
                            (stats.long_distance_3_flag > 0 && (stats.long_distance_3_span < 0 || (stats.long_distance_3_span == 0 && stats.long_distance_3_anchor != 0)));
 
-            // Check if ANY hit is LD
             let has_ld = (stats.long_distance_span_1 > 0) || 
                          (stats.long_distance_2_flag > 0 && stats.long_distance_2_span > 0) || 
                          (stats.long_distance_3_flag > 0 && stats.long_distance_3_span > 0);
 
-            // ONLY show the Long Distance icon if it has LD and DOES NOT have Omni
             if has_ld && !has_omni { vec![("Active", 1, AttrUnit::None)] } else { vec![] }
         },
-        formatter: |_, stats, _, _| fmt_effective_range(stats),
+        formatter: |_,stats,_,_,_| fmt_effective_range(stats),
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
@@ -463,14 +518,13 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
         group: DisplayGroup::Body1,
         schema: &[],
         get_attributes: |stats| {
-            // Check if ANY hit is Omni
             let has_omni = (stats.long_distance_span_1 < 0 || (stats.long_distance_span_1 == 0 && stats.long_distance_anchor_1 != 0)) ||
                            (stats.long_distance_2_flag > 0 && (stats.long_distance_2_span < 0 || (stats.long_distance_2_span == 0 && stats.long_distance_2_anchor != 0))) ||
                            (stats.long_distance_3_flag > 0 && (stats.long_distance_3_span < 0 || (stats.long_distance_3_span == 0 && stats.long_distance_3_anchor != 0)));
 
             if has_omni { vec![("Active", 1, AttrUnit::None)] } else { vec![] }
         },
-        formatter: |_, stats, _, _| fmt_effective_range(stats),
+        formatter: |_,stats,_,_,_| fmt_effective_range(stats),
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
@@ -494,7 +548,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |chance, stats, _, _| {
+        formatter: |chance,stats,_,_,_| {
             let maximum_reach = 467.5 + ((stats.wave_level - 1) as f32 * 200.0);
             format!("{}% Chance to create a Level {} Wave\nWave reaches {} Range", chance, stats.wave_level, maximum_reach)
         },
@@ -521,7 +575,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |chance, stats, _, _| {
+        formatter: |chance,stats,_,_,_| {
             let maximum_reach = 467.5 + ((stats.wave_level - 1) as f32 * 200.0);
             format!("{}% Chance to create a Level {} Mini-Wave\nMini-Wave reaches {} Range", chance, stats.wave_level, maximum_reach)
         },
@@ -551,7 +605,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |chance, stats, _, _| {
+        formatter: |chance,stats,_,_,_| {
             let start_bound = stats.surge_spawn_min;
             let end_bound = stats.surge_spawn_min + stats.surge_spawn_max;
             let (minimum_range, maximum_range) = if start_bound < end_bound { (start_bound, end_bound) } else { (end_bound, start_bound) };
@@ -583,7 +637,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |chance, stats, _, _| {
+        formatter: |chance,stats,_,_,_| {
             let start_bound = stats.surge_spawn_min;
             let end_bound = stats.surge_spawn_min + stats.surge_spawn_max;
             let (minimum_range, maximum_range) = if start_bound < end_bound { (start_bound, end_bound) } else { (end_bound, start_bound) };
@@ -615,7 +669,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |chance, stats, _, _| {
+        formatter: |chance,stats,_,_,_| {
             let start_bound = stats.death_surge_spawn_min;
             let end_bound = stats.death_surge_spawn_min + stats.death_surge_spawn_max;
             let (minimum_range, maximum_range) = if start_bound < end_bound { (start_bound, end_bound) } else { (end_bound, start_bound) };
@@ -645,7 +699,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |chance, stats, _, _| {
+        formatter: |chance,stats,_,_,_| {
             let start_bound = stats.explosion_anchor;
             let end_bound = stats.explosion_anchor + stats.explosion_span;
             let (minimum_range, maximum_range) = if start_bound < end_bound { (start_bound, end_bound) } else { (end_bound, start_bound) };
@@ -670,7 +724,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |chance, _, _, _| format!("{}% Chance to Critical Hit dealing +100% Damage\nCritcal Hits bypass Metal resistance", chance),
+        formatter: |chance,_,_,_,_| format!("{}% Chance to Critical Hit dealing +100% Damage\nCritcal Hits bypass Metal resistance", chance),
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
@@ -692,7 +746,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |chance, stats, _, _| {
+        formatter: |chance,stats,_,_,_| {
             format!("{}% Chance to Savage Blow\ndealing +{}% Damage", chance, stats.savage_blow_boost)
         },
         minus_one_is_inf: false,
@@ -716,7 +770,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |_, stats, _, _| format!("When reduced to or below {}% HP\nDamage dealt increases by +{}%", stats.strengthen_threshold, stats.strengthen_boost),
+        formatter: |_,stats,_,_,_| format!("When reduced to or below {}% HP\nDamage dealt increases by +{}%", stats.strengthen_threshold, stats.strengthen_boost),
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
@@ -736,7 +790,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |chance, _, _, _| format!("{}% Chance to Survive a lethal strike", chance),
+        formatter: |chance,_,_,_,_| format!("{}% Chance to Survive a lethal strike", chance),
         minus_one_is_inf: false,
     },
 
@@ -758,7 +812,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |hp, _, _, _| format!("Has a Barrier with {} HP", hp),
+        formatter: |hp,_,_,_,_| format!("Has a Barrier with {} HP", hp),
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
@@ -780,7 +834,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |hp, stats, _, magnification| {
+        formatter: |hp,stats,_,magnification,_| {
             let scaled_hp = (hp as f32 * (magnification.hitpoints as f32 / 100.0)).round() as i32;
             if stats.shield_regen > 0 {
                 format!("Has a Shield with {} HP\nShield regenerates {}% HP when knocked back", scaled_hp, stats.shield_regen)
@@ -809,7 +863,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |count, stats, _, _| format!("Burrows {} Range {}", stats.burrow_distance, fmt_count(count)),
+        formatter: |count,stats,_,_,_| format!("Burrows {} Range {}", stats.burrow_distance, fmt_count(count)),
         minus_one_is_inf: true,
     },
     EnemyAbilityDef {
@@ -833,7 +887,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |count, stats, _, _| format!("Revives {} with {}% HP after {} \nDoesn't revive if Z-Killed", fmt_count(count), stats.revive_hp, fmt_time(stats.revive_time)),
+        formatter: |count,stats,_,_,_| format!("Revives {} with {}% HP after {} \nDoesn't revive if Z-Killed", fmt_count(count), stats.revive_hp, fmt_time(stats.revive_time)),
         minus_one_is_inf: true,
     },
     EnemyAbilityDef {
@@ -855,7 +909,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |chance, stats, _, _| format!("{}% Chance to deal {}% of a\nCat's Max HP in additional damage", chance, stats.toxic_damage),
+        formatter: |chance,stats,_,_,_| format!("{}% Chance to deal {}% of a\nCat's Max HP in additional damage", chance, stats.toxic_damage),
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
@@ -877,7 +931,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |chance, stats, _, _| {
+        formatter: |chance,stats,_,_,_| {
             format!("{}% Chance to cut\nongoing Cat cooldown by {}%", chance, stats.cut_cooldown_percent)
         },
         minus_one_is_inf: false,
@@ -901,7 +955,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |chance, _, duration_frames, _| format!("{}% Chance to Dodge attacks for {}", chance, fmt_time(duration_frames)),
+        formatter: |chance,_,duration_frames,_,_| format!("{}% Chance to Dodge attacks for {}", chance, fmt_time(duration_frames)),
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
@@ -925,7 +979,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |chance, stats, duration_frames, _| format!("{}% Chance to weaken Cats\nto {}% Attack Power for {}", chance, stats.weaken_percent, fmt_time(duration_frames)),
+        formatter: |chance,stats,duration_frames,_,_| format!("{}% Chance to weaken Cats\nto {}% Attack Power for {}", chance, stats.weaken_percent, fmt_time(duration_frames)),
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
@@ -947,7 +1001,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |chance, _, duration_frames, _| format!("{}% Chance to Freeze Cats for {}", chance, fmt_time(duration_frames)),
+        formatter: |chance,_,duration_frames,_,_| format!("{}% Chance to Freeze Cats for {}", chance, fmt_time(duration_frames)),
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
@@ -969,7 +1023,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |chance, _, duration_frames, _| format!("{}% Chance to Slow Cats for {}", chance, fmt_time(duration_frames)),
+        formatter: |chance,_,duration_frames,_,_| format!("{}% Chance to Slow Cats for {}", chance, fmt_time(duration_frames)),
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
@@ -989,7 +1043,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |chance, _, _, _| format!("{}% Chance to Knockback Cats", chance),
+        formatter: |chance,_,_,_,_| format!("{}% Chance to Knockback Cats", chance),
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
@@ -1011,7 +1065,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |chance, _, duration_frames, _| format!("{}% Chance to Curse Cats for {}", chance, fmt_time(duration_frames)),
+        formatter: |chance,_,duration_frames,_,_| format!("{}% Chance to Curse Cats for {}", chance, fmt_time(duration_frames)),
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
@@ -1037,7 +1091,17 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
                 vec![] 
             }
         },
-        formatter: |chance, stats, duration_frames, _| format!("{}% Chance to Warp Cats\n{} Range for {}", chance, fmt_compress(stats.warp_distance_minimum, stats.warp_distance_maximum), fmt_time(duration_frames)),
+        formatter: |chance,stats,duration_frames,_,_| format!("{}% Chance to Warp Cats\n{} Range for {}", chance, fmt_compress(stats.warp_distance_minimum, stats.warp_distance_maximum), fmt_time(duration_frames)),
+        minus_one_is_inf: false,
+    },
+    EnemyAbilityDef {
+        name: "Unknown",
+        fallback: "Unkwn",
+        icon: AbilityIcon::Custom(CustomIcon::Unknown),
+        group: DisplayGroup::Body2,
+        schema: &[],
+        get_attributes: |stats| if stats.has_unknown_abilities > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
+        formatter: |_,_,_,_,_| "This Enemy has an undefined ability\nThe App may need to be updated".into(),
         minus_one_is_inf: false,
     },
     
@@ -1049,7 +1113,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
         group: DisplayGroup::Footer, 
         schema: &[],
         get_attributes: |stats| if stats.wave_immune > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
-        formatter: |_, _, _, _| "Immune to Wave Attacks".into(),
+        formatter: |_,_,_,_,_| "Immune to Wave Attacks".into(),
         minus_one_is_inf: false,
     },
     EnemyAbilityDef { 
@@ -1059,7 +1123,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
         group: DisplayGroup::Footer, 
         schema: &[],
         get_attributes: |stats| if stats.surge_immune > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
-        formatter: |_, _, _, _| "Immune to Surge Attacks".into(), 
+        formatter: |_,_,_,_,_| "Immune to Surge Attacks".into(), 
         minus_one_is_inf: false,
     },
     EnemyAbilityDef { 
@@ -1069,7 +1133,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
         group: DisplayGroup::Footer, 
         schema: &[],
         get_attributes: |stats| if stats.explosion_immune > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
-        formatter: |_, _, _, _| "Immune to Explosions".into(), 
+        formatter: |_,_,_,_,_| "Immune to Explosions".into(), 
         minus_one_is_inf: false,
     },
     EnemyAbilityDef { 
@@ -1079,7 +1143,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
         group: DisplayGroup::Footer, 
         schema: &[],
         get_attributes: |stats| if stats.weaken_immune > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
-        formatter: |_, _, _, _| "Immune to Weaken".into(), 
+        formatter: |_,_,_,_,_| "Immune to Weaken".into(), 
         minus_one_is_inf: false,
     },
     EnemyAbilityDef { 
@@ -1089,7 +1153,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
         group: DisplayGroup::Footer, 
         schema: &[],
         get_attributes: |stats| if stats.freeze_immune > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
-        formatter: |_, _, _, _| "Immune to Freeze".into(), 
+        formatter: |_,_,_,_,_| "Immune to Freeze".into(), 
         minus_one_is_inf: false,
     },
     EnemyAbilityDef { 
@@ -1099,7 +1163,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
         group: DisplayGroup::Footer, 
         schema: &[],
         get_attributes: |stats| if stats.slow_immune > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
-        formatter: |_, _, _, _| "Immune to Slow".into(), 
+        formatter: |_,_,_,_,_| "Immune to Slow".into(), 
         minus_one_is_inf: false,
     },
     EnemyAbilityDef { 
@@ -1109,7 +1173,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
         group: DisplayGroup::Footer, 
         schema: &[],
         get_attributes: |stats| if stats.knockback_immune > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
-        formatter: |_, _, _, _| "Immune to Knockback".into(), 
+        formatter: |_,_,_,_,_| "Immune to Knockback".into(), 
         minus_one_is_inf: false,
     },
     EnemyAbilityDef { 
@@ -1119,7 +1183,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
         group: DisplayGroup::Footer, 
         schema: &[],
         get_attributes: |stats| if stats.curse_immune > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
-        formatter: |_, _, _, _| "Immune to Curse".into(), 
+        formatter: |_,_,_,_,_| "Immune to Curse".into(), 
         minus_one_is_inf: false,
     },
     EnemyAbilityDef { 
@@ -1129,7 +1193,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
         group: DisplayGroup::Footer, 
         schema: &[],
         get_attributes: |stats| if stats.warp_immune > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
-        formatter: |_, _, _, _| "Immune to Warp".into(), 
+        formatter: |_,_,_,_,_| "Immune to Warp".into(), 
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
@@ -1139,7 +1203,7 @@ pub const ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
         group: DisplayGroup::Headline2,
         schema: &[],
         get_attributes: |stats| if stats.counter_surge > 0 { vec![("Active", 1, AttrUnit::None)] } else { vec![] },
-        formatter: |_,_,_, _| "When hit with a Surge Attack, create a Surge of equal Type, Level, and Range".into(),
+        formatter: |_,_,_,_,_| "When hit with a Surge Attack, create a Surge of equal Type, Level, and Range".into(),
         minus_one_is_inf: false,
     },
 ];

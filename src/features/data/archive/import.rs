@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use rayon::prelude::*;
 use zip::ZipArchive;
 
-use crate::features::import::sort::{cat, global, enemy};
+use crate::features::data::sort::{cat, global, enemy};
 use crate::features::cat::patterns as cat_patterns;
 use crate::global::io::patterns as global_patterns;
 

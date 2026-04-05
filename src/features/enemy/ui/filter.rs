@@ -328,7 +328,8 @@ fn render_filter_icon(
     
     match ability_icon {
         AbilityIcon::Custom(custom_icon) => {
-            if let Some(tex) = custom_icon.get_texture(assets) {
+            // UPDATED: Use `assets.get_icon_texture`
+            if let Some(tex) = assets.get_icon_texture(custom_icon) {
                 let img = egui::Image::new(tex).fit_to_exact_size(egui::vec2(32.0, 32.0)).tint(tint);
                 let response = ui.add(egui::ImageButton::new(img).frame(false));
                 if response.clicked() {

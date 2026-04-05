@@ -64,7 +64,7 @@ pub struct StatblockData {
 }
 
 
-const NAME_BOX_WIDTH: f32 = 130.0;
+const NAME_BOX_WIDTH: f32 = 125.0;
 const NAME_BOX_HEIGHT: f32 = 50.0;
 const HEADER_PADDING_Y: i32 = 10;
 const STAT_GRID_PADDING_Y: i32 = 14;
