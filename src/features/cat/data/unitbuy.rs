@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use crate::global::utils; 
 use crate::features::cat::paths;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct UnitBuyRow {
     pub stage_unlock_requirement: i32,
     pub purchase_cost: i32,

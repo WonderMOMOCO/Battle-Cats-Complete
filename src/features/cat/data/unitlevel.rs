@@ -3,7 +3,7 @@ use std::path::Path;
 use crate::global::utils;
 use crate::features::cat::paths;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct CatLevelCurve {
     pub increments: Vec<u16>, 
 }

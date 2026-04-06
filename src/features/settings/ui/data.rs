@@ -78,7 +78,7 @@ fn show_folder_delete_modal(
                 
                 if let Some(size) = &state.size_str {
                     ui.add_space(5.0);
-                    ui.label(egui::RichText::new(format!("\"raw\" folder size: {}", size)).color(ui.visuals().weak_text_color()));
+                    ui.label(egui::RichText::new(format!("Folder size: {}", size)).color(ui.visuals().weak_text_color()));
                 }
 
                 ui.add_space(15.0);
@@ -119,16 +119,22 @@ pub fn show(ui: &mut egui::Ui, settings: &mut GameDataSettings, runtime: &mut Ru
 
     let mut game_deleter = ctx.data_mut(|d| d.get_temp::<FolderDeleter>(egui::Id::new("game_deleter")).unwrap_or_default());
     let mut raw_deleter = ctx.data_mut(|d| d.get_temp::<FolderDeleter>(egui::Id::new("raw_deleter")).unwrap_or_default());
+    let mut cache_deleter = ctx.data_mut(|d| d.get_temp::<FolderDeleter>(egui::Id::new("cache_deleter")).unwrap_or_default());
 
     game_deleter.update();
     raw_deleter.update();
+    cache_deleter.update();
 
-    if game_deleter.is_active() || raw_deleter.is_active() {
+    if game_deleter.is_active() || raw_deleter.is_active() || cache_deleter.is_active() {
         ctx.request_repaint();
     }
 
     let game_exists = Path::new("game").exists();
     let raw_exists = Path::new("game/raw").exists();
+    
+    let cache_dir_opt = crate::global::io::cache::get_cache_dir();
+    let cache_size = cache_dir_opt.as_ref().map(|path| get_folder_size(path)).unwrap_or(0);
+    let cache_exists = cache_size > 0;
 
     egui::ScrollArea::vertical()
         .id_salt("game_data_scroll")
@@ -182,6 +188,32 @@ pub fn show(ui: &mut egui::Ui, settings: &mut GameDataSettings, runtime: &mut Ru
                 }
             } else {
                 let btn = egui::Button::new("No \"raw\" Folder")
+                    .fill(egui::Color32::from_rgb(60, 60, 60)); 
+                ui.add_sized([180.0, 30.0], btn);
+            }
+
+            ui.add_space(5.0);
+
+            if cache_deleter.is_deleting() {
+                let btn = egui::Button::new("Clearing Cache...")
+                    .fill(egui::Color32::from_rgb(200, 180, 50)); 
+                ui.add_sized([180.0, 30.0], btn);
+            } else if cache_deleter.is_done() {
+                let btn = egui::Button::new("Cleared Cache!")
+                    .fill(egui::Color32::from_rgb(40, 160, 40)); 
+                ui.add_sized([180.0, 30.0], btn);
+            } else if cache_exists {
+                let btn = egui::Button::new("Clear Cache")
+                    .fill(egui::Color32::from_rgb(180, 50, 50)); 
+                if ui.add_sized([180.0, 30.0], btn).clicked() {
+                    let state_id = egui::Id::new("delete_cache_modal");
+                    ctx.data_mut(|d| d.insert_temp(state_id, FolderDeleteState { 
+                        is_open: true, 
+                        size_str: Some(format_size(cache_size)) 
+                    }));
+                }
+            } else {
+                let btn = egui::Button::new("Cache Empty")
                     .fill(egui::Color32::from_rgb(60, 60, 60)); 
                 ui.add_sized([180.0, 30.0], btn);
             }
@@ -269,11 +301,18 @@ pub fn show(ui: &mut egui::Ui, settings: &mut GameDataSettings, runtime: &mut Ru
         raw_deleter.start("game/raw");
     }
 
+    if show_folder_delete_modal(&ctx, drag_guard, "delete_cache_modal", "Are you sure you want to clear the Cache?\nIt will automatically rebuild the next time the app loads.") {
+        if let Some(cache_directory) = crate::global::io::cache::get_cache_dir() {
+            cache_deleter.start(cache_directory);
+        }
+    }
+
     crate::features::settings::ui::exceptions::show(&ctx, drag_guard);
 
     ctx.data_mut(|d| {
         d.insert_temp(egui::Id::new("game_deleter"), game_deleter);
         d.insert_temp(egui::Id::new("raw_deleter"), raw_deleter);
+        d.insert_temp(egui::Id::new("cache_deleter"), cache_deleter);
     });
 
     refresh_needed

@@ -1,11 +1,7 @@
 use eframe::egui;
-
-// Global Utilities & Formats
 use crate::global::game::param::Param;
 use crate::global::io::{json, watcher::GlobalWatcher};
 use crate::global::ui::shared::DragGuard;
-
-// Feature States
 use crate::updater::Updater;
 use crate::features::data::logic::ImportState;
 use crate::features::cat::logic::CatListState;
@@ -29,6 +25,9 @@ pub struct BattleCatsApp {
     #[serde(skip)] pub(crate) drag_guard: DragGuard,
     #[serde(skip)] pub(crate) global_watcher: Option<GlobalWatcher>,
     #[serde(skip)] pub param: Param,
+    
+    #[serde(skip)] pub hash_rx: Option<std::sync::mpsc::Receiver<bool>>,
+    
     pub(crate) cat_list_state: CatListState,
     pub(crate) enemy_list_state: EnemyListState,
     pub(crate) stage_list_state: StageListState,
@@ -50,6 +49,7 @@ impl Default for BattleCatsApp {
             updater: Updater::default(),
             drag_guard: DragGuard::default(),
             global_watcher: None,
+            hash_rx: None,
             param: Param::default(),
         }
     }
@@ -61,6 +61,19 @@ impl eframe::App for BattleCatsApp {
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        if let Some(rx) = &self.hash_rx {
+            if let Ok(is_valid) = rx.try_recv() {
+                self.hash_rx = None;
+                if !is_valid {
+                    self.perform_full_data_reload();
+                    ctx.request_repaint();
+                } else {
+                    self.cat_list_state.cat_list.force_search_rebuild();
+                    self.enemy_list_state.enemy_list.force_search_rebuild();
+                }
+            }
+        }
+
         self.updater.update_state(ctx);
         
         let status_str = match self.updater.status {

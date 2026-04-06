@@ -120,7 +120,7 @@ impl BattleCatsApp {
             self.cat_list_state.anim_viewer.loaded_id.clear();
             cat_loader::resync_scan(&mut self.cat_list_state, self.settings.scanner_config());
         } else {
-            for id in cat_ids_to_refresh {
+            for &id in &cat_ids_to_refresh {
                 self.cat_list_state.cat_list.flush_icon(id);
                 if self.cat_list_state.selected_cat == Some(id) {
                     self.cat_list_state.detail_texture = None; 
@@ -136,7 +136,7 @@ impl BattleCatsApp {
             self.enemy_list_state.detail_key.clear();
             enemy_loader::resync_scan(&mut self.enemy_list_state, self.settings.scanner_config());
         } else {
-            for id in enemy_ids_to_refresh {
+            for &id in &enemy_ids_to_refresh {
                 self.enemy_list_state.enemy_list.flush_icon(id);
                 if self.enemy_list_state.selected_enemy == Some(id) {
                     self.enemy_list_state.detail_texture = None;
@@ -144,6 +144,19 @@ impl BattleCatsApp {
                 }
                 enemy_loader::refresh_enemy(&mut self.enemy_list_state, id, &self.settings.scanner_config());
             }
+        }
+
+        if (!cat_ids_to_refresh.is_empty() || !enemy_ids_to_refresh.is_empty() || global_cat_refresh || global_enemy_refresh || global_stage_refresh) 
+            && !crate::global::resolver::is_mod_active() {
+            
+            let cats = self.cat_list_state.cats.clone();
+            let enemies = self.enemy_list_state.enemies.clone();
+            
+            std::thread::spawn(move || {
+                let hash = crate::global::io::cache::get_game_hash(None);
+                crate::global::io::cache::save("cats_cache.bin", hash, &cats);
+                crate::global::io::cache::save("enemies_cache.bin", hash, &enemies);
+            });
         }
 
         ctx.request_repaint();

@@ -7,7 +7,7 @@ use crate::features::cat::paths;
 
 pub const ICON_SIZE: f32 = 40.0;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct CatRaw {
     pub hitpoints: i32,
     pub knockbacks: i32,

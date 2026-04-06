@@ -3,7 +3,7 @@ use std::fs;
 use std::path::Path;
 use std::cell::Cell;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct EnemyRaw {
     pub hitpoints: i32,
     pub knockbacks: i32,

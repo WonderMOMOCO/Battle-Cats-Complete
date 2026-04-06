@@ -5,14 +5,14 @@ use std::collections::HashMap;
 use crate::global::utils;
 use crate::features::cat::paths;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct TalentRaw {
     pub id: u16,
     pub type_id: u16, 
     pub groups: Vec<TalentGroupRaw>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct TalentGroupRaw {
     pub ability_id: u8,
     pub max_level: u8,
