@@ -6,7 +6,8 @@ use crate::global::ui::shared::DragGuard;
 // Note: No notice will appear if NOTICE_CONTENT is empty
 pub const NOTICE_TITLE: &str = "NOTICE";
 pub const NOTICE_CONTENT: &str = r#"
-
+Data tab's backend logic has been rewritten from scratch to improve (and hopefully perfect) region merging accuracy!
+It is recommended you delete your "game/metadata" folder at the least. At most do a full game import from scatch to buid new metadata
 "#;
 
 #[derive(Serialize, Deserialize, Default)]

@@ -40,10 +40,10 @@ pub fn show(ui: &mut egui::Ui, settings: &mut CatDataSettings) -> bool {
             });
 
             ui.horizontal(|ui| {
-                if toggle_ui(ui, &mut settings.show_invalid_units).changed() {
+                if toggle_ui(ui, &mut settings.show_invalid_cats).changed() {
                     refresh_needed = true;
                 }
-                ui.label("Show Invalid Units");
+                ui.label("Show Invalid Cats");
             });
 
             ui.add_space(20.0);

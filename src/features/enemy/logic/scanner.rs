@@ -67,9 +67,13 @@ pub fn start_scan(config: ScannerConfig) -> Receiver<EnemyEntry> {
             }
 
             if let Some(ref p) = resolved_icon {
-                if is_placeholder_png(p) && !config.show_invalid {
+                if is_placeholder_png(p) && !config.show_invalid_enemies {
                     resolved_icon = None;
                 }
+            }
+
+            if resolved_icon.is_none() && !config.show_invalid_enemies {
+                return None;
             }
 
             let mut atk_anim_frames = 0;
@@ -130,6 +134,16 @@ pub fn scan_single(id: u32, config: &ScannerConfig) -> Option<EnemyEntry> {
     let mut resolved_icon = None;
     if let (Some(parent), Some(name)) = (icon_p.parent(), icon_p.file_name().and_then(|n| n.to_str())) {
         resolved_icon = crate::global::resolver::get(parent, &[name], priority).into_iter().next();
+    }
+
+    if let Some(ref p) = resolved_icon {
+        if is_placeholder_png(p) && !config.show_invalid_enemies {
+            resolved_icon = None;
+        }
+    }
+
+    if resolved_icon.is_none() && !config.show_invalid_enemies {
+        return None;
     }
 
     let mut atk_anim_frames = 0;

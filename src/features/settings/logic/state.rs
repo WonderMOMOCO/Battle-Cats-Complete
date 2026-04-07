@@ -7,6 +7,7 @@ use super::upd::UpdateMode;
 pub struct Settings {
     pub general: GeneralSettings,
     pub cat_data: CatDataSettings,
+    pub enemy_data: EnemyDataSettings,
     pub game_data: GameDataSettings,
     pub animation: AnimSettings,
     
@@ -36,7 +37,7 @@ impl Default for GeneralSettings {
 pub struct CatDataSettings {
     pub preferred_banner_form: usize,
     pub high_banner_quality: bool,
-    pub show_invalid_units: bool,
+    pub show_invalid_cats: bool,
     pub expand_spirit_details: bool,
     pub default_level: i32,
     pub auto_level_calculations: bool,
@@ -48,11 +49,25 @@ impl Default for CatDataSettings {
         Self {
             preferred_banner_form: 3,
             high_banner_quality: true,
-            show_invalid_units: false,
+            show_invalid_cats: false,
             expand_spirit_details: false,
             default_level: 50,
             auto_level_calculations: true,
             bump_ultra_60: true,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(default)]
+pub struct EnemyDataSettings {
+    pub show_invalid_enemies: bool,
+}
+
+impl Default for EnemyDataSettings {
+    fn default() -> Self {
+        Self {
+            show_invalid_enemies: false,
         }
     }
 }
@@ -137,7 +152,8 @@ impl Default for RuntimeState {
 pub struct ScannerConfig {
     pub language_priority: Vec<String>,
     pub preferred_form: usize,
-    pub show_invalid: bool,
+    pub show_invalid_cats: bool,
+    pub show_invalid_enemies: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -151,7 +167,8 @@ impl Settings {
         ScannerConfig {
             language_priority: self.general.language_priority.clone(),
             preferred_form: self.cat_data.preferred_banner_form,
-            show_invalid: self.cat_data.show_invalid_units,
+            show_invalid_cats: self.cat_data.show_invalid_cats,
+            show_invalid_enemies: self.enemy_data.show_invalid_enemies,
         }
     }
 

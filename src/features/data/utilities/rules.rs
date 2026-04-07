@@ -16,8 +16,6 @@ pub fn compile() -> (RegexSet, Vec<ExceptionRule>) {
         let extension_string = if rule.extension.is_empty() { String::new() } else { format!(r"\.(?:{})", rule.extension) };
         let pattern = format!(r"^(?:{}){}{}$", rule.pattern, lang_string, extension_string);
         
-        // We verify the Regex compiles correctly individually first
-        // This prevents one bad user rule in JSON from panic-crashing the entire RegexSet
         if Regex::new(&pattern).is_ok() {
             patterns_for_set.push(pattern);
             active_rules.push(rule);

@@ -3,7 +3,7 @@ use std::path::Path;
 use std::sync::mpsc::Sender;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use rayon::prelude::*;
-use crate::features::data::logic::keys; 
+use crate::features::data::utilities::crypto; 
 
 struct PackEntry {
     name: String,
@@ -53,7 +53,7 @@ pub fn run(pack_dir: &Path, tx: Sender<String>) -> Result<(), String> {
         
         if entry.offset + aligned_size <= pack_data.len() {
             let chunk = &pack_data[entry.offset .. entry.offset + aligned_size];
-            if let Ok((decrypted_bytes, _)) = keys::decrypt_pack_chunk(chunk, &entry.name) {
+            if let Ok((decrypted_bytes, _)) = crypto::decrypt_pack_chunk(chunk, &entry.name) {
                 let final_data = &decrypted_bytes[..std::cmp::min(entry.size, decrypted_bytes.len())];
                 let out_file = target_dir.join(&entry.name);
                 
@@ -95,13 +95,13 @@ pub fn run(pack_dir: &Path, tx: Sender<String>) -> Result<(), String> {
 }
 
 fn decrypt_list_content(data: &[u8]) -> Result<String, String> {
-    let pack_key = keys::get_md5_key("pack");
-    if let Ok(bytes) = keys::decrypt_ecb_with_key(data, &pack_key) {
+    let pack_key = crypto::get_md5_key("pack");
+    if let Ok(bytes) = crypto::decrypt_ecb_with_key(data, &pack_key) {
         if let Ok(s) = String::from_utf8(bytes) { return Ok(s); }
     }
     
-    let bc_key = keys::get_md5_key("battlecats");
-    if let Ok(bytes) = keys::decrypt_ecb_with_key(data, &bc_key) {
+    let bc_key = crypto::get_md5_key("battlecats");
+    if let Ok(bytes) = crypto::decrypt_ecb_with_key(data, &bc_key) {
         if let Ok(s) = String::from_utf8(bytes) { return Ok(s); }
     }
     

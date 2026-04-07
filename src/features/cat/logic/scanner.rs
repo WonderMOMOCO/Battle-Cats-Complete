@@ -168,7 +168,7 @@ pub fn process_cat_entry(
     
     let resolved_stats = crate::global::resolver::get(stats_parent, &[stats_name], priority).into_iter().next();
 
-    if !config.show_invalid && resolved_stats.is_none() {
+    if !config.show_invalid_cats && resolved_stats.is_none() {
         return None;
     }
 
@@ -205,10 +205,10 @@ pub fn process_cat_entry(
         let mut form_valid = false;
         
         if let Some(b_path) = &resolved_banner {
-            if config.show_invalid || is_valid_png(b_path) {
+            if config.show_invalid_cats || is_valid_png(b_path) {
                 form_valid = true;
             }
-        } else if config.show_invalid {
+        } else if config.show_invalid_cats {
             form_valid = dir.exists();
         }
 
@@ -219,7 +219,7 @@ pub fn process_cat_entry(
         }
     }
 
-    if !config.show_invalid && forms_existence.iter().all(|&e| !e) {
+    if !config.show_invalid_cats && forms_existence.iter().all(|&e| !e) {
         return None; 
     }
 

@@ -12,6 +12,8 @@ pub struct GlobalMatcher {
     img022_cut: Regex,
     localizable: Regex,
     param: Regex,
+    audio_ogg: Regex,
+    audio_caf: Regex,
 }
 
 impl GlobalMatcher {
@@ -26,10 +28,12 @@ impl GlobalMatcher {
             img022_cut: Regex::new(patterns::ASSET_022CUT_PATTERN).unwrap(),
             localizable: Regex::new(patterns::LOCALIZEABLE_PATTERN).unwrap(),
             param: Regex::new(patterns::PARAM_PATTERN).unwrap(),
+            audio_ogg: Regex::new(patterns::AUDIO_OGG_PATTERN).unwrap(),
+            audio_caf: Regex::new(patterns::AUDIO_CAF_PATTERN).unwrap(),
         }
     }
 
-    pub fn get_dest(&self, name: &str, sheets_dir: &Path, ui_dir: &Path, tables_dir: &Path) -> Option<PathBuf> {
+    pub fn get_dest(&self, name: &str, sheets_dir: &Path, ui_dir: &Path, tables_dir: &Path, audio_dir: &Path) -> Option<PathBuf> {
         if self.param.is_match(name) {
             return Some(tables_dir.to_path_buf());
         }
@@ -47,6 +51,12 @@ impl GlobalMatcher {
         }
         if self.img022.is_match(name) || self.img022_cut.is_match(name) {
             return Some(sheets_dir.join("img022"));
+        }
+        if self.audio_ogg.is_match(name) {
+            return Some(audio_dir.join("ogg"));
+        }
+        if self.audio_caf.is_match(name) {
+            return Some(audio_dir.join("caf"));
         }
         
         None

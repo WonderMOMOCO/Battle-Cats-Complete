@@ -92,7 +92,7 @@ impl BattleCatsApp {
             }
 
             let is_in_enemies_dir = path_str.contains("enemies");
-            if is_in_enemies_dir && Self::process_enemy_path(&path, &mut enemy_ids_to_refresh) {
+            if is_in_enemies_dir && self.process_enemy_path(&path, &mut enemy_ids_to_refresh) {
                 global_enemy_refresh = true;
             }
 
@@ -184,7 +184,7 @@ impl BattleCatsApp {
             folder_name[4..].parse::<u32>().ok()
         } else {
             None
-        };
+        } ;
 
         let Some(id) = parsed_id else { return true; };
 
@@ -206,7 +206,7 @@ impl BattleCatsApp {
         false
     }
     
-    pub fn process_enemy_path(path: &Path, enemy_ids_to_refresh: &mut HashSet<u32>) -> bool {
+    pub fn process_enemy_path(&mut self, path: &Path, enemy_ids_to_refresh: &mut HashSet<u32>) -> bool {
         let components: Vec<_> = path.components().map(|comp| comp.as_os_str().to_string_lossy()).collect();
         
         let Some(enemies_idx) = components.iter().position(|comp| comp == "enemies") else { return false; };
@@ -214,7 +214,16 @@ impl BattleCatsApp {
         
         let Ok(id) = folder_name.parse::<u32>() else { return true; };
         
-        enemy_ids_to_refresh.insert(id);
+        let is_anim = components.get(enemies_idx + 2).map(|s| s.as_ref()) == Some("anim");
+        if !is_anim || self.enemy_list_state.selected_enemy != Some(id) {
+            enemy_ids_to_refresh.insert(id);
+            return false;
+        }
+
+        let loaded = &mut self.enemy_list_state.anim_viewer.loaded_id;
+        loaded.clear();
+        self.enemy_list_state.anim_viewer.texture_version += 1;
+        
         false
     }
 }

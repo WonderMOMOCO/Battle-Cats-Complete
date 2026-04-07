@@ -5,5 +5,6 @@ pub mod data;
 pub mod general;
 pub mod tabs;
 pub mod exceptions;
+pub mod enemies;
 
 pub use tabs::{show, toggle_ui};

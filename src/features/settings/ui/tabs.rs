@@ -4,12 +4,9 @@ use crate::global::ui::shared::DragGuard;
 
 pub fn show(ctx: &egui::Context, settings: &mut Settings, drag_guard: &mut DragGuard) -> bool {
     let mut refresh_needed = false;
-    let tabs = ["General", "Cats", "Data", "Animation", "Add-Ons"];
+    let tabs = ["General", "Cats", "Enemies", "Data", "Animation", "Add-Ons"];
 
     egui::CentralPanel::default().show(ctx, |ui| {
-        ui.heading("Settings");
-        ui.add_space(10.0);
-
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 5.0; 
 
@@ -47,6 +44,7 @@ pub fn show(ctx: &egui::Context, settings: &mut Settings, drag_guard: &mut DragG
                 let result = match current_tab.as_str() {
                     "General" => super::general::show(ui, &mut settings.general, &mut settings.runtime),
                     "Cats" => super::cats::show(ui, &mut settings.cat_data),
+                    "Enemies" => super::enemies::show(ui, &mut settings.enemy_data),
                     "Data" => super::data::show(ui, &mut settings.game_data, &mut settings.runtime, drag_guard),
                     "Animation" => super::animation::show(ui, &mut settings.animation),
                     "Add-Ons" => super::addons::show(ui, drag_guard), 

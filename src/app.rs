@@ -3,7 +3,7 @@ use crate::global::game::param::Param;
 use crate::global::io::{json, watcher::GlobalWatcher};
 use crate::global::ui::shared::DragGuard;
 use crate::updater::Updater;
-use crate::features::data::logic::ImportState;
+use crate::features::data::state::ImportState;
 use crate::features::cat::logic::CatListState;
 use crate::features::enemy::logic::state::EnemyListState;
 use crate::features::stage::logic::state::StageListState;

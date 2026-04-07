@@ -75,7 +75,7 @@ pub struct ImportState {
     #[serde(skip)] pub import_job_completed_time: Option<Instant>,
     #[serde(skip)] pub import_job_aborted_time: Option<Instant>,
     #[serde(skip)] pub import_progress_current: Arc<AtomicUsize>,
-    #[serde(skip)] pub import_progress_max: Arc<AtomicUsize>,
+    #[serde(skip)] pub import_progress_maximum: Arc<AtomicUsize>,
 
     #[serde(skip)] pub export_log_content: String,
     #[serde(skip)] pub export_rx: Option<Receiver<String>>,
@@ -84,7 +84,7 @@ pub struct ImportState {
     #[serde(skip)] pub export_job_completed_time: Option<Instant>,
     #[serde(skip)] pub export_job_aborted_time: Option<Instant>,
     #[serde(skip)] pub export_progress_current: Arc<AtomicUsize>,
-    #[serde(skip)] pub export_progress_max: Arc<AtomicUsize>,
+    #[serde(skip)] pub export_progress_maximum: Arc<AtomicUsize>,
 }
 
 impl Default for ImportState {
@@ -110,7 +110,7 @@ impl Default for ImportState {
             import_job_completed_time: None,
             import_job_aborted_time: None,
             import_progress_current: Arc::new(AtomicUsize::new(0)),
-            import_progress_max: Arc::new(AtomicUsize::new(0)),
+            import_progress_maximum: Arc::new(AtomicUsize::new(0)),
 
             export_log_content: String::new(),
             export_rx: None,
@@ -119,80 +119,80 @@ impl Default for ImportState {
             export_job_completed_time: None,
             export_job_aborted_time: None,
             export_progress_current: Arc::new(AtomicUsize::new(0)),
-            export_progress_max: Arc::new(AtomicUsize::new(0)),
+            export_progress_maximum: Arc::new(AtomicUsize::new(0)),
         }
     }
 }
 
 impl ImportState {
-    pub fn update(&mut self, ctx: &egui::Context) -> bool {
+    pub fn update(&mut self, egui_context: &egui::Context) -> bool {
         let mut finished_just_now = false;
         
         self.import_censored = censor_path(&self.import_path);
         self.decrypt_censored = censor_path(&self.decrypt_path);
 
-        // Process Import Logs
-        if let Some(rx) = &self.import_rx {
-            while let Ok(msg) = rx.try_recv() {
-                self.import_log_content.push_str(&format!("{}\n", msg));
+        if let Some(receiver) = &self.import_rx {
+            while let Ok(message) = receiver.try_recv() {
+                self.import_log_content.push_str(&format!("{}\n", message));
             }
         }
 
-        // Process Export Logs
-        if let Some(rx) = &self.export_rx {
-            while let Ok(msg) = rx.try_recv() {
-                self.export_log_content.push_str(&format!("{}\n", msg));
+        if let Some(receiver) = &self.export_rx {
+            while let Ok(message) = receiver.try_recv() {
+                self.export_log_content.push_str(&format!("{}\n", message));
             }
         }
 
-        // Evaluate Import State
-        let import_status = self.import_job_status.load(Ordering::Relaxed);
-        if import_status == 1 {
-            ctx.request_repaint();
-        } else if import_status == 2 || import_status == 3 {
+        let import_status_value = self.import_job_status.load(Ordering::Relaxed);
+        
+        if import_status_value == 1 {
+            egui_context.request_repaint();
+        } else if import_status_value == 2 || import_status_value == 3 {
             if self.import_abort_flag.load(Ordering::Relaxed) {
                 self.import_job_aborted_time = Some(Instant::now());
-            } else if import_status == 2 {
+            } else if import_status_value == 2 {
                 finished_just_now = true;
                 self.import_job_completed_time = Some(Instant::now());
             }
             self.import_job_status.store(0, Ordering::Relaxed);
             self.import_abort_flag.store(false, Ordering::Relaxed);
             self.import_rx = None;
-            ctx.request_repaint(); 
+            egui_context.request_repaint(); 
         }
 
         if let Some(time) = self.import_job_completed_time {
-            if time.elapsed().as_secs() < 2 { ctx.request_repaint(); } 
+            if time.elapsed().as_secs() < 2 { egui_context.request_repaint(); } 
             else { self.import_job_completed_time = None; }
         }
+        
         if let Some(time) = self.import_job_aborted_time {
-            if time.elapsed().as_secs() < 2 { ctx.request_repaint(); } 
+            if time.elapsed().as_secs() < 2 { egui_context.request_repaint(); } 
             else { self.import_job_aborted_time = None; }
         }
 
-        // Evaluate Export State
-        let export_status = self.export_job_status.load(Ordering::Relaxed);
-        if export_status == 1 {
-            ctx.request_repaint();
-        } else if export_status == 2 || export_status == 3 {
+        let export_status_value = self.export_job_status.load(Ordering::Relaxed);
+        
+        if export_status_value == 1 {
+            egui_context.request_repaint();
+        } else if export_status_value == 2 || export_status_value == 3 {
             if self.export_abort_flag.load(Ordering::Relaxed) {
                 self.export_job_aborted_time = Some(Instant::now());
-            } else if export_status == 2 {
+            } else if export_status_value == 2 {
                 self.export_job_completed_time = Some(Instant::now());
             }
             self.export_job_status.store(0, Ordering::Relaxed);
             self.export_abort_flag.store(false, Ordering::Relaxed);
             self.export_rx = None;
-            ctx.request_repaint(); 
+            egui_context.request_repaint(); 
         }
 
         if let Some(time) = self.export_job_completed_time {
-            if time.elapsed().as_secs() < 2 { ctx.request_repaint(); } 
+            if time.elapsed().as_secs() < 2 { egui_context.request_repaint(); } 
             else { self.export_job_completed_time = None; }
         }
+        
         if let Some(time) = self.export_job_aborted_time {
-            if time.elapsed().as_secs() < 2 { ctx.request_repaint(); } 
+            if time.elapsed().as_secs() < 2 { egui_context.request_repaint(); } 
             else { self.export_job_aborted_time = None; }
         }
 
@@ -200,53 +200,48 @@ impl ImportState {
     }
 }
 
-pub fn censor_path(path: &str) -> String {
-    if path.is_empty() || path == "No source selected" { return String::new(); }
+pub fn censor_path(path_string: &str) -> String {
+    if path_string.is_empty() || path_string == "No source selected" { return String::new(); }
     
-    let mut clean = path.to_string();
-    if let Ok(user) = env::var("USERNAME").or_else(|_| env::var("USER")) {
-        if !user.is_empty() { clean = clean.replace(&user, "***"); }
+    let mut clean_string = path_string.to_string();
+    if let Ok(username) = env::var("USERNAME").or_else(|_| env::var("USER")) {
+        if !username.is_empty() { clean_string = clean_string.replace(&username, "***"); }
     }
     
-    let path_obj = Path::new(&clean);
-    let components: Vec<_> = path_obj.components().map(|c| c.as_os_str().to_string_lossy()).collect();
+    let path_object = Path::new(&clean_string);
+    let path_components: Vec<_> = path_object.components().map(|component| component.as_os_str().to_string_lossy()).collect();
     
-    if components.len() >= 2 {
-        let mut parent = components[components.len()-2].to_string();
-        let mut file = components[components.len()-1].to_string();
-        
-        let total_len = parent.chars().count() + file.chars().count();
-        
-        if total_len > 20 {
-            if file.chars().count() >= 20 {
-                // File name is too long on its own, truncate it and drop the parent
-                file = format!("{}...", file.chars().take(18).collect::<String>());
-                parent = String::new();
+    if path_components.len() < 2 {
+        if clean_string.chars().count() > 20 {
+            return format!("...{}", clean_string.chars().skip(clean_string.chars().count() - 20).collect::<String>());
+        }
+        return clean_string;
+    }
+
+    let mut parent_folder = path_components[path_components.len()-2].to_string();
+    let mut target_file = path_components[path_components.len()-1].to_string();
+    
+    let total_length = parent_folder.chars().count() + target_file.chars().count();
+    
+    if total_length > 20 {
+        if target_file.chars().count() >= 20 {
+            target_file = format!("{}...", target_file.chars().take(18).collect::<String>());
+            parent_folder = String::new();
+        } else {
+            let allowed_parent_length = 20 - target_file.chars().count();
+            if allowed_parent_length > 2 {
+                parent_folder = format!("{}...", parent_folder.chars().take(allowed_parent_length - 2).collect::<String>());
             } else {
-                // File name fits, but combined with parent is too long. Truncate parent.
-                let allowed_parent = 20 - file.chars().count();
-                if allowed_parent > 2 {
-                    parent = format!("{}...", parent.chars().take(allowed_parent - 2).collect::<String>());
-                } else {
-                    parent = String::new();
-                }
+                parent_folder = String::new();
             }
         }
-        
-        // Add the ellipsis prefix only if we chopped off earlier directories
-        let prefix = if components.len() > 2 { "...\\" } else { "" };
-        
-        if parent.is_empty() {
-            format!("{}{}", prefix, file)
-        } else {
-            format!("{}{}\\{}", prefix, parent, file)
-        }
+    }
+    
+    let ellipsis_prefix = if path_components.len() > 2 { "...\\" } else { "" };
+    
+    if parent_folder.is_empty() {
+        format!("{}{}", ellipsis_prefix, target_file)
     } else {
-        // Fallback for root files
-        if clean.chars().count() > 20 {
-            format!("...{}", clean.chars().skip(clean.chars().count() - 20).collect::<String>())
-        } else {
-            clean
-        }
+        format!("{}{}\\{}", ellipsis_prefix, parent_folder, target_file)
     }
 }

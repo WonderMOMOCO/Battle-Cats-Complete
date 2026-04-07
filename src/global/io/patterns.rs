@@ -8,6 +8,10 @@ pub const ASSET_022CUT_PATTERN: &str = r"^img022(?:_([a-z]{2}))?\.imgcut$";
 pub const LOCALIZEABLE_PATTERN: &str = r"^localizable(?:_([a-z]{2}))?\.tsv$";
 pub const PARAM_PATTERN: &str = r"^param\.tsv$";
 
+// Audio
+pub const AUDIO_OGG_PATTERN: &str = r"^.+\.ogg$";
+pub const AUDIO_CAF_PATTERN: &str = r"^.+\.caf$";
+
 // Gatya Items
 pub const GATYA_ITEM_D_PATTERN: &str = r"^gatyaitemD_(\d{2,3})_([fz])\.png$"; 
 pub const GATYA_ITEM_BUY_PATTERN: &str = r"^Gatyaitembuy\.csv$";
