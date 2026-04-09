@@ -100,6 +100,8 @@ impl eframe::App for BattleCatsApp {
         self.enemy_list_state.update_data();
         self.stage_list_state.update_data();
 
+        self.stage_list_state.sync_enemies(&self.enemy_list_state.enemies);
+
         if self.cat_list_state.scan_receiver.is_some() || self.enemy_list_state.scan_receiver.is_some() || self.stage_list_state.scan_receiver.is_some() {
             ctx.request_repaint();
         }

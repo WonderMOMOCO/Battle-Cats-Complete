@@ -8,7 +8,6 @@ pub fn load(dir: &Path, filename: &str, priority: &[String]) -> HashMap<u32, Vec
     let mut map: HashMap<u32, Vec<String>> = HashMap::new();
     let paths = resolver::get(dir, &[filename], priority);
     
-    // Reverse iterate to apply lowest priority first, allowing higher priority to overwrite
     for path in paths.iter().rev() {
         let Ok(content) = fs::read_to_string(path) else { continue; };
         let sep = detect_csv_separator(&content);
@@ -27,7 +26,6 @@ pub fn load(dir: &Path, filename: &str, priority: &[String]) -> HashMap<u32, Vec
                 entry.resize(parts.len(), String::new());
             }
             
-            // Overwrite ONLY if the new part is not empty
             for (i, part) in parts.into_iter().enumerate() {
                 if !part.is_empty() {
                     entry[i] = part;

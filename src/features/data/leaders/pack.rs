@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::sync::mpsc::Sender;
 use std::sync::atomic::{AtomicBool, AtomicUsize};
 use std::sync::Arc;
-use crate::features::data::utilities::engine;
+use crate::features::data::utilities::{engine, crypto};
 use crate::features::data::state::{ImportMode, AdbRegion};
 
 pub fn run(
@@ -16,6 +16,13 @@ pub fn run(
     progress_maximum: Arc<AtomicUsize>
 ) -> Result<(), String> {
     
+    let user_keys = crypto::UserKeys::load();
+    if user_keys.is_empty() {
+        let _ = status_sender.send("ERROR: No decryption keys found.".to_string());
+        let _ = status_sender.send("Please add them in Settings -> Data -> Manage Keys.".to_string());
+        return Err("Missing decryption keys".to_string());
+    }
+
     let source_directory = match import_mode {
         ImportMode::Folder => PathBuf::from(source_path_string),
         ImportMode::Zip => {

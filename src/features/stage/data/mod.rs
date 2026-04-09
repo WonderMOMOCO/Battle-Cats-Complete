@@ -1,4 +1,11 @@
-pub mod mapstagedata;
-pub mod stage;
-pub mod stagename;
+pub mod charagroup;
+pub mod dropitem;
+pub mod ex_option;
 pub mod map_name;
+pub mod map_option;
+pub mod mapstagedata;
+pub mod scorebonusmap;
+pub mod specialrulesmap;
+pub mod stage;
+pub mod stage_option;
+pub mod stagename;

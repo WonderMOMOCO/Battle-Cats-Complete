@@ -27,7 +27,10 @@ pub const BG_BATTLE_PATTERN: &str = r"^bg(\d+)(?:_[0-9_]+)?\.(png|imgcut|maanim|
 pub const BG_DATA_PATTERN: &str = r"^bg(\d+)(?:_[0-9_]+)?\.json$";
 pub const BG_EFFECT_PATTERN: &str = r"^bgEffect_(\d+)(?:_[0-9_]+)?\.(png|imgcut|maanim|mamodel|json)$";
 
-// Specifics and EX
+// Specifics, Options, and EX
 pub const LIMIT_MSG_PATTERN: &str = r"^MapStageLimitMessage(?:_[a-zA-Z]{2})?\.csv$";
 pub const EX_PATTERN: &str = r"^EX_(group|lottery|option)\.csv$";
 pub const CERTIFICATION_PRESET_PATTERN: &str = r"^Certification(\d+)\.preset$";
+pub const DROP_ITEM_PATTERN: &str = r"^DropItem(?:_[a-zA-Z]{2})?\.csv$";
+pub const CHARAGROUP_PATTERN: &str = r"^Charagroup(?:_[a-zA-Z]{2})?\.csv$";
+pub const SCORE_BONUS_PATTERN: &str = r"^ScoreBonusMap(?:_[a-zA-Z]{2})?\.json$";

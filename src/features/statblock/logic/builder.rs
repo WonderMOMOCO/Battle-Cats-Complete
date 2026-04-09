@@ -57,7 +57,7 @@ pub struct StatblockData {
     pub spirit_data: Option<SpiritData>,
 }
 
-const NAME_BOX_WIDTH: f32 = 126.0;
+const NAME_BOX_WIDTH: f32 = 125.3;
 const NAME_BOX_HEIGHT: f32 = 50.0;
 const HEADER_PADDING_Y: i32 = 10;
 const STAT_GRID_PADDING_Y: i32 = 14;

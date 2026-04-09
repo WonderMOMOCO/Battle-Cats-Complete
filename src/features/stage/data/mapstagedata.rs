@@ -4,21 +4,49 @@ use serde::{Serialize, Deserialize};
 use crate::global::resolver;
 use crate::global::utils::detect_csv_separator;
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct DropReward {
+    pub chance: u32,
+    pub id: u32,
+    pub amount: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct TimedScore {
+    pub score: u32,
+    pub id: u32,
+    pub amount: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum RewardStructure {
+    None,
+    Treasure {
+        drop_rule: i32,
+        drops: Vec<DropReward>,
+    },
+    Timed(Vec<TimedScore>),
+}
+
+impl Default for RewardStructure {
+    fn default() -> Self { Self::None }
+}
+
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct MapStageEntry {
     pub energy: u32,
     pub xp: u32,
-    pub treasure_type: i32,
-    pub drops: Vec<(u32, u32, u32)>,  // chance, id, amount
-    pub scores: Vec<(u32, u32, u32)>, // score, id, amount
+    pub init_track: u32,
+    pub bgm_change_percent: u32,
+    pub boss_track: u32,
+    pub rewards: RewardStructure,
 }
 
 pub fn load(dir: &Path, filename: &str, priority: &[String]) -> Vec<MapStageEntry> {
     let paths = resolver::get(dir, &[filename], priority);
-    let target = paths.first();
-    let Some(path) = target else { return Vec::new(); };
-    
+    let Some(path) = paths.first() else { return Vec::new(); };
     let Ok(content) = fs::read_to_string(path) else { return Vec::new(); };
+    
     parse(&content)
 }
 
@@ -35,44 +63,64 @@ fn parse(content: &str) -> Vec<MapStageEntry> {
         if parts.len() < 2 { continue; }
 
         let mut entry = MapStageEntry {
-            energy: parts.get(0).unwrap_or(&"0").parse().unwrap_or(0),
-            xp: parts.get(1).unwrap_or(&"0").parse().unwrap_or(0),
-            ..Default::default()
+            energy: parts.get(0).and_then(|s| s.parse().ok()).unwrap_or(0),
+            xp: parts.get(1).and_then(|s| s.parse().ok()).unwrap_or(0),
+            init_track: parts.get(2).and_then(|s| s.parse().ok()).unwrap_or(0),
+            bgm_change_percent: parts.get(3).and_then(|s| s.parse().ok()).unwrap_or(0),
+            boss_track: parts.get(4).and_then(|s| s.parse().ok()).unwrap_or(0),
+            rewards: RewardStructure::None,
         };
 
         let is_time = parts.len() > 15 && parts[8..15].iter().all(|&x| x == "-2");
 
         if is_time {
-            parse_scores(&mut entry, &parts);
+            entry.rewards = parse_scores(&parts);
         } else {
-            parse_treasures(&mut entry, &parts);
+            entry.rewards = parse_treasures(&parts);
         }
 
         entries.push(entry);
     }
+    
     entries
 }
 
-fn parse_scores(entry: &mut MapStageEntry, parts: &[&str]) {
-    let score_block_len = (parts.len() - 17) / 3;
+fn parse_scores(parts: &[&str]) -> RewardStructure {
+    let mut scores = Vec::new();
+    let score_block_len = (parts.len().saturating_sub(17)) / 3;
+    
     for i in 0..score_block_len {
         let score = parts.get(16 + i * 3).and_then(|s| s.parse().ok()).unwrap_or(0);
         let id = parts.get(17 + i * 3).and_then(|s| s.parse().ok()).unwrap_or(0);
-        let amt = parts.get(18 + i * 3).and_then(|s| s.parse().ok()).unwrap_or(0);
-        entry.scores.push((score, id, amt));
+        let amount = parts.get(18 + i * 3).and_then(|s| s.parse().ok()).unwrap_or(0);
+        scores.push(TimedScore { score, id, amount });
     }
+    
+    RewardStructure::Timed(scores)
 }
 
-fn parse_treasures(entry: &mut MapStageEntry, parts: &[&str]) {
-    if parts.len() < 8 { return; }
+fn parse_treasures(parts: &[&str]) -> RewardStructure {
+    if parts.len() < 8 { return RewardStructure::None; }
     
-    entry.treasure_type = parts.get(8).and_then(|s| s.parse().ok()).unwrap_or(0);
-    let drop_len = (parts.len() - 7) / 3;
+    let mut drops = Vec::new();
+    
+    let chance = parts.get(5).and_then(|s| s.parse().ok()).unwrap_or(0);
+    let id = parts.get(6).and_then(|s| s.parse().ok()).unwrap_or(0);
+    let amount = parts.get(7).and_then(|s| s.parse().ok()).unwrap_or(0);
+    drops.push(DropReward { chance, id, amount });
 
-    for i in 0..drop_len {
-        let chance = parts.get(5 + i * 3).and_then(|s| s.parse().ok()).unwrap_or(0);
-        let id = parts.get(6 + i * 3).and_then(|s| s.parse().ok()).unwrap_or(0);
-        let amt = parts.get(7 + i * 3).and_then(|s| s.parse().ok()).unwrap_or(0);
-        entry.drops.push((chance, id, amt));
+    let is_multi = parts.len() > 9;
+    let drop_rule = if is_multi { parts.get(8).and_then(|s| s.parse().ok()).unwrap_or(0) } else { 0 };
+
+    if is_multi {
+        let drop_len = (parts.len().saturating_sub(7)) / 3;
+        for i in 1..drop_len {
+            let c = parts.get(6 + i * 3).and_then(|s| s.parse().ok()).unwrap_or(0);
+            let i_id = parts.get(7 + i * 3).and_then(|s| s.parse().ok()).unwrap_or(0);
+            let amt = parts.get(8 + i * 3).and_then(|s| s.parse().ok()).unwrap_or(0);
+            drops.push(DropReward { chance: c, id: i_id, amount: amt });
+        }
     }
+    
+    RewardStructure::Treasure { drop_rule, drops }
 }

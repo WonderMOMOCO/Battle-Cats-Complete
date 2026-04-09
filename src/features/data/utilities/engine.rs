@@ -55,6 +55,15 @@ pub fn run_universal_import(
     progress_maximum: &Arc<AtomicUsize>
 ) -> Result<(), String> {
     
+    let user_keys = crypto::UserKeys::load();
+    if user_keys.is_empty() {
+        let _ = status_sender.send("ERROR: No decryption keys found.".to_string());
+        let _ = status_sender.send("Please add them in Settings -> Data -> Manage Keys.".to_string());
+        return Err("Missing Decryption Keys".into());
+    }
+    
+    let active_key_tuples = user_keys.as_tuples();
+
     let game_root_path = Path::new("game");
     let meta_directory_path = game_root_path.join("meta");
     let pack_manifest_path = meta_directory_path.join("pack.json");
@@ -323,6 +332,7 @@ pub fn run_universal_import(
     progress_current.store(0, Ordering::Relaxed);
     
     let successfully_extracted_count = AtomicI32::new(0);
+    let failed_decryption_count = AtomicUsize::new(0);
     let console_update_interval = (final_extraction_queue.len() / 100).max(10);
 
     let _ = status_sender.send(format!("Comparing and organizing {} game files...", final_extraction_queue.len()));
@@ -350,18 +360,23 @@ pub fn run_universal_import(
             if input_pack_file.seek(SeekFrom::Start(processing_task.byte_offset)).is_err() { continue; }
             if input_pack_file.read_exact(&mut encrypted_byte_buffer).is_err() { continue; }
 
-            if let Ok((decrypted_byte_vector, _)) = crypto::decrypt_pack_chunk(&encrypted_byte_buffer, &processing_task.original_name) {
-                let strict_size_limit = std::cmp::min(processing_task.byte_size, decrypted_byte_vector.len());
-                let exact_data_slice = &decrypted_byte_vector[..strict_size_limit];
+            match crypto::decrypt_pack_chunk(&encrypted_byte_buffer, &processing_task.original_name, &active_key_tuples) {
+                Ok((decrypted_byte_vector, _)) => {
+                    let strict_size_limit = std::cmp::min(processing_task.byte_size, decrypted_byte_vector.len());
+                    let exact_data_slice = &decrypted_byte_vector[..strict_size_limit];
 
-                let calculated_true_weight = audit::calculate_true_weight(exact_data_slice, &processing_task.final_name);
-                let cleaned_data_vector = audit::strip_carriage_returns(exact_data_slice, &processing_task.final_name);
+                    let calculated_true_weight = audit::calculate_true_weight(exact_data_slice, &processing_task.final_name);
+                    let cleaned_data_vector = audit::strip_carriage_returns(exact_data_slice, &processing_task.final_name);
 
-                decrypted_candidates.push(DecryptedCandidate {
-                    task: processing_task,
-                    clean_data: cleaned_data_vector,
-                    true_weight: calculated_true_weight,
-                });
+                    decrypted_candidates.push(DecryptedCandidate {
+                        task: processing_task,
+                        clean_data: cleaned_data_vector,
+                        true_weight: calculated_true_weight,
+                    });
+                },
+                Err(_) => {
+                    failed_decryption_count.fetch_add(1, Ordering::Relaxed);
+                }
             }
         }
 
@@ -419,6 +434,11 @@ pub fn run_universal_import(
         return Err("Job Aborted".into()); 
     }
     
+    let final_errors = failed_decryption_count.load(Ordering::Relaxed);
+    if final_errors > 0 {
+        let _ = status_sender.send(format!("Encountered {} errors decrypting pack chunks.", final_errors));
+    }
+
     for (filename_key, entry_data) in updated_manifest_entries { 
         global_file_ledger.insert(filename_key, entry_data); 
     }

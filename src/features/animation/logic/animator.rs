@@ -6,16 +6,28 @@ pub fn animate(model: &Model, animation: &Animation, global_frame: f32) -> Vec<M
 
     for curve in &animation.curves {
         if curve.part_id >= parts.len() { continue; }
+        if curve.keyframes.is_empty() { continue; }
         
         let keyframe_min = curve.keyframes.first().map(|keyframe| keyframe.frame as f32).unwrap_or(0.0);
         let keyframe_max = curve.keyframes.last().map(|keyframe| keyframe.frame as f32).unwrap_or(0.0);
 
         let duration = (keyframe_max - keyframe_min).max(1.0);
         let mut local_frame = global_frame;
-        let animation_loop_count = curve.loop_count; 
 
-        if animation_loop_count != 1 {
+        if global_frame < keyframe_min {
+            local_frame = keyframe_min;
+        } else if curve.loop_count == -1 {
             local_frame = (global_frame - keyframe_min).rem_euclid(duration) + keyframe_min;
+        } else if curve.loop_count >= 1 {
+            // Finite loop wraps up to the loop_count, then holds the last frame
+            let max_elapsed = (curve.loop_count as f32) * duration;
+            let elapsed = global_frame - keyframe_min;
+            
+            if elapsed >= max_elapsed {
+                local_frame = keyframe_max; 
+            } else {
+                local_frame = elapsed.rem_euclid(duration) + keyframe_min;
+            }
         } 
 
         let is_discrete = matches!(curve.modification_type, 0 | 1 | 3 | 13 | 14);

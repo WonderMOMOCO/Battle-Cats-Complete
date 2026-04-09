@@ -19,6 +19,9 @@ pub struct StageMatcher {
     limit_msg: Regex,
     ex_files: Regex,
     certification_preset: Regex,
+    drop_item: Regex,
+    charagroup: Regex,
+    score_bonus: Regex,
 }
 
 impl StageMatcher {
@@ -40,6 +43,9 @@ impl StageMatcher {
             limit_msg: Regex::new(patterns::LIMIT_MSG_PATTERN).unwrap(),
             ex_files: Regex::new(patterns::EX_PATTERN).unwrap(),
             certification_preset: Regex::new(patterns::CERTIFICATION_PRESET_PATTERN).unwrap(),
+            drop_item: Regex::new(patterns::DROP_ITEM_PATTERN).unwrap(),
+            charagroup: Regex::new(patterns::CHARAGROUP_PATTERN).unwrap(),
+            score_bonus: Regex::new(patterns::SCORE_BONUS_PATTERN).unwrap(),
         }
     }
 
@@ -54,18 +60,23 @@ impl StageMatcher {
         if self.map_global_name.is_match(name) { return Some(stages_dir.join("Map_Name")); }
 
         match name {
-            "Map_option.csv" | "MapConditions.json" => return Some(stages_dir.to_path_buf()),
+            "Map_option.csv" | "MapConditions.json" | "Stage_option.csv" | 
+            "DropItem.csv" | "Charagroup.csv" => return Some(stages_dir.to_path_buf()),
+            "ScoreBonusMap.json" => return Some(stages_dir.join("R")),
+            "SpecialRulesMap.json" | "SpecialRulesMapOption.json" => return Some(stages_dir.join("SR")),
             "bg.csv" => return Some(stages_dir.join("backgrounds").join("battle")),
-            "Stage_option.csv" => return Some(stages_dir.to_path_buf()),
             "fixed_formation.csv" => return Some(stages_dir.join("fixedlineup")), 
             "stage.csv" => return Some(stages_dir.join("EC").join("000")),
-            "SpecialRulesMap.json" | "SpecialRulesMapOption.json" => return Some(stages_dir.join("SR")),
             "tower_layout.csv" => return Some(stages_dir.join("V")), 
             "stage_conditions.csv" => return Some(stages_dir.join("L")),
             "stage_hint_popup.csv" => return Some(stages_dir.join("G")),
             _ => {} 
         }
 
+        // Regex matches for catching localized variants (e.g. DropItem_en.csv)
+        if self.drop_item.is_match(name) { return Some(stages_dir.to_path_buf()); }
+        if self.charagroup.is_match(name) { return Some(stages_dir.to_path_buf()); }
+        if self.score_bonus.is_match(name) { return Some(stages_dir.join("R")); }
         if self.certification_preset.is_match(name) { return Some(stages_dir.join("fixedlineup")); }
         if self.ex_files.is_match(name) { return Some(stages_dir.join("EX")); }
         if self.limit_msg.is_match(name) { return Some(stages_dir.join("MapStageLimitMessage")); }
@@ -85,7 +96,7 @@ impl StageMatcher {
             let mut folder_id = id;
 
             if raw_prefix == "ec" {
-                if id == 48 { mapped_prefix = "M"; folder_id = 50; }
+                if id == 48 { mapped_prefix = "M"; } // Reroute 48 to Challenge Battle (M) but keep ID 48
                 if id >= 49 && id <= 50 { mapped_prefix = "PT"; folder_id = id + 2; }
             }
 
@@ -144,9 +155,12 @@ impl StageMatcher {
             } else {
                 // Legacy Fallback: map_id capture is actually the stage ID here
                 let mut p = "EC";
-                if map_id == 50 { p = "M"; } // Merged into M!
+                let folder_id = map_id;
+                
+                if map_id == 48 { p = "M"; } // Reroute 48 to Challenge Battle (M) but keep ID 48
                 if map_id >= 51 && map_id <= 52 { p = "PT"; }
-                return Some(stages_dir.join(p).join("000").join(format!("{:02}", map_id)));
+                
+                return Some(stages_dir.join(p).join("000").join(format!("{:02}", folder_id)));
             }
         }
 

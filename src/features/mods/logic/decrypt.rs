@@ -19,6 +19,14 @@ pub fn run(pack_dir: &Path, tx: Sender<String>) -> Result<(), String> {
         return Err("DownloadLocal.list or .pack missing from target folder".to_string());
     }
 
+    let user_keys = crypto::UserKeys::load();
+    if user_keys.is_empty() {
+        let _ = tx.send("ERROR: No decryption keys found.".to_string());
+        let _ = tx.send("Please add them in Settings -> Data -> Manage Keys.".to_string());
+        return Err("Missing decryption keys.".to_string());
+    }
+    let active_key_tuples = user_keys.as_tuples();
+
     let mods_root = Path::new("mods");
     let mut mod_num = 1;
     while mods_root.join(format!("NewMod{}", mod_num)).exists() {
@@ -46,21 +54,29 @@ pub fn run(pack_dir: &Path, tx: Sender<String>) -> Result<(), String> {
     }
 
     let pack_data = fs::read(&pack_path).map_err(|e| e.to_string())?;
+    
     let extracted_count = AtomicUsize::new(0);
+    let failed_count = AtomicUsize::new(0);
 
     entries.into_par_iter().for_each(|entry| {
         let aligned_size = if entry.size % 16 == 0 { entry.size } else { ((entry.size / 16) + 1) * 16 };
         
         if entry.offset + aligned_size <= pack_data.len() {
             let chunk = &pack_data[entry.offset .. entry.offset + aligned_size];
-            if let Ok((decrypted_bytes, _)) = crypto::decrypt_pack_chunk(chunk, &entry.name) {
-                let final_data = &decrypted_bytes[..std::cmp::min(entry.size, decrypted_bytes.len())];
-                let out_file = target_dir.join(&entry.name);
-                
-                if let Some(parent) = out_file.parent() { let _ = fs::create_dir_all(parent); }
-                let _ = fs::write(out_file, final_data);
-                
-                extracted_count.fetch_add(1, Ordering::Relaxed);
+            
+            match crypto::decrypt_pack_chunk(chunk, &entry.name, &active_key_tuples) {
+                Ok((decrypted_bytes, _)) => {
+                    let final_data = &decrypted_bytes[..std::cmp::min(entry.size, decrypted_bytes.len())];
+                    let out_file = target_dir.join(&entry.name);
+                    
+                    if let Some(parent) = out_file.parent() { let _ = fs::create_dir_all(parent); }
+                    let _ = fs::write(out_file, final_data);
+                    
+                    extracted_count.fetch_add(1, Ordering::Relaxed);
+                },
+                Err(_) => {
+                    failed_count.fetch_add(1, Ordering::Relaxed);
+                }
             }
         }
     });
@@ -87,6 +103,11 @@ pub fn run(pack_dir: &Path, tx: Sender<String>) -> Result<(), String> {
                 }
             }
         }
+    }
+
+    let final_errors = failed_count.load(Ordering::Relaxed);
+    if final_errors > 0 {
+        let _ = tx.send(format!("Encountered {} errors decrypting pack chunks.", final_errors));
     }
 
     let final_count = extracted_count.load(Ordering::Relaxed);

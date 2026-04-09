@@ -266,6 +266,13 @@ pub fn show(ui: &mut egui::Ui, settings: &mut GameDataSettings, runtime: &mut Ru
             ui.heading("Import");
             ui.add_space(5.0);
 
+            let keys_btn = egui::Button::new("Manage Keys")
+                    .fill(egui::Color32::from_rgb(40, 90, 160));
+                
+            if ui.add_sized([180.0, 30.0], keys_btn).clicked() {
+                crate::features::settings::ui::keys::open(&ctx);
+            }
+
             let import_btn = egui::Button::new("Manage Exceptions")
                 .fill(egui::Color32::from_rgb(40, 90, 160));
             
@@ -308,6 +315,7 @@ pub fn show(ui: &mut egui::Ui, settings: &mut GameDataSettings, runtime: &mut Ru
     }
 
     crate::features::settings::ui::exceptions::show(&ctx, drag_guard);
+    crate::features::settings::ui::keys::show(&ctx, drag_guard);
 
     ctx.data_mut(|d| {
         d.insert_temp(egui::Id::new("game_deleter"), game_deleter);
