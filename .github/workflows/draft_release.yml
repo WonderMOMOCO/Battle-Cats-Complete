@@ -10,8 +10,6 @@ on:
 env:
   CARGO_TERM_COLOR: always
   BIN_NAME: "Battle Cats Complete"
-  # Forces all actions to use the updated Node 24 runner, clearing the warning
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true 
 
 jobs:
   check-version:
@@ -21,7 +19,7 @@ jobs:
       should_release: ${{ steps.check.outputs.should_release }}
       app_version: ${{ steps.get_version.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Get version from Cargo.toml
         id: get_version
         run: |
@@ -35,7 +33,6 @@ jobs:
         run: |
           VERSION=${{ steps.get_version.outputs.version }}
           TAG="v$VERSION"
-          # Check if release exists; if command fails, it doesn't exist (good)
           if gh release view "$TAG" > /dev/null 2>&1; then
             echo "Version $TAG already exists."
             echo "should_release=false" >> $GITHUB_OUTPUT
@@ -50,11 +47,11 @@ jobs:
     if: needs.check-version.outputs.should_release == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Cache Cargo Dependencies
         uses: swatinem/rust-cache@v2
         with:
-           key: windows-release
+            key: windows-release
       - name: Build Release
         run: cargo build --release --verbose
       - name: Rename and Zip (Windows)
@@ -62,7 +59,7 @@ jobs:
           move target/release/*.exe "${{ env.BIN_NAME }}.exe"
           Compress-Archive -Path "${{ env.BIN_NAME }}.exe" -DestinationPath bcc_windows.zip
       - name: Upload Windows Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: windows-build
           path: bcc_windows.zip
@@ -74,11 +71,11 @@ jobs:
     if: needs.check-version.outputs.should_release == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Cache Cargo Dependencies
         uses: swatinem/rust-cache@v2
         with:
-           key: linux-release
+            key: linux-release
       - name: Build Release
         run: cargo build --release --verbose
       - name: Prepare and Zip (Linux)
@@ -88,7 +85,7 @@ jobs:
           chmod +x "${{ env.BIN_NAME }}"
           zip bcc_linux.zip "${{ env.BIN_NAME }}"
       - name: Upload Linux Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: linux-build
           path: bcc_linux.zip
@@ -100,11 +97,11 @@ jobs:
     if: needs.check-version.outputs.should_release == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Cache Cargo Dependencies
         uses: swatinem/rust-cache@v2
         with:
-           key: macos-release
+            key: macos-release
       - name: Build Release
         run: cargo build --release --verbose
       - name: Prepare and Zip (Mac)
@@ -114,7 +111,7 @@ jobs:
           chmod +x "${{ env.BIN_NAME }}"
           zip bcc_mac.zip "${{ env.BIN_NAME }}"
       - name: Upload Mac Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: mac-build
           path: bcc_mac.zip
@@ -125,14 +122,14 @@ jobs:
     needs: [check-version, build-windows, build-linux, build-macos]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           path: artifacts
           merge-multiple: true
       - name: List artifacts (Verification)
         run: ls -R artifacts
       - name: Create Release Draft
-        uses: softprops/action-gh-release@v2 # Bumped to v2!
+        uses: softprops/action-gh-release@v2
         with:
           token: ${{ secrets.MY_RELEASE_TOKEN }}
           tag_name: v${{ needs.check-version.outputs.app_version }}
