@@ -167,7 +167,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.MY_RELEASE_TOKEN }}
         run: |
+          # THE FIX: Added --repo to explicitly tell the CLI where we are!
           gh release create "v${{ needs.check-version.outputs.app_version }}" \
+            --repo "${{ github.repository }}" \
             --title "Battle Cats Complete v${{ needs.check-version.outputs.app_version }}" \
             --draft \
             --prerelease \
