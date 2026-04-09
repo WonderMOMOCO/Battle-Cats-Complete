@@ -1,139 +1,65 @@
-name: Build & Draft Release
+name: Notify Discord on Release
 
 on:
-  push:
-    branches: [ "main" ]
-    paths:
-      - 'Cargo.toml'
+  release:
+    types: [released, published]
   workflow_dispatch:
 
-env:
-  CARGO_TERM_COLOR: always
-  BIN_NAME: "Battle Cats Complete"
-
 jobs:
-  check-version:
-    name: Check Version
+  notify:
     runs-on: ubuntu-latest
-    outputs:
-      should_release: ${{ steps.check.outputs.should_release }}
-      app_version: ${{ steps.get_version.outputs.version }}
     steps:
       - uses: actions/checkout@v5
-      - name: Get version from Cargo.toml
-        id: get_version
+
+      - name: Get Latest Release info
+        if: github.event_name == 'workflow_dispatch'
+        id: latest_release
         run: |
-          VERSION=$(grep "^version" Cargo.toml | head -1 | awk -F '"' '{print $2}')
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Found version: $VERSION"
-      - name: Check if tag exists
-        id: check
+          # Stick with your [0] logic but ensures we use the token safely
+          RELEASE_DATA=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases" | jq '.[0]')
+          
+          echo "name=$(echo $RELEASE_DATA | jq -r .name)" >> $GITHUB_OUTPUT
+          echo "tag=$(echo $RELEASE_DATA | jq -r .tag_name)" >> $GITHUB_OUTPUT
+          echo "url=$(echo $RELEASE_DATA | jq -r .html_url)" >> $GITHUB_OUTPUT
+          echo "date=$(echo $RELEASE_DATA | jq -r .published_at)" >> $GITHUB_OUTPUT
+          
+          echo $RELEASE_DATA | jq -r .body > release_body.txt
+
+      - name: Send Rich Message to Discord
         env:
-          GH_TOKEN: ${{ secrets.MY_RELEASE_TOKEN }}
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          RELEASE_BODY_EVENT: ${{ github.event.release.body }}
         run: |
-          VERSION=${{ steps.get_version.outputs.version }}
-          TAG="v$VERSION"
-          if gh release view "$TAG" > /dev/null 2>&1; then
-            echo "Version $TAG already exists."
-            echo "should_release=false" >> $GITHUB_OUTPUT
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            REL_NAME="${{ steps.latest_release.outputs.name }}"
+            REL_URL="${{ steps.latest_release.outputs.url }}"
+            REL_DATE=$(echo "${{ steps.latest_release.outputs.date }}" | cut -c1-10)
+            MESSAGE_BODY=$(cat release_body.txt)
           else
-            echo "Version $TAG is new! Preparing release..."
-            echo "should_release=true" >> $GITHUB_OUTPUT
+            REL_NAME="${{ github.event.release.name }}"
+            REL_URL="${{ github.event.release.html_url }}"
+            REL_DATE=$(echo "${{ github.event.release.published_at }}" | cut -c1-10)
+            MESSAGE_BODY="$RELEASE_BODY_EVENT"
           fi
 
-  build-windows:
-    name: Build Windows
-    needs: check-version
-    if: needs.check-version.outputs.should_release == 'true' || github.event_name == 'workflow_dispatch'
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v5
-      - name: Cache Cargo Dependencies
-        uses: swatinem/rust-cache@v2
-        with:
-            key: windows-release
-      - name: Build Release
-        run: cargo build --release --verbose
-      - name: Rename and Zip (Windows)
-        run: |
-          move target/release/*.exe "${{ env.BIN_NAME }}.exe"
-          Compress-Archive -Path "${{ env.BIN_NAME }}.exe" -DestinationPath bcc_windows.zip
-      - name: Upload Windows Artifact
-        uses: actions/upload-artifact@v5
-        with:
-          name: windows-build
-          path: bcc_windows.zip
-          retention-days: 1
+          if [ ${#MESSAGE_BODY} -gt 2000 ]; then
+            MESSAGE_BODY=$(printf "%s ...\n\n**[Read full release notes](%s)**" "${MESSAGE_BODY:0:2000}" "$REL_URL")
+          fi
 
-  build-linux:
-    name: Build Linux
-    needs: check-version
-    if: needs.check-version.outputs.should_release == 'true' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - name: Cache Cargo Dependencies
-        uses: swatinem/rust-cache@v2
-        with:
-            key: linux-release
-      - name: Build Release
-        run: cargo build --release --verbose
-      - name: Prepare and Zip (Linux)
-        run: |
-          ORIGINAL_BIN_NAME=$(sed -n 's/^name = "\(.*\)"/\1/p' Cargo.toml | head -1)
-          mv "target/release/$ORIGINAL_BIN_NAME" "${{ env.BIN_NAME }}"
-          chmod +x "${{ env.BIN_NAME }}"
-          zip bcc_linux.zip "${{ env.BIN_NAME }}"
-      - name: Upload Linux Artifact
-        uses: actions/upload-artifact@v5
-        with:
-          name: linux-build
-          path: bcc_linux.zip
-          retention-days: 1
+          CLEAN_BODY=$(echo "$MESSAGE_BODY" | jq -Rs .)
+          CLEAN_NAME=$(echo "$REL_NAME" | jq -Rs .)
 
-  build-macos:
-    name: Build MacOS
-    needs: check-version
-    if: needs.check-version.outputs.should_release == 'true' || github.event_name == 'workflow_dispatch'
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v5
-      - name: Cache Cargo Dependencies
-        uses: swatinem/rust-cache@v2
-        with:
-            key: macos-release
-      - name: Build Release
-        run: cargo build --release --verbose
-      - name: Prepare and Zip (Mac)
-        run: |
-          ORIGINAL_BIN_NAME=$(sed -n 's/^name = "\(.*\)"/\1/p' Cargo.toml | head -1)
-          mv "target/release/$ORIGINAL_BIN_NAME" "${{ env.BIN_NAME }}"
-          chmod +x "${{ env.BIN_NAME }}"
-          zip bcc_mac.zip "${{ env.BIN_NAME }}"
-      - name: Upload Mac Artifact
-        uses: actions/upload-artifact@v5
-        with:
-          name: mac-build
-          path: bcc_mac.zip
-          retention-days: 1
-
-  create-release:
-    name: Create Release Draft
-    needs: [check-version, build-windows, build-linux, build-macos]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v5
-        with:
-          path: artifacts
-          merge-multiple: true
-      - name: List artifacts (Verification)
-        run: ls -R artifacts
-      - name: Create Release Draft
-        uses: softprops/action-gh-release@v2
-        with:
-          token: ${{ secrets.MY_RELEASE_TOKEN }}
-          tag_name: v${{ needs.check-version.outputs.app_version }}
-          name: Battle Cats Complete v${{ needs.check-version.outputs.app_version }}
-          draft: true
-          prerelease: true
-          files: artifacts/*
+          # Re-using your manual curl block
+          curl -H "Content-Type: application/json" \
+          -d "{
+            \"content\": **$CLEAN_NAME**,
+            \"embeds\": [{
+              \"title\": \"Release\",
+              \"url\": \"$REL_URL\",
+              \"description\": $CLEAN_BODY,
+              \"color\": 2058496,
+              \"footer\": { \"text\": \"Release Date: $REL_DATE\" }
+            }]
+          }" \
+          "$DISCORD_WEBHOOK"
