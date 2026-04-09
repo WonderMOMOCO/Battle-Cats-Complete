@@ -34,3 +34,5 @@ pub const CERTIFICATION_PRESET_PATTERN: &str = r"^Certification(\d+)\.preset$";
 pub const DROP_ITEM_PATTERN: &str = r"^DropItem(?:_[a-zA-Z]{2})?\.csv$";
 pub const CHARAGROUP_PATTERN: &str = r"^Charagroup(?:_[a-zA-Z]{2})?\.csv$";
 pub const SCORE_BONUS_PATTERN: &str = r"^ScoreBonusMap(?:_[a-zA-Z]{2})?\.json$";
+pub const DIFFICULTY_LEVEL_PATTERN: &str = r"^difficulty_level(?:_[a-zA-Z]{2})?\.tsv$";
+pub const DROP_CHARA_PATTERN: &str = r"^drop_chara(?:_[a-zA-Z]{2})?\.csv$";

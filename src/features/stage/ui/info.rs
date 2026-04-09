@@ -1,79 +1,70 @@
 use eframe::egui;
 use crate::features::stage::registry::Stage;
+use crate::features::stage::logic::info as info_logic;
 
-fn center_header(ui: &mut egui::Ui, text: &str) {
-    ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
-        ui.add(egui::Label::new(egui::RichText::new(text).strong()).wrap_mode(egui::TextWrapMode::Extend));
+fn center_header(ui: &mut egui::Ui, display_text: &str) {
+    ui.centered_and_justified(|ui| {
+        ui.add(egui::Label::new(egui::RichText::new(display_text).strong()).wrap_mode(egui::TextWrapMode::Extend));
     });
 }
 
-fn center_text(ui: &mut egui::Ui, text: impl Into<String>) {
-    ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
-        ui.add(egui::Label::new(text.into()).wrap_mode(egui::TextWrapMode::Extend));
+fn center_text(ui: &mut egui::Ui, display_text: impl Into<String>) {
+    ui.centered_and_justified(|ui| {
+        ui.add(egui::Label::new(display_text.into()).wrap_mode(egui::TextWrapMode::Extend));
     });
 }
 
-pub fn draw(ui: &mut egui::Ui, stage: &Stage) {
+pub fn draw(ui: &mut egui::Ui, stage_data: &Stage) {
     ui.strong("General Information");
     ui.separator();
+
+    let energy_header = if stage_data.category == "B" { "Catamin" } else { "Energy" };
+    let formatted_energy_value = info_logic::format_energy_cost(&stage_data.category, stage_data.energy);
+    let formatted_difficulty = info_logic::format_difficulty_level(stage_data.difficulty);
+    let formatted_crown = info_logic::format_crown_display(stage_data.target_crowns, stage_data.max_crowns);
+    let formatted_no_continues = info_logic::format_boolean_status(stage_data.is_no_continues, "Yes", "No");
+    let formatted_indestructible = info_logic::format_boolean_status(stage_data.is_base_indestructible, "Active", "-");
+    let formatted_boss_track = info_logic::format_boss_track(stage_data.boss_track, stage_data.bgm_change_percent);
+    let (base_header, formatted_base_value) = info_logic::format_base_display(stage_data.anim_base_id, stage_data.base_id);
 
     egui::Grid::new("stage_meta_grid")
         .striped(true)
         .spacing([15.0, 8.0])
-        .show(ui, |ui| {
-            // ROW 1: HEADERS
-            center_header(ui, "Base HP");
-            center_header(ui, "Energy");
-            center_header(ui, "XP Base");
-            center_header(ui, "Width");
-            center_header(ui, "Max Enemy");
-            center_header(ui, "No Cont.");
-            ui.end_row();
+        .show(ui, |grid| {
+            center_header(grid, "Base HP");
+            center_header(grid, energy_header);
+            center_header(grid, "XP Base");
+            center_header(grid, "Width");
+            center_header(grid, "Max Enemy");
+            center_header(grid, "Min Respawn");
+            center_header(grid, "Difficulty");
+            grid.end_row();
 
-            // ROW 1: VALUES
-            center_text(ui, stage.base_hp.to_string());
-            center_text(ui, stage.energy.to_string());
-            center_text(ui, stage.xp.to_string());
-            center_text(ui, stage.width.to_string());
-            center_text(ui, stage.max_enemies.to_string());
-            center_text(ui, if stage.is_no_continues { "Yes" } else { "No" });
-            ui.end_row();
+            center_text(grid, stage_data.base_hp.to_string());
+            center_text(grid, formatted_energy_value);
+            center_text(grid, stage_data.xp.to_string());
+            center_text(grid, stage_data.width.to_string());
+            center_text(grid, stage_data.max_enemies.to_string());
+            center_text(grid, format!("{}f", stage_data.min_spawn));
+            center_text(grid, formatted_difficulty);
+            grid.end_row();
 
-            // ROW 2: HEADERS
-            center_header(ui, "Boss Guard");
-            
-            if stage.anim_base_id != 0 {
-                center_header(ui, "Anim Base");
-            } else {
-                center_header(ui, "Base Img");
-            }
-            
-            center_header(ui, "BG ID");
-            center_header(ui, "BGM");
-            center_header(ui, "Boss BGM");
-            center_header(ui, "");
-            ui.end_row();
+            center_header(grid, "No Cont.");
+            center_header(grid, "Boss Guard");
+            center_header(grid, &base_header);
+            center_header(grid, "BG ID");
+            center_header(grid, "BGM");
+            center_header(grid, "Boss BGM");
+            center_header(grid, "Crowns");
+            grid.end_row();
 
-            // ROW 2: VALUE
-            center_text(ui, if stage.is_base_indestructible { "Active" } else { "-" });
-            
-            if stage.anim_base_id != 0 {
-                let actual_enemy_id = if stage.anim_base_id >= 2 { stage.anim_base_id - 2 } else { 0 };
-                center_text(ui, format!("E-{:03}", actual_enemy_id));
-            } else {
-                center_text(ui, stage.base_id.to_string());
-            }
-
-            center_text(ui, stage.background_id.to_string());
-            center_text(ui, stage.init_track.to_string());
-            
-            if stage.boss_track == 0 && stage.bgm_change_percent == 0 {
-                center_text(ui, "-");
-            } else {
-                center_text(ui, format!("Trk {} ({}%)", stage.boss_track, stage.bgm_change_percent));
-            }
-            
-            center_text(ui, "");
-            ui.end_row();
+            center_text(grid, formatted_no_continues);
+            center_text(grid, formatted_indestructible);
+            center_text(grid, formatted_base_value);
+            center_text(grid, stage_data.background_id.to_string());
+            center_text(grid, stage_data.init_track.to_string());
+            center_text(grid, formatted_boss_track);
+            center_text(grid, formatted_crown);
+            grid.end_row();
         });
 }

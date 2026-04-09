@@ -15,6 +15,7 @@ pub struct Stage {
     pub anim_base_id: u32,
     pub width: u32,
     pub base_hp: u32,
+    pub min_spawn: u32, 
     pub background_id: u32,
     pub max_enemies: u32,
     pub is_no_continues: bool,
@@ -30,6 +31,8 @@ pub struct Stage {
     pub rewards: data::mapstagedata::RewardStructure,
 
     // Stage Options & Restrictions
+    pub difficulty: u16,  
+    pub max_crowns: u8,   
     pub target_crowns: i8, 
     pub rarity_mask: u8,
     pub deploy_limit: u32,

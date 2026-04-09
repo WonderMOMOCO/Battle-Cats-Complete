@@ -4,10 +4,11 @@ use std::sync::atomic::{AtomicBool, AtomicU8, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::thread;
 
-use crate::features::data::utilities::{engine, crypto};
+use crate::features::data::utilities::engine;
 use crate::features::data::state::{AdbImportType, AdbRegion};
 use crate::features::addons::adb::bridge;
 use crate::features::settings::logic::state::EmulatorConfig;
+use crate::features::settings::logic::keys::UserKeys;
 
 pub fn run(
     status_sender: Sender<String>, 
@@ -27,7 +28,7 @@ pub fn run(
                 status_tracker.store(if is_error { 3 } else { 2 }, Ordering::Relaxed); 
             };
 
-            let user_keys = crypto::UserKeys::load();
+            let user_keys = UserKeys::load();
             if user_keys.is_empty() {
                 let _ = status_sender.send("ERROR: No decryption keys found.".to_string());
                 let _ = status_sender.send("Please add them in Settings -> Data -> Manage Keys.".to_string());

@@ -9,8 +9,15 @@ pub fn draw(ctx: &egui::Context, ui: &mut egui::Ui, state: &mut StageListState) 
         return;
     };
 
+    let item_buy_registry = &state.item_buy_registry;
+    let item_name_registry = &state.item_name_registry;
+    let drop_chara_registry = &state.drop_chara_registry;
+    let unit_buy_registry = &state.unit_buy_registry;
+    let item_texture_cache = &mut state.item_texture_cache;
+    let active_language_priority_array = &state.active_language_priority;
     let enemy_registry = &state.enemy_registry;
     let texture_cache = &mut state.enemy_texture_cache;
+    
     let Some(stage) = state.registry.stages.get(stage_id) else { return; };
 
     egui::ScrollArea::vertical()
@@ -35,7 +42,17 @@ pub fn draw(ctx: &egui::Context, ui: &mut egui::Ui, state: &mut StageListState) 
                     super::info::draw(ui, stage);
                     ui.add_space(20.0);
                     
-                    super::treasure::draw(ui, stage);
+                    super::treasure::draw(
+                        ctx, 
+                        ui, 
+                        stage, 
+                        item_buy_registry, 
+                        item_name_registry, 
+                        drop_chara_registry, 
+                        unit_buy_registry,
+                        item_texture_cache, 
+                        active_language_priority_array
+                    );
                     ui.add_space(20.0);
 
                     super::battleground::draw(ctx, ui, stage, enemy_registry, texture_cache);

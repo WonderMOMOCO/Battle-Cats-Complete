@@ -1,8 +1,7 @@
 use std::fs;
 use std::path::Path;
 use eframe::egui;
-
-use crate::features::data::utilities::crypto::UserKeys;
+use crate::features::settings::logic::keys::UserKeys;
 use crate::global::ui::shared::DragGuard;
 
 const COL_REGION_WIDTH: f32 = 40.0;
@@ -147,12 +146,12 @@ pub fn show(ctx: &egui::Context, drag_guard: &mut DragGuard) {
             ];
 
             for (name, region_data) in regions {
-                ui.vertical_centered(|ui| { ui.label(egui::RichText::new(name).strong()); });
+                ui.centered_and_justified(|ui| { ui.label(egui::RichText::new(name).strong()); });
                 ui.add(egui::TextEdit::singleline(&mut region_data.key).desired_width(COL_INPUT_WIDTH));
                 ui.add(egui::TextEdit::singleline(&mut region_data.iv).desired_width(COL_INPUT_WIDTH));
                 ui.end_row();
             }
-        });
+        })
     });
 
     if state.keys != original_keys || (state.is_open && !is_open) {

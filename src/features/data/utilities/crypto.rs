@@ -2,58 +2,10 @@ use aes::Aes128;
 use aes::cipher::{BlockDecryptMut, KeyIvInit, KeyInit};
 use block_padding::Pkcs7;
 use md5;
-use serde::{Serialize, Deserialize};
-use std::fs;
+use crate::features::settings::logic::keys::UserKeys;
 
 type Aes128Cbc = cbc::Decryptor<Aes128>;
 type Aes128Ecb = ecb::Decryptor<Aes128>;
-
-// --- BYOK Data Structures ---
-
-#[derive(Clone, Serialize, Deserialize, Default, PartialEq)]
-pub struct RegionKey {
-    pub key: String,
-    pub iv: String,
-}
-
-#[derive(Clone, Serialize, Deserialize, Default, PartialEq)]
-pub struct UserKeys {
-    pub jp: RegionKey,
-    pub en: RegionKey,
-    pub tw: RegionKey,
-    pub kr: RegionKey,
-}
-
-impl UserKeys {
-    pub fn load() -> Self {
-        if let Ok(data) = fs::read_to_string("keys.json") {
-            if let Ok(keys) = serde_json::from_str(&data) {
-                return keys;
-            }
-        }
-        Self::default()
-    }
-
-    pub fn save(&self) {
-        if let Ok(data) = serde_json::to_string_pretty(self) {
-            let _ = fs::write("keys.json", data);
-        }
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.jp.key.is_empty() && self.en.key.is_empty() && 
-        self.tw.key.is_empty() && self.kr.key.is_empty()
-    }
-
-    pub fn as_tuples(&self) -> Vec<(String, String, String)> {
-        let mut vec = Vec::new();
-        if !self.jp.key.is_empty() && !self.jp.iv.is_empty() { vec.push((self.jp.key.clone(), self.jp.iv.clone(), "JP".to_string())); }
-        if !self.en.key.is_empty() && !self.en.iv.is_empty() { vec.push((self.en.key.clone(), self.en.iv.clone(), "EN".to_string())); }
-        if !self.tw.key.is_empty() && !self.tw.iv.is_empty() { vec.push((self.tw.key.clone(), self.tw.iv.clone(), "TW".to_string())); }
-        if !self.kr.key.is_empty() && !self.kr.iv.is_empty() { vec.push((self.kr.key.clone(), self.kr.iv.clone(), "KR".to_string())); }
-        vec
-    }
-}
 
 pub fn get_md5_key(text: &str) -> [u8; 16] {
     let digest = md5::compute(text.as_bytes());
@@ -87,37 +39,28 @@ pub fn decrypt_ecb_with_key(data: &[u8], key: &[u8; 16]) -> Result<Vec<u8>, Stri
 
 fn is_content_valid(data: &[u8], filename: &str) -> bool {
     let lower_name = filename.to_lowercase();
-    
     if lower_name.ends_with(".png") {
-        if data.len() < 4 { return false; }
-        return data.starts_with(&[0x89, 0x50, 0x4E, 0x47]);
+        return data.len() >= 4 && data.starts_with(&[0x89, 0x50, 0x4E, 0x47]);
     }
-
-    if lower_name.ends_with(".csv") 
-        || lower_name.ends_with(".list") 
-        || lower_name.ends_with(".json")
-        || lower_name.ends_with(".maanim")   
-        || lower_name.ends_with(".mamodel")  
-        || lower_name.ends_with(".imgcut")   
+    if lower_name.ends_with(".csv") || lower_name.ends_with(".list") || lower_name.ends_with(".json")
+        || lower_name.ends_with(".maanim") || lower_name.ends_with(".mamodel") || lower_name.ends_with(".imgcut") 
     {
         return std::str::from_utf8(data).is_ok();
     }
-
     true
 }
 
-pub fn decrypt_pack_chunk(data: &[u8], internal_filename: &str, user_keys: &[(String, String, String)]) -> Result<(Vec<u8>, String), String> {
+pub fn decrypt_pack_chunk(data: &[u8], internal_filename: &str, user_keys: &UserKeys) -> Result<(Vec<u8>, String), String> {
+    let key_tuples = user_keys.as_tuples();
     
-    for (k_hex, iv_hex, region) in user_keys.iter() {
+    for (k_hex, iv_hex, region) in key_tuples {
         let Ok(key_bytes) = hex::decode(k_hex) else { continue; };
         let Ok(iv_bytes) = hex::decode(iv_hex) else { continue; };
-        
-        let Ok(key_arr) = key_bytes.try_into() else { continue; };
-        let Ok(iv_arr) = iv_bytes.try_into() else { continue; };
+        let (Ok(key_arr), Ok(iv_arr)) = (key_bytes.try_into(), iv_bytes.try_into()) else { continue; };
 
         if let Ok(result) = decrypt_cbc_with_key(data, &key_arr, &iv_arr) {
             if is_content_valid(&result, internal_filename) {
-                return Ok((result, region.to_string()));
+                return Ok((result, region));
             }
         }
     }

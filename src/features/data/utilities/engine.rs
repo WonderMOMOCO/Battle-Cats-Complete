@@ -10,6 +10,7 @@ use rayon::prelude::*;
 use crate::features::data::utilities::{apk, crypto, audit, manifest, router, rules, chrono};
 use crate::global::io::patterns;
 use crate::features::settings::logic::exceptions::RuleHandling;
+use crate::features::settings::logic::keys::UserKeys;
 
 #[derive(Clone)]
 struct UniversalTask {
@@ -55,15 +56,13 @@ pub fn run_universal_import(
     progress_maximum: &Arc<AtomicUsize>
 ) -> Result<(), String> {
     
-    let user_keys = crypto::UserKeys::load();
+    let user_keys = UserKeys::load();
     if user_keys.is_empty() {
         let _ = status_sender.send("ERROR: No decryption keys found.".to_string());
         let _ = status_sender.send("Please add them in Settings -> Data -> Manage Keys.".to_string());
         return Err("Missing Decryption Keys".into());
     }
     
-    let active_key_tuples = user_keys.as_tuples();
-
     let game_root_path = Path::new("game");
     let meta_directory_path = game_root_path.join("meta");
     let pack_manifest_path = meta_directory_path.join("pack.json");
@@ -360,7 +359,7 @@ pub fn run_universal_import(
             if input_pack_file.seek(SeekFrom::Start(processing_task.byte_offset)).is_err() { continue; }
             if input_pack_file.read_exact(&mut encrypted_byte_buffer).is_err() { continue; }
 
-            match crypto::decrypt_pack_chunk(&encrypted_byte_buffer, &processing_task.original_name, &active_key_tuples) {
+            match crypto::decrypt_pack_chunk(&encrypted_byte_buffer, &processing_task.original_name, &user_keys) {
                 Ok((decrypted_byte_vector, _)) => {
                     let strict_size_limit = std::cmp::min(processing_task.byte_size, decrypted_byte_vector.len());
                     let exact_data_slice = &decrypted_byte_vector[..strict_size_limit];

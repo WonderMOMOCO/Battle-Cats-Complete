@@ -34,24 +34,31 @@ impl GlobalMatcher {
     }
 
     pub fn get_dest(&self, name: &str, sheets_dir: &Path, ui_dir: &Path, tables_dir: &Path, audio_dir: &Path) -> Option<PathBuf> {
-        if self.param.is_match(name) {
+        // Tables Directory
+        if self.param.is_match(name) || self.gatya_item_buy.is_match(name) {
             return Some(tables_dir.to_path_buf());
         }
         if self.localizable.is_match(name) {
             return Some(tables_dir.join("localizable"));
         }
-        if self.gatya_item_d.is_match(name) || self.gatya_item_buy.is_match(name) {
+        if self.gatya_item_name.is_match(name) {
+            return Some(tables_dir.join("GatyaitemName"));
+        }
+
+        // UI Directory
+        if self.gatya_item_d.is_match(name) {
             return Some(ui_dir.join("gatyaitemD"));
         }
-        if self.gatya_item_name.is_match(name) {
-            return Some(ui_dir.join("gatyaitemD").join("GatyaitemName"));
-        }
+
+        // Sheets Directory
         if self.img015.is_match(name) || self.img015_cut.is_match(name) {
             return Some(sheets_dir.join("img015"));
         }
         if self.img022.is_match(name) || self.img022_cut.is_match(name) {
             return Some(sheets_dir.join("img022"));
         }
+
+        // Audio Directory
         if self.audio_ogg.is_match(name) {
             return Some(audio_dir.join("ogg"));
         }

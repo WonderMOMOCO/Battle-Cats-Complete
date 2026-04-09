@@ -4,6 +4,7 @@ use std::sync::mpsc::Sender;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use rayon::prelude::*;
 use crate::features::data::utilities::crypto; 
+use crate::features::settings::logic::keys::UserKeys;
 
 struct PackEntry {
     name: String,
@@ -19,13 +20,12 @@ pub fn run(pack_dir: &Path, tx: Sender<String>) -> Result<(), String> {
         return Err("DownloadLocal.list or .pack missing from target folder".to_string());
     }
 
-    let user_keys = crypto::UserKeys::load();
+    let user_keys = UserKeys::load();
     if user_keys.is_empty() {
         let _ = tx.send("ERROR: No decryption keys found.".to_string());
         let _ = tx.send("Please add them in Settings -> Data -> Manage Keys.".to_string());
         return Err("Missing decryption keys.".to_string());
     }
-    let active_key_tuples = user_keys.as_tuples();
 
     let mods_root = Path::new("mods");
     let mut mod_num = 1;
@@ -64,7 +64,7 @@ pub fn run(pack_dir: &Path, tx: Sender<String>) -> Result<(), String> {
         if entry.offset + aligned_size <= pack_data.len() {
             let chunk = &pack_data[entry.offset .. entry.offset + aligned_size];
             
-            match crypto::decrypt_pack_chunk(chunk, &entry.name, &active_key_tuples) {
+            match crypto::decrypt_pack_chunk(chunk, &entry.name, &user_keys) {
                 Ok((decrypted_bytes, _)) => {
                     let final_data = &decrypted_bytes[..std::cmp::min(entry.size, decrypted_bytes.len())];
                     let out_file = target_dir.join(&entry.name);
