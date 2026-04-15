@@ -13,7 +13,7 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         id: latest_release
         run: |
-          RELEASE_DATA=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          RELEASE_DATA=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             "https://api.github.com/repos/${{ github.repository }}/releases" | jq '.[0]')
           
           echo "name=$(echo $RELEASE_DATA | jq -r .name)" >> $GITHUB_OUTPUT
