@@ -60,7 +60,7 @@ pub fn link(ui: &mut egui::Ui, ctx: &egui::Context) {
             let state_clone = state.clone();
             let ctx_clone = ctx.clone();
             let current_version = env!("CARGO_PKG_VERSION");
-            let repo_owner = "WonderMOMOCO";
+            let repo_owner = "Battle-Cats-Complete";
             let repo_name = "Battle-Cats-Complete";
 
             thread::spawn(move || {

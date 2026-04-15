@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 // Global File Constants
 pub const UNIT_BUY: &str = "unitbuy.csv";
-pub const UNIT_LEVEL: &str = "unitLevel.csv";
+pub const UNIT_LEVEL: &str = "unitlevel.csv";
 pub const SKILL_ACQUISITION: &str = "SkillAcquisition.csv";
 pub const SKILL_LEVEL: &str = "SkillLevel.csv"; 
 
