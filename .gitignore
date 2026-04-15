@@ -9,13 +9,14 @@ Battle_Cats_Complete.exe
 
 # Quality of Life
 .cargo/
+publish.ps1
 
 # Extracted Game Data
 /game/
 /exports/
 /mods/
 
-# Update Leftovers
+# Update Leftovers 
 tmp_update.zip
 tmp_new_version.exe
 tmp_new_version
