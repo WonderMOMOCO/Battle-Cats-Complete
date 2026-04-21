@@ -913,26 +913,26 @@ pub static ENEMY_ABILITY_REGISTRY: &[EnemyAbilityDef] = &[
         minus_one_is_inf: false,
     },
     EnemyAbilityDef {
-        name: "Cut Cooldown",
-        fallback: "CDown",
-        icon: AbilityIcon::Standard(img015::ICON_CUT_COOLDOWN),
+        name: "Drain",
+        fallback: "Drain",
+        icon: AbilityIcon::Standard(img015::ICON_DRAIN),
         group: DisplayGroup::Body2,
         schema: &[
             ("Chance", AttrUnit::Percent), 
             ("Amount", AttrUnit::Percent)
         ],
         get_attributes: |stats| {
-            if stats.cut_cooldown_chance > 0 { 
+            if stats.drain_chance > 0 { 
                 vec![
-                    ("Chance", stats.cut_cooldown_chance, AttrUnit::Percent), 
-                    ("Amount", stats.cut_cooldown_percent, AttrUnit::Percent),
+                    ("Chance", stats.drain_chance, AttrUnit::Percent), 
+                    ("Amount", stats.drain_percent, AttrUnit::Percent),
                 ] 
             } else { 
                 vec![] 
             }
         },
         formatter: |chance,stats,_,_,_| {
-            format!("{}% Chance to cut\nongoing Cat cooldown by {}%", chance, stats.cut_cooldown_percent)
+            format!("{}% Chance to extend\nongoing Cat cooldown by {}%", chance, stats.drain_percent)
         },
         minus_one_is_inf: false,
     },

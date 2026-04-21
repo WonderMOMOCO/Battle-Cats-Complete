@@ -218,14 +218,15 @@ impl Updater {
         let display_ver = if tag.starts_with('v') { tag.clone() } else { format!("v{}", tag) };
         let screen_rect = ctx.screen_rect();
 
-        let window_id = egui::Id::new("Update Available");
+        let window_id = egui::Id::new("Update_Available");
         let (allow_drag, fixed_pos) = drag_guard.assign_bounds(ctx, window_id);
 
         let mut window = egui::Window::new("Update Available")
             .id(window_id)
             .collapsible(false).resizable(false).order(egui::Order::Tooltip)
             .constrain(false).movable(allow_drag)
-            .default_pos(screen_rect.center() - egui::vec2(130.0, 60.0));
+            .pivot(egui::Align2::CENTER_CENTER)
+            .default_pos(screen_rect.center());
             
         if let Some(pos) = fixed_pos { window = window.current_pos(pos); }
             
@@ -282,14 +283,15 @@ impl Updater {
         ctx.request_repaint();
         let screen_rect = ctx.screen_rect();
         
-        let window_id = egui::Id::new("Downloading Update");
+        let window_id = egui::Id::new("Downloading_Update");
         let (allow_drag, fixed_pos) = drag_guard.assign_bounds(ctx, window_id);
 
         let mut window = egui::Window::new("Downloading Update")
             .id(window_id)
             .collapsible(false).resizable(false).title_bar(false) 
             .order(egui::Order::Tooltip).constrain(false).movable(allow_drag)
-            .default_pos(screen_rect.center() - egui::vec2(100.0, 40.0));
+            .pivot(egui::Align2::CENTER_CENTER)
+            .default_pos(screen_rect.center());
             
         if let Some(pos) = fixed_pos { window = window.current_pos(pos); }
             
@@ -321,14 +323,15 @@ impl Updater {
         let display_tag = if tag.starts_with('v') { tag.clone() } else { format!("v{}", tag) };
         let screen_rect = ctx.screen_rect();
 
-        let window_id = egui::Id::new("Update Complete");
+        let window_id = egui::Id::new("Update_Complete");
         let (allow_drag, fixed_pos) = drag_guard.assign_bounds(ctx, window_id);
 
         let mut window = egui::Window::new("Update Complete")
             .id(window_id)
             .collapsible(false).resizable(false).order(egui::Order::Tooltip)
             .constrain(false).movable(allow_drag)
-            .default_pos(screen_rect.center() - egui::vec2(100.0, 50.0));
+            .pivot(egui::Align2::CENTER_CENTER)
+            .default_pos(screen_rect.center());
             
         if let Some(pos) = fixed_pos { window = window.current_pos(pos); }
             

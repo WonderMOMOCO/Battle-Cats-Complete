@@ -98,7 +98,7 @@ pub const ICON_EXPLOSION: usize = 335;
 pub const ICON_IMMUNE_EXPLOSION: usize = 337;
 pub const ICON_SUPERVILLIAN: usize = 384;
 pub const ICON_RESIST_EXPLOSION: usize = 386;
-pub const ICON_CUT_COOLDOWN: usize = 389;
+pub const ICON_DRAIN: usize = 389;
 
 pub fn ensure_loaded(ctx: &egui::Context, sheets: &mut Vec<SpriteSheet>, settings: &Settings) {
     let base_dir = paths::img015_folder(std::path::Path::new(""));
