@@ -2,6 +2,7 @@ use std::sync::mpsc::{Sender, Receiver};
 use std::sync::{Arc, atomic::AtomicBool};
 use crate::features::animation::export::encoding::{ExportFormat, EncoderMessage};
 use crate::global::ui::shared::DragGuard;
+use crate::features::settings::logic::state::Settings;
 
 pub const DEFAULT_WALK_LEN: i32 = 90;
 pub const DEFAULT_IDLE_LEN: i32 = 90;
@@ -188,5 +189,30 @@ impl Default for ExporterState {
             anim_name: String::new(),
             completion_time: None,
         }
+    }
+}
+
+impl ExporterState {
+    pub fn with_settings(settings: &Settings) -> Self {
+        let mut state = Self::default();
+        
+        state.format = match settings.animation.last_export_format {
+            1 => ExportFormat::WebP,
+            2 => ExportFormat::Avif,
+            3 => ExportFormat::Png,
+            4 => ExportFormat::Mp4,
+            5 => ExportFormat::Mkv,
+            6 => ExportFormat::Webm,
+            7 => ExportFormat::Zip,
+            _ => ExportFormat::Gif,
+        };
+        
+        state.quality_percent = settings.animation.last_export_quality.unwrap_or(100);
+        state.quality_percent_str = settings.animation.last_export_quality.map_or_else(String::new, |v| v.to_string());
+        
+        state.compression_percent = settings.animation.last_export_compression.unwrap_or(0);
+        state.compression_percent_str = settings.animation.last_export_compression.map_or_else(String::new, |v| v.to_string());
+        
+        state
     }
 }

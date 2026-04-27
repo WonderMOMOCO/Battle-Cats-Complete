@@ -6,7 +6,9 @@ use crate::global::ui::shared::DragGuard;
 // Note: No notice will appear if NOTICE_CONTENT is empty
 pub const NOTICE_TITLE: &str = "NOTICE";
 pub const NOTICE_CONTENT: &str = r#"
+# New Exception Rules In v0.13.11
 
+BCC v0.13.11 added nw exception rules for units 840 and 848. If you do not reset to default, these units' animations may be incorrect and/or jumbled. Please navigate to Settings > Data > Manage Exceptions > Reset to Default.
 "#;
 
 #[derive(Serialize, Deserialize, Default)]

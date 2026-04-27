@@ -305,6 +305,23 @@
         "th": false
       },
       "locked": true
+    },
+    {
+      "pattern": "(udi|uni|gatyachara_)?(848|840)_[fc]",
+      "extension": "png|imgcut",
+      "handling": "Include",
+      "languages": {
+        "en": false,
+        "ja": false,
+        "tw": false,
+        "ko": true,
+        "es": false,
+        "de": false,
+        "fr": false,
+        "it": false,
+        "th": false
+      },
+      "locked": false
     }
   ]
 }

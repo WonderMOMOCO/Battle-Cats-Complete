@@ -35,11 +35,8 @@ pub struct CatEntry {
     pub talent_data: Option<TalentRaw>,
     pub unit_buy: UnitBuyRow,
     pub evolve_text: [Vec<String>; 4], 
-    
-    #[serde(skip)]
-    pub talent_costs: Arc<std::collections::HashMap<u8, skilllevel::TalentCost>>,
-    #[serde(skip)]
-    pub skill_descriptions: Arc<Vec<String>>,
+    #[serde(skip)] pub talent_costs: Arc<std::collections::HashMap<u8, skilllevel::TalentCost>>,
+    #[serde(skip)] pub skill_descriptions: Arc<Vec<String>>,
 }
 
 impl CatEntry {

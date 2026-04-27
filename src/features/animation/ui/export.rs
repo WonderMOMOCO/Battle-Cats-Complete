@@ -12,7 +12,7 @@ use crate::features::animation::export::findloop;
 use crate::features::settings::ui::toggle_ui; 
 use crate::features::animation::logic::bounds;
 use crate::features::addons::toolpaths::{self, Presence};
-use crate::features::settings::logic::Settings;
+use crate::features::settings::logic::state::Settings;
 
 const EXPORT_MODE_SPACING: f32 = 2.0; 
 const CAMERA_COLUMN_WIDTH: f32 = 5.0;
@@ -668,8 +668,10 @@ fn render_content(
                             if ui.add(egui::TextEdit::singleline(&mut state.quality_percent_str).hint_text(hint).desired_width(40.0)).on_hover_text(quality_reason).changed() {
                                 if state.quality_percent_str.trim().is_empty() {
                                     state.quality_percent = 100;
+                                    settings.animation.last_export_quality = None;
                                 } else if let Ok(parsed_quality) = state.quality_percent_str.parse::<i32>() { 
                                     state.quality_percent = parsed_quality.clamp(0, 100); 
+                                    settings.animation.last_export_quality = Some(state.quality_percent);
                                 }
                             }
                             ui.label("%").on_hover_text(quality_reason);
@@ -704,8 +706,10 @@ fn render_content(
                             if ui.add(egui::TextEdit::singleline(&mut state.compression_percent_str).hint_text(hint).desired_width(40.0)).on_hover_text(compression_reason).changed() {
                                 if state.compression_percent_str.trim().is_empty() {
                                     state.compression_percent = 0;
+                                    settings.animation.last_export_compression = None;
                                 } else if let Ok(parsed_compression) = state.compression_percent_str.parse::<i32>() { 
                                     state.compression_percent = parsed_compression.clamp(0, 100); 
+                                    settings.animation.last_export_compression = Some(state.compression_percent);
                                 }
                             }
                             ui.label("%").on_hover_text(compression_reason); 

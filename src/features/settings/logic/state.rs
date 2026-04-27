@@ -109,6 +109,8 @@ pub struct AnimSettings {
     pub default_showcase_idle: i32,
     pub default_showcase_kb: i32,
     pub last_export_format: i32,
+    pub last_export_quality: Option<i32>,
+    pub last_export_compression: Option<i32>,
     pub controls_expanded: bool,
     pub export_popup_open: bool,
 }
@@ -126,6 +128,8 @@ impl Default for AnimSettings {
             default_showcase_idle: 90,
             default_showcase_kb: 60,
             last_export_format: 0,
+            last_export_quality: None,
+            last_export_compression: None,
             controls_expanded: true,
             export_popup_open: false,
         }

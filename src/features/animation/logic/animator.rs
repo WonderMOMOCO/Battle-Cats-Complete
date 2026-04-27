@@ -90,18 +90,18 @@ fn interpolate_curve(curve: &AnimModification, frame: f32, is_discrete: bool) ->
     
     if !is_found {
         let Some(last_keyframe) = curve.keyframes.last() else { return None; };
-        return Some(last_keyframe.value as f32);
+        return Some((last_keyframe.value as f32).trunc());
     }
     
     if end_index == 0 {
-         return Some(curve.keyframes[0].value as f32);
+         return Some((curve.keyframes[0].value as f32).trunc());
     }
 
     let start_keyframe = &curve.keyframes[start_index];
     let end_keyframe = &curve.keyframes[end_index];
 
-    if is_discrete { return Some(start_keyframe.value as f32); }
-    if start_keyframe.frame == end_keyframe.frame { return Some(start_keyframe.value as f32); }
+    if is_discrete { return Some((start_keyframe.value as f32).trunc()); }
+    if start_keyframe.frame == end_keyframe.frame { return Some((start_keyframe.value as f32).trunc()); }
 
     if start_keyframe.ease_mode == 3 {
         let mut points = Vec::new();
@@ -140,7 +140,7 @@ fn interpolate_curve(curve: &AnimModification, frame: f32, is_discrete: bool) ->
             }
             final_result += polynomial_product;
         }
-        return Some(final_result);
+        return Some(final_result.trunc());
     }
 
     let time_duration = (end_keyframe.frame - start_keyframe.frame) as f32;
@@ -179,5 +179,5 @@ fn interpolate_curve(curve: &AnimModification, frame: f32, is_discrete: bool) ->
         }
     }
 
-    Some(interpolated_value)
+    Some(interpolated_value.trunc())
 }

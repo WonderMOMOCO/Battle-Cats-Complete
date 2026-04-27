@@ -435,20 +435,8 @@ impl AnimViewer {
 
             let previous_mode = self.export_state.export_mode.clone();
             
-            // Re-Initialize the entire state natively, resetting the camera to 0.0
-            self.export_state = ExporterState::default();
+            self.export_state = ExporterState::with_settings(settings);
             self.export_state.export_mode = previous_mode;
-
-            self.export_state.format = match settings.animation.last_export_format {
-                1 => ExportFormat::WebP,
-                2 => ExportFormat::Avif,
-                3 => ExportFormat::Png,
-                4 => ExportFormat::Mp4,
-                5 => ExportFormat::Mkv,
-                6 => ExportFormat::Webm,
-                7 => ExportFormat::Zip,
-                _ => ExportFormat::Gif,
-            };
             
             if let Some(message) = preserved_loop_msg {
                 self.export_state.loop_result_msg = Some(message);
