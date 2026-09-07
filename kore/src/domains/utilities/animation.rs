@@ -37,7 +37,7 @@ pub fn clips(png: &Path, cut: &Path, model: &Path, anims: &[PathBuf], frames: Fr
 
     clips.push(Clip::model(rig));
 
-    ClipSet { name: stem_of(model), clips, offsets: vec!["Combat", "Gacha"] }
+    ClipSet { name: stem_of(model), clips, offsets: Vec::new() }
 }
 
 fn rig_id(png: &Path, cut: &Path, model: &Path) -> String {

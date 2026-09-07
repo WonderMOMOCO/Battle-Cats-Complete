@@ -162,7 +162,7 @@ impl State {
     }
 
     pub fn sync(&mut self, key: &str, build: impl FnOnce() -> ClipSet, settings: &Settings, anim_state: &AnimState) {
-        self.data.restore_offset(anim_state.offset_row);
+        self.data.restore_offset(anim_state.placement);
         self.data.sync(key, build);
         self.data.measure(settings.animation.bounds_cull as f32 / CULL_SCALE);
         self.export.sync(&self.data, settings, anim_state);
@@ -205,7 +205,7 @@ impl State {
     }
 
     pub fn preload(&mut self, key: &str, build: impl FnOnce() -> ClipSet, anim_state: &AnimState) -> Task<Message> {
-        self.data.restore_offset(anim_state.offset_row);
+        self.data.restore_offset(anim_state.placement);
         Self::preload_task(self.data.preload_request(key, build))
     }
 

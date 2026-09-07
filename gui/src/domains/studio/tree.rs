@@ -23,6 +23,14 @@ pub(super) struct TreeRow {
 }
 
 impl TreeRow {
+    pub(super) fn cargo(&self) -> Option<Cargo> {
+        match (self.part, self.track) {
+            (Some(part), _) => Some(Cargo::Part(part)),
+            (None, Some(track)) => Some(Cargo::Track(track)),
+            _ => None,
+        }
+    }
+
     pub(super) fn span(&self) -> f32 {
         ROW_PADDING * 2.0
             + MARKER_WIDTH
@@ -69,7 +77,7 @@ impl TreeRow {
         let held = if by_part { self.part } else { self.track };
         let selected = held.is_some() && held == picked;
 
-        let seated = match self.part.is_some() {
+        let seated = match self.cargo().is_some() {
             true => {
                 let grip = mouse_area(content).on_press(Message::Press(index));
 

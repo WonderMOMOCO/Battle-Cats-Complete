@@ -1,18 +1,21 @@
 use std::sync::Arc;
 
-use nyanko::common::{scrub, Separator};
+use nyanko::common::{cell_value, declared_rows};
 use nyanko::graphics::rig::{AnimModification, Animation, Keyframe, Model, RigError};
 use nyanko::graphics::tools::timeline;
 
+use super::mamodel::{split, Line, DELIMITER};
 use super::{blank_curve, Cadence};
 
 const BOM: [u8; 3] = [0xef, 0xbb, 0xbf];
 const NAME_FIELD: usize = 5;
+const HEADER_LINES: usize = 3;
 
 #[derive(Clone)]
 pub struct Maanim {
     bom: bool,
-    tag: Option<String>,
+    tag: String,
+    ended: bool,
     names: Vec<String>,
     animation: Arc<Animation>,
 }
@@ -20,16 +23,17 @@ pub struct Maanim {
 impl Maanim {
     pub fn parse(bytes: &[u8]) -> Result<Self, RigError> {
         let animation = Animation::parse(bytes)?;
-        let body = scrub(bytes);
-        let lines: Vec<&str> = body.lines().filter(|line| !line.trim().is_empty()).collect();
-        let tag = lines
-            .first()
-            .filter(|line| line.trim_start().starts_with('['))
-            .map(|line| (*line).to_owned());
 
-        let names = names(&lines, &body, animation.modifications.len());
+        let bom = bytes.starts_with(&BOM);
+        let body = String::from_utf8_lossy(if bom { &bytes[BOM.len()..] } else { bytes }).into_owned();
 
-        Ok(Self { bom: bytes.starts_with(&BOM), tag, names, animation: Arc::new(animation) })
+        let lines = split(&body);
+        let tag = lines.first().map(|line| line.text.clone()).unwrap_or_default();
+        let ended = lines.last().is_none_or(|line| !line.end.is_empty());
+
+        let names = names(&lines, animation.modifications.len());
+
+        Ok(Self { bom, tag, ended, names, animation: Arc::new(animation) })
     }
 
     pub fn shared(&self) -> Arc<Animation> {
@@ -271,14 +275,10 @@ impl Maanim {
     }
 
     pub fn write(&self) -> Vec<u8> {
-        let delimiter = Separator::Comma.char();
+        let delimiter = DELIMITER;
         let mut body = String::new();
 
-        if let Some(tag) = &self.tag {
-            body.push_str(tag);
-            body.push('\n');
-        }
-
+        push_line(&mut body, &self.tag);
         push_line(&mut body, &self.animation.version.to_string());
         push_line(&mut body, &self.animation.modifications.len().to_string());
 
@@ -299,6 +299,10 @@ impl Maanim {
             }
         }
 
+        if !self.ended {
+            body.pop();
+        }
+
         let mut bytes = Vec::with_capacity(body.len() + BOM.len());
 
         if self.bom {
@@ -315,30 +319,18 @@ fn push_line(body: &mut String, text: &str) {
     body.push('\n');
 }
 
-fn names(lines: &[&str], body: &str, tracks: usize) -> Vec<String> {
-    let delimiter = Separator::detect(body).unwrap_or(Separator::Comma).char();
-    let mut cursor = usize::from(lines.first().is_some_and(|line| line.trim_start().starts_with('[')));
-    cursor += 2;
-
+fn names(lines: &[Line], tracks: usize) -> Vec<String> {
+    let mut cursor = HEADER_LINES;
     let mut found = Vec::with_capacity(tracks);
 
     for _ in 0..tracks {
-        let Some(header) = lines.get(cursor) else { break };
+        let header = lines.get(cursor).map_or("", |line| line.text.as_str());
         cursor += 1;
 
-        let name = header.splitn(NAME_FIELD + 1, delimiter).nth(NAME_FIELD).unwrap_or_default();
-        found.push(name.to_owned());
+        found.push(header.splitn(NAME_FIELD + 1, DELIMITER).nth(NAME_FIELD).unwrap_or_default().to_owned());
 
-        let Some(count) = lines.get(cursor) else { break };
-        cursor += 1;
-
-        let declared = count
-            .split(delimiter)
-            .next()
-            .and_then(|text| text.trim().parse::<usize>().ok())
-            .unwrap_or(0);
-
-        cursor += declared.min(lines.len().saturating_sub(cursor));
+        let keys = lines.get(cursor).map_or(0, |line| cell_value(&line.text));
+        cursor += 1 + declared_rows(keys).unwrap_or(0);
     }
 
     found

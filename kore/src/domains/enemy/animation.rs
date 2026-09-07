@@ -1,4 +1,4 @@
-use crate::systems::animation::{self, Clip, ClipSet, Loop, RigFiles};
+use crate::systems::animation::{self, named_offsets, Clip, ClipSet, Loop, RigFiles};
 use crate::Vfs;
 
 use super::files;
@@ -47,7 +47,7 @@ pub fn clips(enemy: &EnemyEntry, vfs: &Vfs) -> ClipSet {
 
     clips.push(Clip::model(rig));
 
-    ClipSet { name: set_id(enemy), clips, offsets: vec!["Combat", "Castle HP"] }
+    ClipSet { name: set_id(enemy), clips, offsets: named_offsets("Base HP") }
 }
 
 fn zombie_name(index: usize) -> Option<&'static str> {

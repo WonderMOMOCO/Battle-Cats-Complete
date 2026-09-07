@@ -1,12 +1,14 @@
 use std::sync::Arc;
 
-use nyanko::common::{scrub, Separator};
+use nyanko::common::{cell_value, declared_rows};
 use nyanko::graphics::rig::{RigError, SpriteCut};
 
-use super::mamodel::{clean, keep, read};
+use super::mamodel::{kept, keep, read, split, Line, DELIMITER};
 
 const BOM: [u8; 3] = [0xef, 0xbb, 0xbf];
 const CUT_CELLS: usize = 4;
+const NAME_LINE: usize = 2;
+const COUNT_LINE: usize = 3;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Role {
@@ -17,19 +19,13 @@ enum Role {
 }
 
 #[derive(Clone)]
-struct Line {
-    text: String,
-    end: &'static str,
-}
-
-#[derive(Clone)]
 pub struct Imgcut {
     bom: bool,
-    delimiter: char,
     lines: Vec<Line>,
     roles: Vec<Option<Role>>,
-    raws: Vec<String>,
-    tail: &'static str,
+    raws: Vec<Option<String>>,
+    tail: String,
+    present: usize,
     declared: usize,
     sheet: String,
     cuts: Arc<Vec<SpriteCut>>,
@@ -37,32 +33,14 @@ pub struct Imgcut {
 
 impl Imgcut {
     pub fn parse(bytes: &[u8]) -> Result<Self, RigError> {
-        let delimiter = Separator::detect(&scrub(bytes)).unwrap_or(Separator::Comma).char();
-
         let bom = bytes.starts_with(&BOM);
         let body = String::from_utf8_lossy(if bom { &bytes[BOM.len()..] } else { bytes }).into_owned();
 
         let lines = split(&body);
-        let live: Vec<usize> = lines
-            .iter()
-            .enumerate()
-            .filter(|(_, line)| !line.text.trim().is_empty())
-            .map(|(at, _)| at)
-            .collect();
+        let sheet = lines.get(NAME_LINE).map(|line| line.text.trim().to_owned()).unwrap_or_default();
 
-        let tagged = live.first().is_some_and(|at| lines[*at].text.trim_start().starts_with('['));
-        let mut cursor = usize::from(tagged) + 1;
-
-        let sheet = live.get(cursor).map(|at| lines[*at].text.trim().to_owned()).unwrap_or_default();
-        cursor += 1;
-
-        let count = live
-            .get(cursor)
-            .and_then(|at| lines[*at].text.trim().parse::<usize>().ok())
-            .ok_or(RigError::NoSpriteCuts)?;
-        cursor += 1;
-
-        let declared = count.min(live.len().saturating_sub(cursor));
+        let count = lines.get(COUNT_LINE).map_or(0, |line| cell_value(&line.text));
+        let declared = declared_rows(count).ok_or(RigError::CountTooLarge)?;
 
         if declared == 0 {
             return Err(RigError::NoSpriteCuts);
@@ -70,41 +48,43 @@ impl Imgcut {
 
         let mut roles = vec![None; lines.len()];
 
-        if let Some(at) = live.get(cursor - 2) {
-            roles[*at] = Some(Role::Named);
+        for (at, role) in [(NAME_LINE, Role::Named), (COUNT_LINE, Role::Count)] {
+            if at < lines.len() {
+                roles[at] = Some(role);
+            }
         }
 
-        if let Some(at) = live.get(cursor - 1) {
-            roles[*at] = Some(Role::Count);
-        }
-
-        let mut raws = Vec::with_capacity(declared);
         let mut cuts = Vec::with_capacity(declared);
-        let mut tail = "\n";
+        let mut raws = Vec::with_capacity(declared);
+        let mut present = 0;
+        let mut tail = String::from("\n");
+        let mut carried = SpriteCut::default();
 
         for at in 0..declared {
-            let Some(line) = live.get(cursor + at) else {
-                break;
-            };
+            if let Some(line) = lines.get(COUNT_LINE + 1 + at) {
+                roles[COUNT_LINE + 1 + at] = Some(if at == 0 { Role::Cuts } else { Role::Skip });
+                tail = line.end.clone();
+                present = at + 1;
 
-            roles[*line] = Some(if at == 0 { Role::Cuts } else { Role::Skip });
-            tail = lines[*line].end;
+                let row: Vec<&str> = line.text.split(DELIMITER).collect();
 
-            let raw = &lines[*line].text;
-            let row: Vec<&str> = raw.split(delimiter).collect();
+                carried = SpriteCut {
+                    x: read(row.first().copied()),
+                    y: read(row.get(1).copied()),
+                    width: read(row.get(2).copied()),
+                    height: read(row.get(3).copied()),
+                    name: row.get(CUT_CELLS).copied().unwrap_or_default().trim().to_owned(),
+                };
 
-            cuts.push(SpriteCut {
-                x: read(row.first().copied()),
-                y: read(row.get(1).copied()),
-                width: read(row.get(2).copied()),
-                height: read(row.get(3).copied()),
-                name: clean(row.get(CUT_CELLS).copied().unwrap_or_default()).trim().to_owned(),
-            });
+                raws.push(Some(line.text.clone()));
+            } else {
+                raws.push(None);
+            }
 
-            raws.push(raw.clone());
+            cuts.push(carried.clone());
         }
 
-        Ok(Self { bom, delimiter, lines, roles, raws, tail, declared, sheet, cuts: Arc::new(cuts) })
+        Ok(Self { bom, lines, roles, raws, tail, present, declared, sheet, cuts: Arc::new(cuts) })
     }
 
     pub fn sheet(&self) -> &str {
@@ -178,7 +158,7 @@ impl Imgcut {
     pub fn add_cut(&mut self) -> usize {
         let cuts = Arc::make_mut(&mut self.cuts);
         cuts.push(SpriteCut::default());
-        self.raws.push(String::new());
+        self.raws.push(None);
 
         cuts.len() - 1
     }
@@ -205,18 +185,18 @@ impl Imgcut {
         for (at, line) in self.lines.iter().enumerate() {
             match self.roles.get(at).copied().flatten() {
                 Some(Role::Skip) => continue,
-                Some(Role::Cuts) => self.push_cuts(&mut body, line.end),
+                Some(Role::Cuts) => self.push_cuts(&mut body, &line.end),
                 Some(Role::Count) => {
                     body.push_str(&count_line(&line.text, self.declared, self.cuts.len()));
-                    body.push_str(line.end);
+                    body.push_str(&line.end);
                 }
                 Some(Role::Named) => {
                     body.push_str(&keep_text(&line.text, &self.sheet));
-                    body.push_str(line.end);
+                    body.push_str(&line.end);
                 }
                 None => {
                     body.push_str(&line.text);
-                    body.push_str(line.end);
+                    body.push_str(&line.end);
                 }
             }
         }
@@ -232,15 +212,16 @@ impl Imgcut {
     }
 
     fn push_cuts(&self, body: &mut String, end: &str) {
-        let last = self.cuts.len().saturating_sub(1);
+        let count = kept(&self.cuts, self.declared, self.present);
+        let last = count.saturating_sub(1);
         let end = if end.is_empty() { "\n" } else { end };
 
-        for (at, cut) in self.cuts.iter().enumerate() {
-            let raw = self.raws.get(at).map_or("", String::as_str);
+        for (at, cut) in self.cuts.iter().enumerate().take(count) {
+            let raw = self.raws.get(at).and_then(Option::as_deref);
             let values = [cut.x, cut.y, cut.width, cut.height];
 
-            body.push_str(&cells(raw, &values, &cut.name, self.delimiter));
-            body.push_str(if at == last { self.tail } else { end });
+            body.push_str(&cells(raw, &values, &cut.name));
+            body.push_str(if at == last { &self.tail } else { end });
         }
     }
 }
@@ -270,38 +251,13 @@ fn set_field(cut: &mut SpriteCut, cell: usize, value: i32) {
     *held = value;
 }
 
-fn split(body: &str) -> Vec<Line> {
-    let mut lines = Vec::new();
-    let mut rest = body;
+fn cells(raw: Option<&str>, values: &[i32; CUT_CELLS], name: &str) -> String {
+    let fresh = raw.is_none();
+    let raw: Vec<&str> = raw
+        .filter(|text| !text.is_empty())
+        .map_or_else(Vec::new, |text| text.split(DELIMITER).collect());
 
-    while !rest.is_empty() {
-        let Some(at) = rest.find(['\n', '\r']) else {
-            lines.push(Line { text: rest.to_owned(), end: "" });
-
-            break;
-        };
-
-        let (text, tail) = rest.split_at(at);
-        let (end, skip) = match (tail.starts_with('\r'), tail.starts_with("\r\n")) {
-            (_, true) => ("\r\n", 2),
-            (true, _) => ("\r", 1),
-            _ => ("\n", 1),
-        };
-
-        lines.push(Line { text: text.to_owned(), end });
-        rest = &tail[skip..];
-    }
-
-    lines
-}
-
-fn cells(raw: &str, values: &[i32; CUT_CELLS], name: &str, delimiter: char) -> String {
-    let raw: Vec<&str> = match raw.is_empty() {
-        true => Vec::new(),
-        false => raw.split(delimiter).collect(),
-    };
-
-    let mut count = match raw.is_empty() {
+    let mut count = match fresh {
         true => CUT_CELLS + usize::from(!name.is_empty()),
         false => raw.len(),
     };
@@ -312,7 +268,7 @@ fn cells(raw: &str, values: &[i32; CUT_CELLS], name: &str, delimiter: char) -> S
         }
     }
 
-    if clean(raw.get(CUT_CELLS).copied().unwrap_or_default()).trim() != name {
+    if raw.get(CUT_CELLS).copied().unwrap_or_default().trim() != name {
         count = count.max(CUT_CELLS + 1);
     }
 
@@ -321,13 +277,13 @@ fn cells(raw: &str, values: &[i32; CUT_CELLS], name: &str, delimiter: char) -> S
             Some(value) => keep(raw.get(at).copied(), *value),
             None if at == CUT_CELLS => raw
                 .get(at)
-                .filter(|text| clean(text).trim() == name)
+                .filter(|text| text.trim() == name)
                 .map_or_else(|| name.to_owned(), |text| (*text).to_owned()),
             None => raw.get(at).copied().unwrap_or_default().to_owned(),
         })
         .collect();
 
-    written.join(&delimiter.to_string())
+    written.join(&DELIMITER.to_string())
 }
 
 fn count_line(raw: &str, was: usize, now: usize) -> String {
@@ -335,13 +291,13 @@ fn count_line(raw: &str, was: usize, now: usize) -> String {
         return raw.to_owned();
     }
 
-    let declared = clean(raw).trim().parse::<usize>().unwrap_or(was);
+    let declared = usize::try_from(cell_value(raw)).unwrap_or(was);
 
     declared.saturating_add(now).saturating_sub(was).to_string()
 }
 
 fn keep_text(raw: &str, text: &str) -> String {
-    match clean(raw).trim() == text {
+    match raw.trim() == text {
         true => raw.to_owned(),
         false => text.to_owned(),
     }

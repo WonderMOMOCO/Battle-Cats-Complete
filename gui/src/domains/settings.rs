@@ -63,7 +63,7 @@ pub enum Message {
     ToggleAutoLevel(bool),
     ToggleBumpUltra(bool),
     ToggleInvalidEnemies(bool),
-    ToggleIgnoreCrashes(bool),
+    ToggleAutoFaults(bool),
     ScrubBehaviorSelected(ScrubBehavior),
     SidebarBehaviorSelected(SidebarBehavior),
     ExportBehaviorSelected(ExportBehavior),
@@ -182,8 +182,8 @@ impl State {
                 Task::none()
             }
 
-            Message::ToggleIgnoreCrashes(val) => {
-                core_settings.studio.ignore_crashes = val;
+            Message::ToggleAutoFaults(val) => {
+                core_settings.studio.auto_faults = val;
                 Task::none()
             }
 
@@ -601,11 +601,11 @@ impl State {
 
         let information = hover_hint(
             toggle_row(
-                core_settings.studio.ignore_crashes,
-                text("Ignore Crash Warnings"),
-                Some(Message::ToggleIgnoreCrashes),
+                core_settings.studio.auto_faults,
+                text("Auto Set Fault"),
+                Some(Message::ToggleAutoFaults),
             ),
-            "Studio marks the parts and channels the game's own animation pass faults on\nTurn this on to stop it checking and hide the marks entirely",
+            "Studio checks a rig against the side it is installed on, picked under Option page 2\nTurn this on to have opening a cat or an enemy pick that side for you, rather than leaving it where you set it",
         );
 
         let timeline = hover_hint(

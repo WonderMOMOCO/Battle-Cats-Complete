@@ -8,6 +8,7 @@ use std::io;
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
+use nyanko::graphics::tools::crash::Side;
 use tracing::{debug, info, warn};
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipWriter};
@@ -17,7 +18,7 @@ pub use crate::domains::mods::patch_root;
 
 use crate::common::architecture::{GAME, MODS, STUDIO};
 use crate::domains::settings::FrameCount;
-use crate::systems::animation::{Clip, ClipSet, Rigging};
+use crate::systems::animation::{self, Clip, ClipSet, Rigging};
 
 pub use blank::SEED_SUFFIX;
 
@@ -28,6 +29,7 @@ const MODEL_EXT: &str = "mamodel";
 const ANIM_EXT: &str = "maanim";
 pub const DEFAULT_NAME: &str = "New Set";
 pub const SEED_NAME: &str = "New";
+const ATTACK_SLOT: &str = "02";
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Slot {
@@ -133,6 +135,17 @@ impl Set {
         self.files().first().map_or(Home::Loose, |path| home(path))
     }
 
+    /// The unit stem the set's files are filed under, where the mount makes the name the address.
+    pub fn addressed(&self) -> Option<String> {
+        if !matches!(self.home(), Home::Game | Home::Mod) {
+            return None;
+        }
+
+        let stem = self.model.as_deref()?.file_stem()?.to_str()?;
+
+        stem_id(stem).map(|_| stem.to_owned())
+    }
+
     pub fn clips(&self, frames: FrameCount) -> ClipSet {
         let (Some(sheet), Some(cuts), Some(model)) = (&self.sheet, &self.cuts, &self.model) else {
             return ClipSet::default();
@@ -145,22 +158,31 @@ impl Set {
             model: model.clone(),
         });
 
+        let unit = self.addressed();
+
         let mut clips: Vec<Clip> = self
             .anims
             .iter()
-            .map(|anim| Clip {
-                name: None,
-                slot: None,
-                role: None,
-                looping: frames.looping(),
-                rig: Arc::clone(&rig),
-                anim: Some(anim.clone()),
+            .map(|anim| {
+                let named = unit
+                    .as_deref()
+                    .and_then(|unit| slot_index(anim, unit))
+                    .and_then(animation::standard);
+
+                Clip {
+                    name: named.map(|(name, _, _)| name.to_owned()),
+                    slot: named.map(|(_, slot, _)| slot),
+                    role: named.map(|(_, _, role)| role),
+                    looping: frames.looping(),
+                    rig: Arc::clone(&rig),
+                    anim: Some(anim.clone()),
+                }
             })
             .collect();
 
         clips.push(Clip::model(rig));
 
-        ClipSet { name: self.name.clone(), clips, offsets: vec!["Combat", "Gacha"] }
+        ClipSet { name: self.name.clone(), clips, offsets: Vec::new() }
     }
 }
 
@@ -504,6 +526,31 @@ pub fn stem_id(stem: &str) -> Option<i32> {
     (known && tail.len() == 1).then(|| head.parse::<i32>().ok())?
 }
 
+fn slot_index(anim: &Path, unit: &str) -> Option<usize> {
+    anim.file_stem()?.to_str()?.strip_prefix(unit)?.parse().ok()
+}
+
+pub fn stem_side(stem: &str) -> Option<Side> {
+    let (_, tail) = stem.split_once('_')?;
+
+    if tail.len() != 1 {
+        return None;
+    }
+
+    if tail.starts_with(aim::ENEMY_SUFFIX) {
+        return Some(Side::Enemy);
+    }
+
+    aim::FORMS.iter().any(|form| tail.starts_with(*form)).then_some(Side::Cat)
+}
+
+pub fn attack_slot(anim: &Path) -> bool {
+    anim.file_stem()
+        .and_then(OsStr::to_str)
+        .and_then(|stem| stem.strip_suffix(ATTACK_SLOT))
+        .is_some_and(|unit| stem_id(unit).is_some())
+}
+
 pub fn occupied(set: &Set, target: &Aim, root: &Path) -> Vec<String> {
     let (Some(stem), true) = (target.stem(), set.model.is_some()) else {
         return Vec::new();
@@ -707,5 +754,18 @@ mod tests {
         assert!(pullable(&seat("game/x.png"), false));
         assert!(!pullable(&seat("game/x.png"), true));
         assert!(pullable(&seat("/tmp/x.png"), true));
+    }
+
+    #[test]
+    fn only_a_units_third_slot_counts_as_the_attack_animation() {
+        // The engine reaches the unguarded modulo through an entity's attacking state,
+        // so the slot only exists for a unit. bgEffect_057_02 ships with a zero length
+        // and never attacks anything; reading it as slot two flags a vanilla file.
+        assert!(attack_slot(Path::new("game/cats/000/f/anim/000_f02.maanim")));
+        assert!(attack_slot(Path::new("game/enemies/044/anim/044_e02.maanim")));
+
+        assert!(!attack_slot(Path::new("game/stages/backgrounds/effects/057/bgEffect_057_02.maanim")));
+        assert!(!attack_slot(Path::new("game/cats/000/f/anim/000_f01.maanim")));
+        assert!(!attack_slot(Path::new("game/raw/rain.maanim")));
     }
 }

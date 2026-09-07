@@ -14,6 +14,8 @@ use super::{classify, figures, prose, Action, AnimTarget, CatTarget, Context, En
 
 const BINARY_NOTICE: &str = "Cannot open binary format";
 const NO_CHANNEL_NOTICE: &str = "This part has no channels in this animation";
+const UNALIGNED_NOTICE: &str = "This model declares no unit divisors, and the revision that reads offsets reads those too";
+const NO_OFFSET_NOTICE: &str = "This model declares no offset rows to remove";
 const NOT_DRAWN_NOTICE: &str = "This part is not drawn on the current frame";
 const EVERY_CHANNEL_NOTICE: &str = "This part already has every channel";
 const NO_CLIP_NOTICE: &str = "Select an animation clip to add channels";
@@ -161,6 +163,10 @@ pub(super) fn items(context: &Context) -> Vec<Item> {
         return items;
     }
 
+    if let Some(target) = context.offsets.as_ref() {
+        return offsets(target);
+    }
+
     if let Some(target) = context.channels.as_ref() {
         return channels(&target.channels);
     }
@@ -173,6 +179,30 @@ pub(super) fn items(context: &Context) -> Vec<Item> {
     }
 
     items
+}
+
+fn offsets(target: &studio::Offsets) -> Vec<Item> {
+    let label = format!("New offset at \"Row {}\"", target.rows);
+
+    let adding = match target.addable {
+        true => Item::new(label, Action::AddOffset),
+        false => Item::disabled(label, UNALIGNED_NOTICE),
+    };
+
+    let dropping = match target.rows {
+        0 => Item::disabled("No offsets".to_owned(), NO_OFFSET_NOTICE),
+        1 => Item::new("Remove \"Row 0\"".to_owned(), Action::DropOffset { row: 0 }).confirming(),
+        rows => Item::list(
+            "Remove offset".to_owned(),
+            (0..rows)
+                .map(|row| {
+                    Item::new(format!("Row {row}"), Action::DropOffset { row }).confirming_terse()
+                })
+                .collect(),
+        ),
+    };
+
+    vec![adding, dropping]
 }
 
 fn channels(target: &studio::Channels) -> Vec<Item> {

@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use nyanko::chapter::Category;
 
 use kore::systems::animation::export::ExportFormat;
+use kore::systems::animation::Placement;
 use kore::domains::import::ImportSubTab;
 use kore::domains::stage::{GlobalMapId, GlobalStageId};
 
@@ -141,7 +142,7 @@ pub(crate) struct AnimState {
     pub last_export_quality: Option<i32>,
     pub last_export_compression: Option<i32>,
     pub controls_expanded: bool,
-    pub offset_row: Option<usize>,
+    pub placement: Placement,
 }
 
 impl Default for AnimState {
@@ -151,7 +152,25 @@ impl Default for AnimState {
             last_export_quality: None,
             last_export_compression: None,
             controls_expanded: true,
-            offset_row: Some(0),
+            placement: Placement::default(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_saved_offset_row_is_dropped_so_the_placement_default_wins() {
+        // Older builds persisted the bare view as `offset_row: null`, and a null that
+        // survives means the viewer keeps showing a placement the engine never draws.
+        let held: AnimState = serde_json::from_str(r#"{"offset_row":null}"#).expect("it loads");
+
+        assert_eq!(held.placement, Placement::Row(0));
+
+        let held: AnimState = serde_json::from_str(r#"{"placement":"Bare"}"#).expect("it loads");
+
+        assert_eq!(held.placement, Placement::Bare, "a deliberate choice still round-trips");
     }
 }

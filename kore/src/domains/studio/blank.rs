@@ -40,7 +40,7 @@ pub(super) fn model() -> String {
     let (align_x, align_y) = (half, BOX_SPAN);
 
     format!(
-        "[modelanim:model]\n1\n1\n-1,0,0,0,0,0,{half},{half},1000,1000,0,1000,0,box\n1000,3600,1000\n2\n0,0,{align_x},{align_y},0,0,combat\n0,0,{align_x},{align_y},0,0,gacha\n"
+        "[modelanim:model]\n3\n1\n-1,0,0,0,0,0,{half},{half},1000,1000,0,1000,0,box\n1000,3600,1000\n2\n0,0,{align_x},{align_y},0,0,combat\n0,0,{align_x},{align_y},0,0,gacha\n"
     )
 }
 
@@ -50,7 +50,8 @@ pub(super) fn track() -> String {
 
 #[cfg(test)]
 mod tests {
-    use nyanko::graphics::rig::Model;
+    use nyanko::graphics::animate;
+    use nyanko::graphics::rig::{Model, Rig};
 
     use super::*;
     use crate::systems::animation::authoring::{Imgcut, Maanim};
@@ -73,21 +74,25 @@ mod tests {
     #[test]
     fn the_seeded_entity_stands_on_the_ground_line() {
         // A box hanging below the origin is an authoring mistake, so the seed must not
-        // ship one. Both numbers come straight from `animate::shift` and `engine::deploy`.
-        let model = Model::parse(model().as_bytes()).expect("the model parses");
-        let root = model.parts.first().expect("the root part");
-        let align = model.alignment.first().expect("the combat row");
+        // ship one. Resolved through nyanko rather than by repeating its placement
+        // arithmetic here, which would drift the moment the engine read changes.
+        let rig = Rig::parse(sheet(), cuts("Test"), model()).expect("the rig parses");
+        let placed = animate::resolve_frame(&rig, None, 0, Some(0));
+        let box_part = placed.first().expect("the seed draws one part");
 
-        let unit = model.scale_unit as f32;
-        let shift = |offset: i32, pivot: i32, scale: i32| {
-            (-(offset as f32) + pivot as f32) * (scale as f32 / unit)
+        let xs: Vec<f32> = box_part.vertices.iter().step_by(2).copied().collect();
+        let ys: Vec<f32> = box_part.vertices.iter().skip(1).step_by(2).copied().collect();
+
+        let span = |axis: &[f32]| {
+            axis.iter().fold((f32::MAX, f32::MIN), |(low, high), at| (low.min(*at), high.max(*at)))
         };
 
-        let top = -(root.pivot_y as f32) + shift(align.y, root.pivot_y, root.scale_y);
-        let left = -(root.pivot_x as f32) + shift(align.x, root.pivot_x, root.scale_x);
+        let (left, right) = span(&xs);
+        let (top, bottom) = span(&ys);
 
-        assert_eq!(top + BOX_SPAN as f32, 0.0, "its feet rest on the origin");
-        assert_eq!(left, -(BOX_SPAN as f32) / 2.0, "and it is centred on it");
+        assert_eq!(bottom, 0.0, "its feet rest on the origin");
+        assert_eq!(top, -(BOX_SPAN as f32));
+        assert_eq!((left, right), (-(BOX_SPAN as f32) / 2.0, BOX_SPAN as f32 / 2.0), "centred on it");
     }
 
     #[test]

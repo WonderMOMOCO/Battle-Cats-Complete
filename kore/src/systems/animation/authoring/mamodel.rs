@@ -1,10 +1,16 @@
-use std::borrow::Cow;
 use std::sync::Arc;
 
-use nyanko::common::{scrub, Separator};
-use nyanko::graphics::rig::{Model, ModelPart, RigError};
+use nyanko::common::cell_value;
+use nyanko::graphics::rig::{Alignment, Model, ModelPart, RigError};
 
 const BOM: [u8; 3] = [0xef, 0xbb, 0xbf];
+pub(super) const DELIMITER: char = ',';
+const VERSION_LINE: usize = 1;
+const COUNT_LINE: usize = 2;
+const GLOW_CELL: usize = 12;
+const GLOW_VERSION: i32 = 2;
+const UNITED_VERSION: i32 = 1;
+const ALIGNED_VERSION: i32 = 3;
 const SHEET_FIELD: usize = 1;
 const PART_CELLS: usize = 13;
 const GLOW_MODES: i32 = 3;
@@ -12,13 +18,14 @@ const NO_PARENT: i32 = -1;
 const NOT_DRAWN: i32 = -1;
 
 #[derive(Clone)]
-struct Line {
-    text: String,
-    end: &'static str,
+pub(super) struct Line {
+    pub(super) text: String,
+    pub(super) end: String,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Role {
+pub(super) enum Role {
+    Version,
     Count,
     Parts,
     Units,
@@ -29,20 +36,22 @@ enum Role {
 
 struct Layout {
     roles: Vec<Option<Role>>,
-    raws: Vec<String>,
-    rows: Vec<String>,
-    tails: [&'static str; 2],
+    raws: Vec<Option<String>>,
+    rows: Vec<Option<String>>,
+    tails: [String; 2],
+    present: [usize; 2],
 }
 
 #[derive(Clone)]
 pub struct Mamodel {
     bom: bool,
-    delimiter: char,
     lines: Vec<Line>,
     roles: Vec<Option<Role>>,
-    raws: Vec<String>,
-    rows: Vec<String>,
-    tails: [&'static str; 2],
+    raws: Vec<Option<String>>,
+    rows: Vec<Option<String>>,
+    tails: [String; 2],
+    present: [usize; 2],
+    version: i32,
     parts: usize,
     aligns: usize,
     model: Arc<Model>,
@@ -51,16 +60,16 @@ pub struct Mamodel {
 impl Mamodel {
     pub fn parse(bytes: &[u8]) -> Result<Self, RigError> {
         let model = Model::parse(bytes)?;
-        let delimiter = Separator::detect(&scrub(bytes)).unwrap_or(Separator::Comma).char();
 
         let bom = bytes.starts_with(&BOM);
         let body = String::from_utf8_lossy(if bom { &bytes[BOM.len()..] } else { bytes }).into_owned();
 
         let lines = split(&body);
-        let Layout { roles, raws, rows, tails } = roles(&lines, &model);
+        let Layout { roles, raws, rows, tails, present } = roles(&lines, &model);
         let (parts, aligns) = (model.parts.len(), model.alignment.len());
+        let version = model.version;
 
-        Ok(Self { bom, delimiter, lines, roles, raws, rows, tails, parts, aligns, model: Arc::new(model) })
+        Ok(Self { bom, lines, roles, raws, rows, tails, present, version, parts, aligns, model: Arc::new(model) })
     }
 
     pub fn shared(&self) -> Arc<Model> {
@@ -131,6 +140,39 @@ impl Mamodel {
         self.model.alignment.len()
     }
 
+    pub fn alignable(&self) -> bool {
+        self.model.version >= UNITED_VERSION && self.roles.contains(&Some(Role::Version))
+    }
+
+    pub fn add_offset(&mut self) -> Option<usize> {
+        if !self.alignable() {
+            return None;
+        }
+
+        let model = Arc::make_mut(&mut self.model);
+        let anchor = model.alignment.last().map_or(0, |row| row.part);
+
+        model.version = model.version.max(ALIGNED_VERSION);
+        model.alignment.push(Alignment { part: anchor, ..Alignment::default() });
+        self.rows.push(None);
+
+        Some(model.alignment.len() - 1)
+    }
+
+    pub fn remove_offset(&mut self, row: usize) -> bool {
+        if row >= self.model.alignment.len() {
+            return false;
+        }
+
+        Arc::make_mut(&mut self.model).alignment.remove(row);
+
+        if row < self.rows.len() {
+            self.rows.remove(row);
+        }
+
+        true
+    }
+
     pub fn offset(&self, row: usize) -> Option<(i32, i32)> {
         self.model.alignment.get(row).map(|row| (row.x, row.y))
     }
@@ -160,7 +202,7 @@ impl Mamodel {
         let model = Arc::make_mut(&mut self.model);
 
         model.parts.push(seeded);
-        self.raws.push(String::new());
+        self.raws.push(None);
 
         model.parts.len() - 1
     }
@@ -253,21 +295,45 @@ impl Mamodel {
 
     pub fn write(&self) -> Vec<u8> {
         let mut body = String::with_capacity(self.lines.iter().map(|line| line.text.len() + 2).sum());
+        let seam = self.seam();
 
         for (at, line) in self.lines.iter().enumerate() {
             match self.roles.get(at).copied().flatten() {
                 Some(Role::Skip) => continue,
-                Some(Role::Parts) => self.push_parts(&mut body, line.end),
-                Some(Role::Aligns) => self.push_aligns(&mut body, line.end),
+                Some(Role::Parts) => self.push_parts(&mut body, &line.end),
+                Some(Role::Aligns) => self.push_aligns(&mut body, &line.end),
+                Some(Role::AlignCount) => {
+                    let seeding = self.aligns == 0 && !self.model.alignment.is_empty();
+                    let end = if line.end.is_empty() && seeding { "\n" } else { &line.end };
+
+                    body.push_str(&self.render(Role::AlignCount, &line.text));
+                    body.push_str(end);
+
+                    if seeding {
+                        self.push_aligns(&mut body, end);
+                    }
+                }
                 Some(role) => {
                     body.push_str(&self.render(role, &line.text));
-                    body.push_str(line.end);
+                    body.push_str(&line.end);
                 }
                 None => {
                     body.push_str(&line.text);
-                    body.push_str(line.end);
+                    body.push_str(&line.end);
                 }
             }
+
+            if Some(at) == seam {
+                self.push_block(&mut body);
+            }
+        }
+
+        if self.creating() && seam.is_none() {
+            terminate(&mut body);
+            body.push_str(&cells(None, &self.units(), None));
+            body.push('\n');
+
+            self.push_block(&mut body);
         }
 
         let mut bytes = Vec::with_capacity(body.len() + BOM.len());
@@ -280,34 +346,65 @@ impl Mamodel {
         bytes
     }
 
+    fn creating(&self) -> bool {
+        let grown = self.model.alignment.len() > self.aligns || self.model.version > self.version;
+
+        grown && !self.roles.contains(&Some(Role::AlignCount))
+    }
+
+    fn seam(&self) -> Option<usize> {
+        if !self.creating() {
+            return None;
+        }
+
+        self.roles.iter().position(|role| *role == Some(Role::Units))
+    }
+
+    fn push_block(&self, body: &mut String) {
+        terminate(body);
+
+        body.push_str(&self.model.alignment.len().to_string());
+        body.push('\n');
+
+        self.push_aligns(body, "\n");
+    }
+
     fn push_parts(&self, body: &mut String, end: &str) {
-        let last = self.model.parts.len().saturating_sub(1);
+        let count = kept(&self.model.parts, self.parts, self.present[0]);
+        let last = count.saturating_sub(1);
         let end = if end.is_empty() { "\n" } else { end };
 
-        for (at, part) in self.model.parts.iter().enumerate() {
-            let raw = self.raws.get(at).map_or("", String::as_str);
-            let values: Vec<i32> = (0..PART_CELLS).map(|cell| field(part, cell)).collect();
+        for (at, part) in self.model.parts.iter().enumerate().take(count) {
+            let raw = self.raws.get(at).and_then(Option::as_deref);
+            let mut values: Vec<i32> = (0..PART_CELLS).map(|cell| field(part, cell)).collect();
 
-            body.push_str(&cells(raw, &values, Some(part.name.as_str()), self.delimiter));
-            body.push_str(if at == last { self.tails[0] } else { end });
+            if self.model.version < GLOW_VERSION && part.glow == 0 {
+                values[GLOW_CELL] = read(raw.and_then(|text| text.split(DELIMITER).nth(GLOW_CELL)));
+            }
+
+            body.push_str(&cells(raw, &values, Some(part.name.as_str())));
+            body.push_str(if at == last { &self.tails[0] } else { end });
         }
     }
 
     fn push_aligns(&self, body: &mut String, end: &str) {
-        let last = self.model.alignment.len().saturating_sub(1);
+        let count = kept(&self.model.alignment, self.aligns, self.present[1]);
+        let last = count.saturating_sub(1);
         let end = if end.is_empty() { "\n" } else { end };
 
-        for (at, row) in self.model.alignment.iter().enumerate() {
-            let raw = self.rows.get(at).map_or("", String::as_str);
-            let values = [row.unknown_0, row.unknown_1, row.x, row.y, row.unknown_4, row.unknown_5];
+        for (at, row) in self.model.alignment.iter().enumerate().take(count) {
+            let raw = self.rows.get(at).and_then(Option::as_deref);
+            let values = [row.part, row.unknown_1, row.x, row.y, row.unknown_4, row.unknown_5];
 
-            body.push_str(&cells(raw, &values, Some(row.name.as_str()), self.delimiter));
-            body.push_str(if at == last { self.tails[1] } else { end });
+            body.push_str(&cells(raw, &values, Some(row.name.as_str())));
+            body.push_str(if at == last { &self.tails[1] } else { end });
         }
     }
 
     fn render(&self, role: Role, raw: &str) -> String {
         match role {
+            Role::Version if cell_value(raw) == self.model.version => raw.to_owned(),
+            Role::Version => self.model.version.to_string(),
             Role::Count => count_line(raw, self.parts, self.model.parts.len()),
             Role::AlignCount => count_line(raw, self.aligns, self.model.alignment.len()),
             Role::Units => self.units_row(raw),
@@ -316,13 +413,17 @@ impl Mamodel {
     }
 
     fn units_row(&self, raw: &str) -> String {
+        cells(Some(raw), &self.units(), None)
+    }
+
+    fn units(&self) -> Vec<i32> {
         let mut values = vec![self.model.scale_unit, self.model.angle_unit, self.model.opacity_unit];
 
         if let Some(extra) = self.model.unknown_3 {
             values.push(extra);
         }
 
-        cells(raw, &values, None, self.delimiter)
+        values
     }
 }
 
@@ -431,26 +532,21 @@ fn remap(moved: &[Option<usize>], parent: i32) -> i32 {
     }
 }
 
-fn split(body: &str) -> Vec<Line> {
+pub(super) fn split(body: &str) -> Vec<Line> {
     let mut lines = Vec::new();
     let mut rest = body;
 
     while !rest.is_empty() {
-        let Some(at) = rest.find(['\n', '\r']) else {
-            lines.push(Line { text: rest.to_owned(), end: "" });
+        let (chunk, tail) = rest.split_once('\n').unwrap_or((rest, ""));
+        let trimmed = chunk.trim_end_matches(['\r', '\n']);
+        let text = if trimmed.is_empty() { chunk } else { trimmed };
 
-            break;
-        };
+        lines.push(Line {
+            text: text.to_owned(),
+            end: rest[text.len()..rest.len() - tail.len()].to_owned(),
+        });
 
-        let (text, tail) = rest.split_at(at);
-        let (end, skip) = match (tail.starts_with('\r'), tail.starts_with("\r\n")) {
-            (_, true) => ("\r\n", 2),
-            (true, _) => ("\r", 1),
-            _ => ("\n", 1),
-        };
-
-        lines.push(Line { text: text.to_owned(), end });
-        rest = &tail[skip..];
+        rest = tail;
     }
 
     lines
@@ -458,80 +554,97 @@ fn split(body: &str) -> Vec<Line> {
 
 fn roles(lines: &[Line], model: &Model) -> Layout {
     let mut roles = vec![None; lines.len()];
-    let live: Vec<usize> = lines
-        .iter()
-        .enumerate()
-        .filter(|(_, line)| !line.text.trim().is_empty())
-        .map(|(at, _)| at)
-        .collect();
+    let mut cursor = COUNT_LINE;
 
-    let tagged = live.first().is_some_and(|at| lines[*at].text.trim_start().starts_with('['));
-    let mut cursor = usize::from(tagged) + 1;
+    if VERSION_LINE < lines.len() {
+        roles[VERSION_LINE] = Some(Role::Version);
+    }
 
-    if let Some(at) = live.get(cursor) {
-        roles[*at] = Some(Role::Count);
+    if cursor < lines.len() {
+        roles[cursor] = Some(Role::Count);
     }
 
     cursor += 1;
 
-    let (raws, held) = block(lines, &live, cursor, model.parts.len(), Role::Parts, &mut roles);
+    let (raws, held, tail) = block(lines, cursor, model.parts.len(), Role::Parts, &mut roles);
     cursor += model.parts.len();
 
-    if let Some(at) = live.get(cursor) {
-        roles[*at] = Some(Role::Units);
+    let mut rows = Vec::new();
+    let mut aligned = 0;
+    let mut trailing = String::from("\n");
+
+    if model.version >= UNITED_VERSION {
+        if cursor < lines.len() {
+            roles[cursor] = Some(Role::Units);
+        }
+
+        cursor += 1;
     }
 
-    cursor += 1;
+    if model.version >= ALIGNED_VERSION {
+        if cursor < lines.len() {
+            roles[cursor] = Some(Role::AlignCount);
+        }
 
-    if let Some(at) = live.get(cursor) {
-        roles[*at] = Some(Role::AlignCount);
+        cursor += 1;
+
+        (rows, aligned, trailing) = block(lines, cursor, model.alignment.len(), Role::Aligns, &mut roles);
     }
 
-    cursor += 1;
-
-    let (rows, trailing) = block(lines, &live, cursor, model.alignment.len(), Role::Aligns, &mut roles);
-
-    Layout { roles, raws, rows, tails: [held, trailing] }
+    Layout { roles, raws, rows, tails: [tail, trailing], present: [held, aligned] }
 }
 
-fn block(
+pub(super) fn block(
     lines: &[Line],
-    live: &[usize],
     cursor: usize,
     count: usize,
     lead: Role,
     roles: &mut [Option<Role>],
-) -> (Vec<String>, &'static str) {
+) -> (Vec<Option<String>>, usize, String) {
     let mut raws = Vec::with_capacity(count);
-    let mut tail = "\n";
+    let mut present = 0;
+    let mut tail = String::from("\n");
 
     for at in 0..count {
-        let Some(line) = live.get(cursor + at) else {
-            raws.push(String::new());
+        let Some(line) = lines.get(cursor + at) else {
+            raws.push(None);
 
             continue;
         };
 
-        roles[*line] = Some(if at == 0 { lead } else { Role::Skip });
-        tail = lines[*line].end;
-        raws.push(lines[*line].text.clone());
+        roles[cursor + at] = Some(if at == 0 { lead } else { Role::Skip });
+        tail = line.end.clone();
+        raws.push(Some(line.text.clone()));
+        present = at + 1;
     }
 
-    (raws, tail)
+    (raws, present, tail)
 }
 
-fn cells(raw: &str, values: &[i32], name: Option<&str>, delimiter: char) -> String {
-    let raw: Vec<&str> = match raw.is_empty() {
-        true => Vec::new(),
-        false => raw.split(delimiter).collect(),
-    };
+pub(super) fn kept<T: Default + PartialEq>(held: &[T], parsed: usize, present: usize) -> usize {
+    if held.len() != parsed || present >= parsed {
+        return held.len();
+    }
 
-    let floor = match raw.is_empty() {
+    let fallback = T::default();
+    let repeated = present.checked_sub(1).and_then(|at| held.get(at)).unwrap_or(&fallback);
+
+    match held[present..].iter().all(|row| row == repeated) {
+        true => present,
+        false => held.len(),
+    }
+}
+
+fn cells(raw: Option<&str>, values: &[i32], name: Option<&str>) -> String {
+    let fresh = raw.is_none();
+    let raw: Vec<&str> = raw
+        .filter(|text| !text.is_empty())
+        .map_or_else(Vec::new, |text| text.split(DELIMITER).collect());
+
+    let mut count = match fresh {
         true => values.len() + usize::from(name.is_some_and(|name| !name.is_empty())),
         false => raw.len(),
     };
-
-    let mut count = floor;
 
     for (at, value) in values.iter().enumerate() {
         if read(raw.get(at).copied()) != *value {
@@ -540,7 +653,7 @@ fn cells(raw: &str, values: &[i32], name: Option<&str>, delimiter: char) -> Stri
     }
 
     if let Some(name) = name
-        && clean(raw.get(values.len()).copied().unwrap_or_default()).trim() != name
+        && raw.get(values.len()).copied().unwrap_or_default().trim() != name
     {
         count = count.max(values.len() + 1);
     }
@@ -550,13 +663,19 @@ fn cells(raw: &str, values: &[i32], name: Option<&str>, delimiter: char) -> Stri
             (Some(value), _) => keep(raw.get(at).copied(), *value),
             (None, Some(name)) if at == values.len() => raw
                 .get(at)
-                .filter(|text| clean(text).trim() == name)
+                .filter(|text| text.trim() == name)
                 .map_or_else(|| name.to_owned(), |text| (*text).to_owned()),
             _ => raw.get(at).copied().unwrap_or_default().to_owned(),
         })
         .collect();
 
-    written.join(&delimiter.to_string())
+    written.join(&DELIMITER.to_string())
+}
+
+fn terminate(body: &mut String) {
+    if !body.is_empty() && !body.ends_with('\n') {
+        body.push('\n');
+    }
 }
 
 fn count_line(raw: &str, was: usize, now: usize) -> String {
@@ -564,20 +683,13 @@ fn count_line(raw: &str, was: usize, now: usize) -> String {
         return raw.to_owned();
     }
 
-    let declared = clean(raw).trim().parse::<usize>().unwrap_or(was);
+    let declared = usize::try_from(cell_value(raw)).unwrap_or(was);
 
     declared.saturating_add(now).saturating_sub(was).to_string()
 }
 
-pub(super) fn clean(cell: &str) -> Cow<'_, str> {
-    match cell.contains(['\0', '\u{feff}']) {
-        true => Cow::Owned(cell.replace(['\0', '\u{feff}'], "")),
-        false => Cow::Borrowed(cell),
-    }
-}
-
 pub(super) fn read(cell: Option<&str>) -> i32 {
-    cell.and_then(|text| clean(text).trim().parse().ok()).unwrap_or(0)
+    cell.map_or(0, cell_value)
 }
 
 pub(super) fn keep(cell: Option<&str>, value: i32) -> String {
@@ -589,7 +701,7 @@ pub(super) fn keep(cell: Option<&str>, value: i32) -> String {
 mod tests {
     use super::*;
 
-    const SAMPLE: &str = "[modelanim:model]\n1\n2\n-1,0,0,0,0,0,0,0,1000,1000,0,1000,0,body\n0,0,1,400,10,-20,5,5,1000,1000,0,1000,0,\t head \t\n1000,3600,1000\n1\n0,0,-30,120,1000,1000,align\n";
+    const SAMPLE: &str = "[modelanim:model]\n3\n2\n-1,0,0,0,0,0,0,0,1000,1000,0,1000,0,body\n0,0,1,400,10,-20,5,5,1000,1000,0,1000,0,\t head \t\n1000,3600,1000\n1\n0,0,-30,120,1000,1000,align\n";
 
     fn round_trip(source: &str) -> String {
         let doc = Mamodel::parse(source.as_bytes()).expect("the sample parses");
@@ -621,11 +733,30 @@ mod tests {
     }
 
     #[test]
-    fn a_blank_line_and_a_line_past_the_alignment_block_are_both_kept() {
-        // One vanilla file carries each; the parser skips them, so the writer has to.
-        let odd = format!("{}\n999,junk\n", SAMPLE.replace("1000,3600,1000\n", "\n1000,3600,1000\n"));
+    fn a_line_past_the_alignment_block_is_kept_verbatim() {
+        let odd = format!("{}999,junk\n", SAMPLE);
 
         assert_eq!(round_trip(&odd), odd);
+    }
+
+    #[test]
+    fn a_blank_line_is_a_row_like_any_other() {
+        // nyanko reads it as the units row rather than skipping it, so the writer has
+        // to agree on where the blocks after it start.
+        let blanked = SAMPLE.replace("1000,3600,1000\n", "\n1000,3600,1000\n");
+        let doc = Mamodel::parse(blanked.as_bytes()).expect("the sample parses");
+
+        assert_eq!(doc.model().scale_unit, 0);
+        assert_eq!(String::from_utf8(doc.write()).expect("the output is text"), blanked);
+    }
+
+    #[test]
+    fn a_count_larger_than_the_rows_present_writes_back_the_rows_it_had() {
+        // 17 modder files declare one; nyanko repeats the last row it read to fill the
+        // gap, and materialising those repeats would rewrite a file nobody edited.
+        let truncated = "[modelanim:model]\n1\n4\n-1,0,0,0,0,0,0,0,1000,1000,0,1000,0,body\n";
+
+        assert_eq!(round_trip(truncated), truncated);
     }
 
     #[test]
@@ -669,6 +800,94 @@ mod tests {
         let written = String::from_utf8(doc.write()).expect("the output is text");
 
         assert!(written.ends_with("0,0,44,120,1000,1000,align\n"));
+    }
+
+    #[test]
+    fn a_first_offset_lands_under_a_count_line_that_had_no_rows() {
+        let bare = SAMPLE.replace("1\n0,0,-30,120,1000,1000,align\n", "0\n");
+        let mut doc = Mamodel::parse(bare.as_bytes()).expect("the sample parses");
+
+        assert_eq!(doc.add_offset(), Some(0));
+        assert!(round_trip_of(&doc).ends_with("1000,3600,1000\n1\n0,0,0,0,0,0\n"), "{}", round_trip_of(&doc));
+    }
+
+    #[test]
+    fn a_model_below_the_aligned_revision_gains_the_block_and_the_revision_with_it() {
+        // Revision 2 declares no block, so the first offset has to raise the revision as
+        // well as write the rows; 2 to 3 changes nothing else the reader looks at.
+        let old = "[modelanim:model]\n2\n1\n-1,0,0,0,0,0,0,0,1000,1000,0,1000,0,body\n1000,3600,1000\n";
+        let mut doc = Mamodel::parse(old.as_bytes()).expect("the sample parses");
+
+        assert_eq!(round_trip(old), old, "an untouched one is left alone");
+        assert_eq!(doc.add_offset(), Some(0));
+
+        let written = round_trip_of(&doc);
+
+        assert!(written.starts_with("[modelanim:model]\n3\n1\n"), "{}", written);
+        assert!(written.ends_with("1000,3600,1000\n1\n0,0,0,0,0,0\n"), "{}", written);
+        assert_eq!(Model::parse(&written).map(|held| held.alignment.len()), Ok(1));
+    }
+
+    #[test]
+    fn a_file_that_stops_before_its_offset_count_still_gains_one() {
+        let cut = "[modelanim:model]\n3\n1\n-1,0,0,0,0,0,0,0,1000,1000,0,1000,0,body\n0,0,0\n";
+        let mut doc = Mamodel::parse(cut.as_bytes()).expect("the sample parses");
+
+        assert_eq!(round_trip(cut), cut, "an untouched one is left alone");
+        assert_eq!(doc.add_offset(), Some(0));
+        assert!(round_trip_of(&doc).ends_with("body\n0,0,0\n1\n0,0,0,0,0,0\n"), "{}", round_trip_of(&doc));
+    }
+
+    #[test]
+    fn a_created_block_lands_where_the_reader_looks_not_at_the_end_of_the_file() {
+        // The old seed declared revision 1 and still trailed a block the reader never
+        // reached. Appending after that made the dead lines live on the next parse and
+        // buried the rows the editor had just written.
+        let seeded = "[modelanim:model]\n1\n1\n-1,0,0,0,0,0,32,32,1000,1000,0,1000,0,box\n1000,3600,1000\n2\n0,0,9,9,0,0,combat\n0,0,9,9,0,0,gacha\n";
+        let mut doc = Mamodel::parse(seeded.as_bytes()).expect("the sample parses");
+
+        assert_eq!(round_trip(seeded), seeded, "an untouched one is left alone");
+        assert_eq!(doc.add_offset(), Some(0));
+        assert!(doc.set_offset(0, 0, 32) && doc.set_offset(0, 1, 64));
+
+        let written = round_trip_of(&doc);
+        let back = Model::parse(&written).expect("it reads back");
+
+        assert_eq!(back.alignment.len(), 1, "{}", written);
+        assert_eq!((back.alignment[0].x, back.alignment[0].y), (32, 64), "{}", written);
+        assert!(written.contains("0,0,9,9,0,0,combat"), "the old lines are still kept: {}", written);
+    }
+
+    #[test]
+    fn a_model_with_no_units_row_of_its_own_declares_no_offsets() {
+        // Revision 3 makes the engine read a units row this file never wrote, so raising
+        // it to reach the block would change every part's scale.
+        let old = SAMPLE.replace("model]\n3\n", "model]\n0\n");
+        let mut doc = Mamodel::parse(old.as_bytes()).expect("the sample parses");
+
+        assert!(!doc.alignable());
+        assert_eq!(doc.add_offset(), None);
+    }
+
+    #[test]
+    fn a_new_offset_names_the_part_the_row_before_it_does() {
+        let mut doc = Mamodel::parse(SAMPLE.as_bytes()).expect("the sample parses");
+
+        assert_eq!(doc.add_offset(), Some(1));
+        assert!(round_trip_of(&doc).ends_with("0,0,-30,120,1000,1000,align\n0,0,0,0,0,0\n"));
+    }
+
+    #[test]
+    fn removing_the_last_offset_takes_the_block_and_its_count_down_with_it() {
+        let mut doc = Mamodel::parse(SAMPLE.as_bytes()).expect("the sample parses");
+
+        assert!(doc.remove_offset(0));
+        assert!(!doc.remove_offset(0), "there is nothing left to take");
+        assert!(round_trip_of(&doc).ends_with("1000,3600,1000\n0\n"), "{}", round_trip_of(&doc));
+    }
+
+    fn round_trip_of(doc: &Mamodel) -> String {
+        String::from_utf8(doc.write()).expect("the output is text")
     }
 
     #[test]

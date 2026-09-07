@@ -1,5 +1,5 @@
 use std::env;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf, MAIN_SEPARATOR};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
@@ -28,6 +28,8 @@ use crate::common::dialog;
 use crate::common::watcher;
 use crate::widget::ConsoleState;
 
+const PATH_BUDGET: usize = 22;
+const ELLIPSIS: &str = "\u{2026}";
 const RULE_PADDING: f32 = 8.0;
 const PROGRESS_TICK: Duration = Duration::from_millis(16);
 
@@ -391,7 +393,7 @@ impl State {
                 } else {
                     None
                 }),
-                text(pack_folder_label)
+                text(pack_folder_label).width(Length::Fill).wrapping(text::Wrapping::None)
             ]
             .align_y(Alignment::Center)
             .spacing(10)
@@ -443,7 +445,7 @@ impl State {
                 } else {
                     None
                 }),
-                text(raw_folder_label)
+                text(raw_folder_label).width(Length::Fill).wrapping(text::Wrapping::None)
             ]
             .align_y(Alignment::Center)
             .spacing(10)
@@ -630,61 +632,78 @@ fn censor_path(path_string: &str) -> String {
         return String::new();
     }
 
-    let mut clean_string = path_string.to_string();
+    let mut clean = path_string.to_owned();
+
     if let Ok(username) = env::var("USERNAME").or_else(|_| env::var("USER"))
-        && !username.is_empty() {
-        clean_string = clean_string.replace(&username, "***");
+        && !username.is_empty()
+    {
+        clean = clean.replace(&username, "***");
     }
 
-    let path_object = Path::new(&clean_string);
-    let path_components: Vec<_> = path_object
+    let parts: Vec<String> = Path::new(&clean)
         .components()
-        .map(|component| component.as_os_str().to_string_lossy())
+        .filter_map(|part| match part {
+            Component::Normal(name) => Some(name.to_string_lossy().into_owned()),
+            _ => None,
+        })
         .collect();
 
-    if path_components.len() < 2 {
-        if clean_string.chars().count() > 20 {
-            return format!(
-                "...{}",
-                clean_string
-                    .chars()
-                    .skip(clean_string.chars().count() - 20)
-                    .collect::<String>()
-            );
-        }
-        return clean_string;
+    if parts.is_empty() {
+        return shorten(&clean, PATH_BUDGET);
     }
 
-    let mut parent_folder = path_components[path_components.len() - 2].to_string();
-    let mut target_file = path_components[path_components.len() - 1].to_string();
+    let separator = MAIN_SEPARATOR.to_string();
+    let kept = parts.len().min(2);
+    let joined = parts[parts.len() - kept..].join(&separator);
+    let deeper = parts.len() > kept;
 
-    let total_length = parent_folder.chars().count() + target_file.chars().count();
+    match deeper {
+        true => format!("{}{}{}", ELLIPSIS, separator, shorten(&joined, PATH_BUDGET - 2)),
+        false => shorten(&joined, PATH_BUDGET),
+    }
+}
 
-    if total_length > 20 {
-        if target_file.chars().count() >= 20 {
-            target_file = format!("{}...", target_file.chars().take(18).collect::<String>());
-            parent_folder = String::new();
-        } else {
-            let allowed_parent_length = 20 - target_file.chars().count();
-            if allowed_parent_length > 2 {
-                parent_folder = format!(
-                    "{}...",
-                    parent_folder
-                        .chars()
-                        .take(allowed_parent_length - 2)
-                        .collect::<String>()
-                );
-            } else {
-                parent_folder = String::new();
-            }
-        }
+fn shorten(text: &str, room: usize) -> String {
+    let length = text.chars().count();
+
+    if length <= room {
+        return text.to_owned();
     }
 
-    let ellipsis_prefix = if path_components.len() > 2 { "...\\" } else { "" };
+    if room < 4 {
+        return ELLIPSIS.to_owned();
+    }
 
-    if parent_folder.is_empty() {
-        format!("{}{}", ellipsis_prefix, target_file)
-    } else {
-        format!("{}{}\\{}", ellipsis_prefix, parent_folder, target_file)
+    let keep = room - 1;
+    let head = keep / 2;
+    let tail = keep - head;
+
+    format!(
+        "{}{}{}",
+        text.chars().take(head).collect::<String>(),
+        ELLIPSIS,
+        text.chars().skip(length - tail).collect::<String>(),
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_deep_path_is_cut_to_the_budget_the_column_can_hold() {
+        // The label sits beside a button in a third of an 800px window; anything
+        // longer wraps into the next column.
+        let shown = censor_path("/home/somebody/Downloads/battle cats data/apk extraction/files");
+
+        assert!(shown.chars().count() <= PATH_BUDGET, "{}", shown);
+        assert!(shown.starts_with(ELLIPSIS), "{}", shown);
+        assert!(shown.ends_with("files"), "the leaf stays readable: {}", shown);
+    }
+
+    #[test]
+    fn a_short_path_is_left_whole() {
+        assert_eq!(censor_path("/tmp/data"), format!("tmp{}data", MAIN_SEPARATOR));
+        assert_eq!(censor_path(""), "");
     }
 }

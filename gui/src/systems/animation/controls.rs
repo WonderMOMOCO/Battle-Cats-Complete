@@ -383,7 +383,7 @@ impl State {
             }
             Message::OffsetSelected(label) => {
                 data.select_offset(&label);
-                anim_state.offset_row = data.selected_offset();
+                anim_state.placement = data.selected_offset();
             }
             Message::RangeStartChanged(value) => {
                 if value.is_empty() {

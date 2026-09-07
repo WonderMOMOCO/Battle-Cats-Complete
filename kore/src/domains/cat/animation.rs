@@ -1,4 +1,4 @@
-use crate::systems::animation::{self, Clip, ClipSet, Loop, RigFiles};
+use crate::systems::animation::{self, named_offsets, Clip, ClipSet, Loop, RigFiles};
 use crate::Vfs;
 
 use super::files;
@@ -53,7 +53,7 @@ pub fn clips(cat: &CatEntry, form: usize, vfs: &Vfs) -> ClipSet {
         clips.push(spirit);
     }
 
-    ClipSet { name: id, clips, offsets: vec!["Combat", "Gacha"] }
+    ClipSet { name: id, clips, offsets: named_offsets("Gacha") }
 }
 
 fn spirit_clip(cat: &CatEntry, form: usize, vfs: &Vfs) -> Option<Clip> {

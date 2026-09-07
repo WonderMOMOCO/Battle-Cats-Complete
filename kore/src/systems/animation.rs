@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use nyanko::graphics::rig::Animation;
+use serde::{Deserialize, Serialize};
 
 use crate::Vfs;
 
@@ -64,10 +65,49 @@ pub struct Clip {
 pub struct ClipSet {
     pub name: String,
     pub clips: Vec<Clip>,
-    pub offsets: Vec<&'static str>,
+    pub offsets: Vec<Offset>,
+}
+
+pub struct Offset {
+    pub row: Option<usize>,
+    pub name: &'static str,
+}
+
+impl Offset {
+    pub fn none(name: &'static str) -> Self {
+        Self { row: None, name }
+    }
+
+    pub fn at(row: usize, name: &'static str) -> Self {
+        Self { row: Some(row), name }
+    }
 }
 
 pub const RAW_OFFSET: &str = "Raw";
+pub const NO_OFFSET: &str = "None";
+
+/// Which alignment row places a rig in the viewer.
+///
+/// The engine has no unplaced mode — every drawn entity runs the anchor
+/// transform, every frame — so the first row is the default and `Bare` is a
+/// deliberate look behind it, never a fallback.
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Placement {
+    Bare,
+    Row(usize),
+}
+
+impl Default for Placement {
+    fn default() -> Self {
+        Placement::Row(0)
+    }
+}
+
+const COMBAT_OFFSET: &str = "Combat";
+
+pub fn named_offsets(placement: &'static str) -> Vec<Offset> {
+    vec![Offset::none(RAW_OFFSET), Offset::at(0, COMBAT_OFFSET), Offset::at(1, placement)]
+}
 
 impl Clip {
     pub fn model(rig: Arc<Rigging>) -> Self {

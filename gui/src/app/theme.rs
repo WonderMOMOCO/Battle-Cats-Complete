@@ -525,6 +525,28 @@ pub fn zebra_table_header(theme: &Theme) -> container::Style {
     }
 }
 
+pub fn zebra_table_footer(theme: &Theme) -> container::Style {
+    let base = zebra_table_header(theme);
+
+    container::Style {
+        border: Border {
+            radius: Radius { top_left: 0.0, top_right: 0.0, bottom_left: RADIUS_SM, bottom_right: RADIUS_SM },
+            ..base.border
+        },
+        ..base
+    }
+}
+
+pub fn pager_step(theme: &Theme, status: button::Status) -> button::Style {
+    let text_color = match status {
+        button::Status::Disabled => weak_text_color(theme),
+        button::Status::Hovered | button::Status::Pressed => theme.palette().primary,
+        button::Status::Active => Color::WHITE,
+    };
+
+    button::Style { text_color, ..button::Style::default() }
+}
+
 pub fn zebra_table_row(theme: &Theme, index: usize) -> container::Style {
     let palette = theme.palette();
     let background = if index.is_multiple_of(2) { shade_color(palette.background, TABLE_ROW_SHADE) } else { palette.background };

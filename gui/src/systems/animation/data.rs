@@ -6,7 +6,7 @@ use tracing::warn;
 use nyanko::graphics::rig::{Animation, BoundingBox, Model, Rig};
 
 use kore::common::preview::{self, Stamp};
-use kore::systems::animation::{cycle, loop_frame, restart, restart_frame, Clip, ClipSet, Loop, Rigging, Role, RAW_OFFSET};
+use kore::systems::animation::{cycle, loop_frame, restart, restart_frame, Clip, ClipSet, Loop, Offset, Placement, Rigging, Role, NO_OFFSET};
 
 pub(super) const COLUMNS: usize = 4;
 const DEFAULT_SLOTS: usize = 8;
@@ -22,8 +22,8 @@ pub struct State {
 
     set_key: String,
     set_name: String,
-    offsets: Vec<&'static str>,
-    offset: Option<usize>,
+    offsets: Vec<Offset>,
+    placement: Placement,
     loaded_rig: String,
     failed_rig: String,
     loaded_clip: Option<usize>,
@@ -40,39 +40,56 @@ impl State {
     pub fn offset(&self) -> Option<usize> {
         let rows = self.available_rows();
 
-        match self.offset {
-            None => None,
-            Some(row) if row < rows => Some(row),
-            Some(_) => (rows > 0).then_some(0),
+        match self.placement {
+            Placement::Bare => None,
+            Placement::Row(row) if row < rows => Some(row),
+            Placement::Row(_) => (rows > 0).then_some(0),
         }
     }
 
-    pub fn offset_label(&self) -> &'static str {
-        self.offset()
-            .and_then(|row| self.offsets.get(row).copied())
-            .unwrap_or(RAW_OFFSET)
+    pub fn offset_label(&self) -> String {
+        self.offset().map_or_else(|| self.bare_label().to_owned(), |row| self.offset_name(row))
     }
 
     fn available_rows(&self) -> usize {
         self.held_unit.as_ref().map_or(0, |unit| unit.model.alignment.len())
     }
 
-    pub fn offset_choices(&self) -> Vec<&'static str> {
-        std::iter::once(RAW_OFFSET)
-            .chain(self.offsets.iter().take(self.available_rows()).copied())
+    fn bare_label(&self) -> &str {
+        self.offsets.iter().find(|held| held.row.is_none()).map_or(NO_OFFSET, |held| held.name)
+    }
+
+    fn offset_name(&self, row: usize) -> String {
+        self.offsets
+            .iter()
+            .find(|held| held.row == Some(row))
+            .map_or_else(|| format!("Row {}", row), |held| held.name.to_owned())
+    }
+
+    pub fn offset_choices(&self) -> Vec<String> {
+        std::iter::once(self.bare_label().to_owned())
+            .chain((0..self.available_rows()).map(|row| self.offset_name(row)))
             .collect()
     }
 
     pub fn select_offset(&mut self, label: &str) {
-        self.offset = self.offsets.iter().position(|known| *known == label);
+        if label == self.bare_label() {
+            self.placement = Placement::Bare;
+
+            return;
+        }
+
+        if let Some(row) = (0..self.available_rows()).find(|row| self.offset_name(*row) == label) {
+            self.placement = Placement::Row(row);
+        }
     }
 
-    pub fn selected_offset(&self) -> Option<usize> {
-        self.offset
+    pub fn selected_offset(&self) -> Placement {
+        self.placement
     }
 
-    pub fn restore_offset(&mut self, row: Option<usize>) {
-        self.offset = row;
+    pub fn restore_offset(&mut self, placement: Placement) {
+        self.placement = placement;
     }
 
     pub fn slots(&self) -> &[Option<usize>] {
@@ -703,6 +720,29 @@ mod tests {
     use kore::systems::animation::SLOT_MODEL;
 
     use super::*;
+
+    #[test]
+    fn a_label_no_row_answers_to_leaves_the_choice_alone() {
+        // A rig with no alignment block offers only the bare entry, so a label carried
+        // over from another rig matches nothing. Clearing the row on that persists "no
+        // placement", which is a view the engine never draws.
+        let mut held = State::default();
+
+        held.select_offset("Combat");
+
+        assert_eq!(held.selected_offset(), Placement::Row(0));
+    }
+
+    #[test]
+    fn the_bare_entry_still_clears_it() {
+        let mut held = State::default();
+
+        assert_eq!(held.selected_offset(), Placement::Row(0), "the row the engine always applies");
+
+        held.select_offset(NO_OFFSET);
+
+        assert_eq!(held.selected_offset(), Placement::Bare);
+    }
 
     fn at(slot: usize) -> Request {
         Request { slot: Some(slot), trailing: false }

@@ -9,6 +9,7 @@ use std::path::Path;
 use indexmap::IndexMap;
 use md5::{Digest, Md5};
 use nyanko::common::Region;
+use nyanko::graphics::tools::crash::Side;
 use serde::{Deserialize, Serialize};
 use tracing::{info, warn};
 
@@ -417,6 +418,58 @@ impl std::fmt::Display for Shown {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum Faults {
+    None,
+    Attack,
+    #[default]
+    Either,
+    Cat,
+    Enemy,
+}
+
+impl Faults {
+    pub const ALL: [Faults; 5] =
+        [Faults::None, Faults::Attack, Faults::Either, Faults::Cat, Faults::Enemy];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Faults::None => "None",
+            Faults::Attack => "Attack",
+            Faults::Either => "Either",
+            Faults::Cat => "Cat",
+            Faults::Enemy => "Enemy",
+        }
+    }
+
+    pub fn side(self) -> Option<Side> {
+        match self {
+            Faults::None => None,
+            Faults::Attack | Faults::Either => Some(Side::Either),
+            Faults::Cat => Some(Side::Cat),
+            Faults::Enemy => Some(Side::Enemy),
+        }
+    }
+
+    pub fn attacking(self) -> bool {
+        self == Faults::Attack
+    }
+
+    pub fn of(side: Side) -> Faults {
+        match side {
+            Side::Either => Faults::Either,
+            Side::Cat => Faults::Cat,
+            Side::Enemy => Faults::Enemy,
+        }
+    }
+}
+
+impl std::fmt::Display for Faults {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.label())
+    }
+}
+
 pub const ONION_LIFE: i32 = 15;
 pub const ONION_ALPHA: i32 = 100;
 
@@ -515,7 +568,7 @@ impl std::fmt::Display for ScrubBehavior {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Default)]
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(default)]
 pub struct StudioSettings {
     pub gizmo: crate::systems::animation::posing::Hand,
@@ -532,9 +585,35 @@ pub struct StudioSettings {
     pub onion_after_color: String,
     pub onion_gap: String,
     pub onion_alpha: String,
-    pub ignore_crashes: bool,
+    pub faults: Faults,
+    pub auto_faults: bool,
     pub scrub: ScrubBehavior,
     pub frame_count: FrameCount,
+}
+
+impl Default for StudioSettings {
+    fn default() -> Self {
+        Self {
+            gizmo: crate::systems::animation::posing::Hand::default(),
+            entity: Scope::default(),
+            origin: Shown::default(),
+            rig: Tier::default(),
+            selected: Tier::default(),
+            hierarchy: Tier::default(),
+            world: Shown::default(),
+            onion: Switch::default(),
+            onion_before_life: String::new(),
+            onion_after_life: String::new(),
+            onion_before_color: String::new(),
+            onion_after_color: String::new(),
+            onion_gap: String::new(),
+            onion_alpha: String::new(),
+            faults: Faults::default(),
+            auto_faults: true,
+            scrub: ScrubBehavior::default(),
+            frame_count: FrameCount::default(),
+        }
+    }
 }
 
 impl StudioSettings {

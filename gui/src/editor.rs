@@ -23,6 +23,7 @@ use kore::common::architecture;
 use kore::domains::mods;
 use kore::domains::settings::{ContextScope, EditorMode};
 use kore::Vfs;
+use nyanko::graphics::tools::crash::Side;
 
 use crate::app::{theme, BattleCatsApp, Page};
 use crate::domains::cat::DetailTab;
@@ -50,6 +51,7 @@ pub enum Target {
     EnemyAnimation,
     AnimPart(usize),
     AnimCurve(usize),
+    AnimFields,
     CatIcon,
     EnemyIcon,
     CatExplanation,
@@ -71,6 +73,7 @@ pub(crate) struct Context {
     levels: Vec<LevelTarget>,
     animation: Option<AnimTarget>,
     channels: Option<ChannelTarget>,
+    offsets: Option<studio::Offsets>,
 }
 
 struct ChannelTarget {
@@ -430,6 +433,8 @@ enum Action {
     AddChannel { part: usize, kind: i32 },
     DropChannel { track: usize },
     AddPart { parent: Option<usize> },
+    AddOffset,
+    DropOffset { row: usize },
     Locate { part: usize },
     DropPart { part: usize },
     EditAnimation(AnimPlan),
@@ -838,6 +843,14 @@ impl State {
                 true => Outcome::Done,
                 false => Outcome::Failed,
             },
+            Action::AddOffset => match studio.add_offset() {
+                true => Outcome::Done,
+                false => Outcome::Failed,
+            },
+            Action::DropOffset { row } => match studio.drop_offset(*row) {
+                true => Outcome::Done,
+                false => Outcome::Failed,
+            },
             Action::Locate { part } => match studio.locate(*part) {
                 true => Outcome::Done,
                 false => Outcome::Failed,
@@ -847,8 +860,8 @@ impl State {
                 false => Outcome::Failed,
             },
             Action::EditAnimation(plan) => match adopt_set(plan, vfs) {
-                Some((set, copied)) => {
-                    studio.adopt(set, plan.target_mod.clone(), plan.clip.clone(), copied);
+                Some((set, copied, side)) => {
+                    studio.adopt(set, plan.target_mod.clone(), plan.clip.clone(), copied, side);
 
                     Outcome::Opened(Page::Studio)
                 }
@@ -980,6 +993,9 @@ pub(crate) fn context(app: &BattleCatsApp, target: Option<Target>) -> Context {
             levels: Vec::new(),
             animation: None,
             channels: channel_target(app, target),
+            offsets: matches!(target, Some(Target::AnimFields))
+                .then(|| app.studio_state.offsets())
+                .flatten(),
         };
     }
 
@@ -1000,6 +1016,7 @@ pub(crate) fn context(app: &BattleCatsApp, target: Option<Target>) -> Context {
             .collect(),
         animation: anim_target(app, reached(Target::CatAnimation), reached(Target::EnemyAnimation)),
         channels: None,
+        offsets: None,
     }
 }
 
@@ -1071,7 +1088,7 @@ fn anim_plan(target: &AnimTarget, target_mod: Option<String>) -> AnimPlan {
         clip: target.clip.clone(),
     }
 }
-fn adopt_set(plan: &AnimPlan, vfs: &Vfs) -> Option<(studio::Set, bool)> {
+fn adopt_set(plan: &AnimPlan, vfs: &Vfs) -> Option<(studio::Set, bool, Option<Side>)> {
     let mut set = studio::Set { name: plan.key.clone(), ..studio::Set::default() };
 
     for file in &plan.files {
@@ -1097,14 +1114,21 @@ fn adopt_set(plan: &AnimPlan, vfs: &Vfs) -> Option<(studio::Set, bool)> {
         return None;
     }
 
+    let side = plan
+        .files
+        .iter()
+        .find(|file| file.ends_with(".mamodel"))
+        .and_then(|file| Path::new(file).file_stem()?.to_str())
+        .and_then(kore_studio::stem_side);
+
     if plan.target_mod.is_some() || plan.unlocked {
-        return Some((set, false));
+        return Some((set, false, side));
     }
 
     let name = kore_studio::vacant(&plan.key);
 
     match kore_studio::adopt(&name, &set) {
-        Ok(copied) => Some((copied, true)),
+        Ok(copied) => Some((copied, true, side)),
         Err(err) => {
             warn!(name, "Failed to copy a locked rig into studio: {}", err);
 

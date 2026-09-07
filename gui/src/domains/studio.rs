@@ -15,12 +15,13 @@ use tracing::{error, info, warn};
 
 use kore::common::architecture;
 use kore::common::preview::{self, Stamp};
-use kore::domains::settings::{FrameCount, Scope, Settings, Shown, StudioSettings, Switch, Tier};
+use kore::domains::settings::{Faults, FrameCount, Scope, Settings, Shown, StudioSettings, Switch, Tier};
 use kore::domains::studio as sets;
 use kore::systems::animation::posing::{self, Hand, Probe};
 use kore::systems::animation::authoring::{self as authoring, bound, Beat, Cadence, Imgcut, CUT_FIELDS, CUT_NAME_FIELD, ease_label, ease_takes_power, ease_value, key_label, kind_label, loop_label, nameable, Maanim, Mamodel, EASES, FIELDS, NAME_FIELD};
 use image::RgbaImage;
 use nyanko::graphics::rig::{Keyframe, Model, ModelPart, Opaque, Rig, SpriteCut};
+use nyanko::graphics::tools::crash::Side;
 use nyanko::graphics::tools::timeline as curve;
 
 use crate::app::state::{AnimState, StudioState};
@@ -46,7 +47,7 @@ mod shipout;
 mod timeline;
 mod tree;
 
-use blame::{Alarm, Blame};
+use blame::{Alarm, Blame, Notice};
 use documents::*;
 use history::{History, Tag};
 use panel::*;
@@ -100,6 +101,10 @@ const NOTICE_OVERHANG: f32 = 4.0;
 const NOTICE_TEXT_SIZE: f32 = 13.0;
 const RENAME_DELAY: Duration = Duration::from_millis(700);
 const KEY_HEAD_HEIGHT: f32 = 19.0;
+const PAGE_DIALS: usize = 8;
+const PAGE_BACK: &str = "\u{25c2}";
+const PAGE_NEXT: &str = "\u{25b8}";
+const PAGER_STEP: f32 = 26.0;
 const DEBUG_WIDTH: f32 = 78.0;
 const OPTION_WIDTH: f32 = 176.0;
 const COMBO_WIDTH: f32 = 88.0;
@@ -112,7 +117,7 @@ const STEP_WIDTH: f32 = 44.0;
 const ACTIVE_TINT: f32 = 0.68;
 const SEGMENT_TOP: f32 = 0.3;
 const SEGMENT_BOTTOM: f32 = 0.88;
-const FACT_ROW_HEIGHT: f32 = 20.0;
+const FACT_ROW_HEIGHT: f32 = 21.0;
 const FACT_ROW_PAD: f32 = 4.0;
 const FACT_LABEL: f32 = 62.0;
 const LOOP_WIDTH: f32 = 56.0;
@@ -141,7 +146,6 @@ const FRAME_HINT: &str = "Right click & drag to set the cut";
 const ALIGN_WIDTH: f32 = 36.0;
 const BUFFER_MARK: char = '!';
 const HEX_DIGITS: usize = 6;
-const NO_SHEET: i32 = i32::MIN;
 const NOT_DRAWN: i32 = -1;
 
 const LOADING_NOTICE: &str = "Loading animation\u{2026}";
@@ -179,7 +183,14 @@ const SCALE_UNIT_DETAIL: &str =
     "The model's scale divisor is zero\nThe game fails to divide by zero";
 const OPACITY_UNIT_DETAIL: &str =
     "The model's opacity divisor is zero\nThe game fails to divide by zero";
+const ATTACK_LENGTH_DETAIL: &str =
+    "The attack animation measures no frames\nThe game divides its frame counter by that length";
+const ENDLESS_ATTACK_DETAIL: &str =
+    "The attack animation never ends and reaches no frame past zero\nAn attacking enemy divides its frame counter by that";
 const UNKNOWN_DETAIL: &str = "The game's animation pass faults on this";
+const FAULT_HINT: &str = "Manage faults under Option page 2";
+const ATTACK_HINT: &str = "Only consider this fault for attacks";
+const ENTITY_FAULT: &str = "This entity may cause a game crash\nPlease find the issue and resolve it";
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum Mode {
@@ -283,6 +294,7 @@ pub enum Dial {
     Gizmo,
     Onion,
     Module,
+    Fault,
     Rig,
     Hierarchy,
     Selected,
@@ -292,23 +304,36 @@ pub enum Dial {
 }
 
 impl Dial {
-    const ALL: [Dial; 9] = [
+    const ALL: [Dial; 10] = [
         Dial::Gizmo,
         Dial::Onion,
-        Dial::Module,
         Dial::Entity,
         Dial::Rig,
         Dial::Hierarchy,
         Dial::Selected,
         Dial::World,
         Dial::Origin,
+        Dial::Module,
+        Dial::Fault,
     ];
+
+    fn pages() -> usize {
+        Dial::ALL.len().div_ceil(PAGE_DIALS).max(1)
+    }
+
+    fn page(page: usize) -> &'static [Dial] {
+        let from = (page * PAGE_DIALS).min(Dial::ALL.len());
+        let to = (from + PAGE_DIALS).min(Dial::ALL.len());
+
+        &Dial::ALL[from..to]
+    }
 
     fn label(self) -> &'static str {
         match self {
             Dial::Gizmo => "Gizmo",
             Dial::Onion => "Onionskin",
             Dial::Module => "Module",
+            Dial::Fault => "Fault",
             Dial::Rig => "Rig",
             Dial::Hierarchy => "Hierarchy",
             Dial::Selected => "Selected",
@@ -390,6 +415,11 @@ impl Field {
     }
 }
 
+pub(crate) struct Offsets {
+    pub(crate) rows: usize,
+    pub(crate) addable: bool,
+}
+
 pub(crate) struct Channels {
     pub(crate) part: usize,
     pub(crate) label: String,
@@ -428,6 +458,8 @@ pub enum Message {
     Sighted(Dial, Shown),
     Scoped(Scope),
     Module(Readout),
+    Faulted(Faults),
+    Page(usize),
     Cycle(Dial),
     OpenOnion,
     OnionPopup(popup::Message),
@@ -489,20 +521,26 @@ enum Drag {
     Idle,
     Pressed {
         row: usize,
-        part: usize,
+        cargo: Cargo,
         since: Instant,
     },
     Moving {
-        part: usize,
+        cargo: Cargo,
         at: Point,
         onto: Option<Landing>,
     },
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Cargo {
+    Part(usize),
+    Track(usize),
+}
+
 impl Drag {
-    fn carrying(self) -> Option<usize> {
+    fn carrying(self) -> Option<Cargo> {
         match self {
-            Drag::Moving { part, .. } => Some(part),
+            Drag::Moving { cargo, .. } => Some(cargo),
             _ => None,
         }
     }
@@ -577,9 +615,12 @@ pub struct State {
     ship_popup: popup::State,
     mode: Mode,
     readout: Readout,
+    dials: usize,
+    pending_fault: Option<Side>,
     flash: Option<Instant>,
     flash_text: String,
     notice_text: String,
+    notice_hint: Option<&'static str>,
     raised: bool,
     lowered: Option<Instant>,
     exporting: bool,
@@ -608,9 +649,12 @@ impl Default for State {
             ship_popup: popup::State::default(),
             mode: Mode::default(),
             readout: Readout::default(),
+            dials: 0,
+            pending_fault: None,
             flash: None,
             flash_text: String::new(),
             notice_text: String::new(),
+            notice_hint: None,
             raised: false,
             lowered: None,
             exporting: false,
@@ -695,7 +739,7 @@ struct Session {
     entity: Scope,
     placed: Vec<viewer::Posed>,
     blame: Blame,
-    faulting: bool,
+    faulting: Faults,
 }
 
 impl State {
@@ -815,7 +859,7 @@ impl State {
             entity: Scope::default(),
             placed: Vec::new(),
             blame: Blame::default(),
-            faulting: false,
+            faulting: Faults::default(),
         });
     }
 
@@ -825,8 +869,11 @@ impl State {
         target_mod: Option<String>,
         clip: Option<String>,
         copied: bool,
+        side: Option<Side>,
     ) {
         let name = set.name.clone();
+
+        self.pending_fault = side;
 
         match copied {
             true => self.manage.adopt(set.clone()),
@@ -888,6 +935,61 @@ impl State {
             Some(folder) => format!("{}/{}", architecture::STUDIO, folder),
             None => architecture::GAME.to_owned(),
         })
+    }
+
+    pub(crate) fn offsets(&self) -> Option<Offsets> {
+        let session = self.session.as_ref().filter(|session| session.mode == Mode::Entity)?;
+        let pose = session.pose.as_ref()?;
+
+        Some(Offsets { rows: pose.doc.offsets(), addable: pose.doc.alignable() })
+    }
+
+    pub(crate) fn add_offset(&mut self) -> bool {
+        let Some(session) = self.session.as_mut() else {
+            return false;
+        };
+
+        session.remember(Tag::Parts);
+
+        let Some(pose) = session.pose.as_mut() else {
+            return false;
+        };
+
+        if pose.doc.add_offset().is_none() {
+            return false;
+        }
+
+        pose.backing.dirty = true;
+
+        let settled = pose.persist_now();
+
+        session.settle_pose();
+
+        settled != Settled::Failed
+    }
+
+    pub(crate) fn drop_offset(&mut self, row: usize) -> bool {
+        let Some(session) = self.session.as_mut() else {
+            return false;
+        };
+
+        session.remember(Tag::Parts);
+
+        let Some(pose) = session.pose.as_mut() else {
+            return false;
+        };
+
+        if !pose.doc.remove_offset(row) {
+            return false;
+        }
+
+        pose.backing.dirty = true;
+
+        let settled = pose.persist_now();
+
+        session.settle_pose();
+
+        settled != Settled::Failed
     }
 
     pub(crate) fn holder(&self, track: usize) -> Option<usize> {
@@ -1065,6 +1167,12 @@ impl State {
     ) -> Task<Message> {
         self.unlocked = settings.files.unlock_game_mount;
 
+        if let Some(side) = self.pending_fault.take()
+            && settings.studio.auto_faults
+        {
+            settings.studio.faults = Faults::of(side);
+        }
+
         let chromed = self.chrome(&message, settings);
 
         if std::mem::take(&mut self.shed_onion) {
@@ -1083,7 +1191,7 @@ impl State {
             return Task::none();
         };
 
-        let faulting = !settings.studio.ignore_crashes;
+        let faulting = settings.studio.faults;
 
         if session.faulting != faulting {
             session.faulting = faulting;
@@ -1157,10 +1265,10 @@ impl State {
                 session.viewer.update(msg, settings, anim).map(Message::Viewer)
             }
             Message::Press(index) => {
-                let part = session.rows.get(index).and_then(|row| row.part);
+                let cargo = session.rows.get(index).and_then(TreeRow::cargo);
 
-                session.drag = match part {
-                    Some(part) => Drag::Pressed { row: index, part, since: Instant::now() },
+                session.drag = match cargo {
+                    Some(cargo) => Drag::Pressed { row: index, cargo, since: Instant::now() },
                     None => Drag::Idle,
                 };
 
@@ -1168,13 +1276,13 @@ impl State {
             }
             Message::DragMove(at) => {
                 let carried = match session.drag {
-                    Drag::Moving { part, .. } => Some(part),
-                    Drag::Pressed { part, .. } if session.drag.ripe() => Some(part),
+                    Drag::Moving { cargo, .. } => Some(cargo),
+                    Drag::Pressed { cargo, .. } if session.drag.ripe() => Some(cargo),
                     _ => None,
                 };
 
-                if let Some(part) = carried {
-                    session.drag = Drag::Moving { part, at, onto: session.landing(part, at) };
+                if let Some(cargo) = carried {
+                    session.drag = Drag::Moving { cargo, at, onto: session.landing(cargo, at) };
                 }
 
                 Task::none()
@@ -1189,7 +1297,7 @@ impl State {
                         return Task::none();
                     }
                     Drag::Moving { onto: None, .. } => {}
-                    Drag::Moving { part, onto: Some(onto), .. } => session.land(part, onto),
+                    Drag::Moving { cargo, onto: Some(onto), .. } => session.land(cargo, onto),
                     _ => {}
                 }
 
@@ -1319,8 +1427,8 @@ impl State {
                 session.scroll = offset;
                 session.window = window;
 
-                if let Drag::Moving { part, at, .. } = session.drag {
-                    session.drag = Drag::Moving { part, at, onto: session.landing(part, at) };
+                if let Drag::Moving { cargo, at, .. } = session.drag {
+                    session.drag = Drag::Moving { cargo, at, onto: session.landing(cargo, at) };
                 }
 
                 Task::none()
@@ -1634,6 +1742,8 @@ impl State {
             | Message::ManagePopup(_)
             | Message::Manage(_)
             | Message::Module(_)
+            | Message::Faulted(_)
+            | Message::Page(_)
             | Message::Cycle(_)
             | Message::Export => Task::none(),
         };
@@ -1650,6 +1760,16 @@ impl State {
 
                 Some(Task::none())
             }
+            Message::Faulted(faults) => {
+                settings.studio.faults = *faults;
+
+                Some(Task::none())
+            }
+            Message::Page(page) => {
+                self.dials = (*page).min(Dial::pages().saturating_sub(1));
+
+                Some(Task::none())
+            }
             Message::Cycle(dial) => {
                 let anim = &mut settings.studio;
 
@@ -1662,6 +1782,7 @@ impl State {
                         self.onioning = next.on();
                     }
                     Dial::Module => self.readout = stepped(&Readout::ALL, self.readout),
+                    Dial::Fault => anim.faults = stepped(&Faults::ALL, anim.faults),
                     Dial::Entity => anim.entity = stepped(&Scope::ALL, anim.entity),
                     _ => match dial.tier(anim) {
                         Some(tier) => dial.set_tier(anim, stepped(&Tier::ALL, tier)),
@@ -1783,18 +1904,21 @@ impl State {
         }
     }
 
-    fn wanted_notice(&self) -> Option<String> {
+    fn wanted_notice(&self) -> Option<Notice> {
         if self.flash.is_some_and(|at| at.elapsed() < NOTICE_EXPIRY) {
-            return Some(self.flash_text.clone());
+            return Some((self.flash_text.clone(), None));
         }
 
-        self.session.as_ref().and_then(Session::alarm_notice)
+        self.session
+            .as_ref()
+            .and_then(Session::alarm_notice)
+            .or_else(|| self.session.as_ref().and_then(Session::entity_notice))
     }
 
     fn settle_notice(&mut self) {
         let wanted = self.wanted_notice();
 
-        if self.raised && wanted.as_deref() == Some(self.notice_text.as_str()) {
+        if self.raised && wanted.as_ref().is_some_and(|(text, _)| text == &self.notice_text) {
             return;
         }
 
@@ -1805,7 +1929,7 @@ impl State {
             return;
         }
 
-        let Some(text) = wanted else {
+        let Some((text, sided)) = wanted else {
             return;
         };
 
@@ -1814,6 +1938,7 @@ impl State {
         }
 
         self.notice_text = text;
+        self.notice_hint = sided;
         self.raised = true;
         self.lowered = None;
     }
@@ -2319,7 +2444,7 @@ impl Session {
         self.relist();
     }
 
-    fn landing(&self, part: usize, at: Point) -> Option<Landing> {
+    fn landing(&self, cargo: Cargo, at: Point) -> Option<Landing> {
         if at.x < TREE_LEFT || at.x > TREE_RIGHT || at.y < TREE_TOP || self.rows.is_empty() {
             return None;
         }
@@ -2333,6 +2458,10 @@ impl Session {
         let row = ((travelled / ROW_HEIGHT).floor() as usize).min(self.rows.len() - 1);
         let within = (travelled - row as f32 * ROW_HEIGHT) / ROW_HEIGHT;
 
+        let Cargo::Part(part) = cargo else {
+            return self.rehome(row).map(|_| Landing::Onto(row));
+        };
+
         let landing = match within {
             _ if (NEST_BAND..1.0 - NEST_BAND).contains(&within) => Landing::Onto(row),
             _ if within < NEST_BAND => Landing::Seam(row),
@@ -2340,6 +2469,12 @@ impl Session {
         };
 
         self.settle(part, landing).map(|_| landing)
+    }
+
+    fn rehome(&self, row: usize) -> Option<usize> {
+        let row = self.rows.get(row)?;
+
+        row.part.or(row.owner)
     }
 
     fn settle(&self, part: usize, onto: Landing) -> Option<Option<usize>> {
@@ -2366,7 +2501,12 @@ impl Session {
         }
     }
 
-    fn land(&mut self, part: usize, onto: Landing) {
+    fn land(&mut self, cargo: Cargo, onto: Landing) {
+        let part = match cargo {
+            Cargo::Part(part) => part,
+            Cargo::Track(track) => return self.rehouse(track, onto),
+        };
+
         let Some(parent) = self.settle(part, onto) else {
             return;
         };
@@ -2398,6 +2538,41 @@ impl Session {
         }
 
         self.settle_pose();
+    }
+
+    fn rehouse(&mut self, track: usize, onto: Landing) {
+        let Landing::Onto(row) = onto else {
+            return;
+        };
+
+        let Some(wanted) = self.rehome(row).and_then(|part| i32::try_from(part).ok()) else {
+            return;
+        };
+
+        if self.draft.as_ref().is_none_or(|draft| draft.doc.track(track).is_none_or(|held| held.part == wanted)) {
+            return;
+        }
+
+        self.remember(Tag::Keys);
+
+        let Some(draft) = self.draft.as_mut() else {
+            return;
+        };
+
+        let Some(held) = draft.doc.edit(track) else {
+            return;
+        };
+
+        held.part = wanted;
+        draft.restate();
+        draft.backing.dirty = true;
+
+        if let Ok(part) = usize::try_from(wanted) {
+            self.expanded.insert(part);
+        }
+
+        self.aim();
+        self.relist();
     }
 
     fn settle_pose(&mut self) {
@@ -2561,7 +2736,12 @@ impl Session {
         }
     }
 
-    fn alarm_notice(&self) -> Option<String> {
+    fn entity_notice(&self) -> Option<Notice> {
+        (self.mode == Mode::Entity && !self.blame.quiet())
+            .then(|| (ENTITY_FAULT.to_owned(), None))
+    }
+
+    fn alarm_notice(&self) -> Option<Notice> {
         if self.mode != Mode::Entity || self.blame.quiet() {
             return None;
         }
@@ -2584,6 +2764,14 @@ impl Session {
         sets::stem_id(model.file_stem()?.to_str()?)
     }
 
+    fn slotted(&self) -> bool {
+        let Some(anim) = self.draft.as_ref().map(|draft| &draft.backing.read_from) else {
+            return false;
+        };
+
+        matches!(sets::home(anim), sets::Home::Game | sets::Home::Mod) && sets::attack_slot(anim)
+    }
+
     fn relist(&mut self) {
         if !self.rows.is_empty() && self.viewer.loaded_rig() != self.plan.set.rig_id() {
             return;
@@ -2598,11 +2786,13 @@ impl Session {
 
         let model = self.viewer.rig().map(|rig| &rig.model);
 
-        self.blame = match (model, self.faulting) {
-            (Some(model), true) => {
+        self.blame = match (model, self.faulting.side()) {
+            (Some(model), Some(side)) => {
                 let anim = tracks.map(Maanim::shared);
+                let slotted = self.slotted();
+                let forced = self.faulting.attacking() && !slotted;
 
-                Blame::of(model, anim.as_deref(), self.unit())
+                Blame::of(model, anim.as_deref(), self.unit(), side, slotted || forced, forced)
             }
             _ => Blame::default(),
         };

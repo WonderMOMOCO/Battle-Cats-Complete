@@ -8,7 +8,7 @@ impl State {
         anim: &'a AnimState,
     ) -> Element<'a, Message> {
         let body = match self.session.as_ref() {
-            Some(session) => session.view(settings, anim, self.shipping(), self.readout),
+            Some(session) => session.view(settings, anim, self.shipping(), self.readout, self.dials),
             None => self.vacant_view(settings, anim),
         };
 
@@ -40,7 +40,7 @@ impl State {
                         container(self.idle.view(settings, anim).map(Message::Viewer))
                             .width(Length::Fill)
                             .height(Length::Fill),
-                        strip(shown, &settings.studio, false, self.readout)
+                        strip(shown, &settings.studio, false, self.readout, self.dials)
                     ]
                     .spacing(GAP)
                     .into(),
@@ -62,7 +62,18 @@ impl State {
     }
 
     fn view_notice(&self) -> Element<'_, Message> {
-        let banner = container(theme::centered_text(self.notice_text.as_str()).size(NOTICE_TEXT_SIZE))
+        let mut said = column![theme::centered_text(self.notice_text.as_str()).size(NOTICE_TEXT_SIZE)]
+            .align_x(Horizontal::Center);
+
+        if let Some(hint) = self.notice_hint {
+            said = said.push(
+                theme::centered_text(hint)
+                    .size(LABEL_SIZE)
+                    .style(|theme: &Theme| text::Style { color: Some(theme::weak_text_color(theme)) }),
+            );
+        }
+
+        let banner = container(said)
             .align_x(Horizontal::Center)
             .align_y(Vertical::Center)
             .padding(Padding {
@@ -84,11 +95,11 @@ impl State {
 }
 
 impl Session {
-    fn ghost(&self, part: usize, at: Point) -> Element<'_, Message> {
+    fn ghost(&self, cargo: Cargo, at: Point) -> Element<'_, Message> {
         let label = self
             .rows
             .iter()
-            .find(|row| row.part == Some(part))
+            .find(|row| row.cargo() == Some(cargo))
             .map_or("", |row| row.label.as_str());
 
         let carried = text(label)
@@ -128,6 +139,7 @@ impl Session {
         anim: &'a AnimState,
         shipping: Shipping,
         readout: Readout,
+        dials: usize,
     ) -> Element<'a, Message> {
         let handled = self.viewer.resolved() && !self.viewer.selecting();
 
@@ -159,7 +171,7 @@ impl Session {
 
         let right: Element<'_, Message> = match self.mode {
             Mode::Atlas => self.canvas(),
-            _ => column![stage, self.strip(settings, readout)].spacing(GAP).into(),
+            _ => column![stage, self.strip(settings, readout, dials)].spacing(GAP).into(),
         };
 
         let body = row![self.side(shipping), right].spacing(GAP);
@@ -178,7 +190,7 @@ impl Session {
         if self.drag != Drag::Idle {
             let carried = self.drag.carrying();
             let ghost: Element<'_, Message> = match self.drag {
-                Drag::Moving { part, at, .. } => self.ghost(part, at),
+                Drag::Moving { cargo, at, .. } => self.ghost(cargo, at),
                 _ => Space::new().width(Length::Fill).height(Length::Fill).into(),
             };
 
@@ -345,7 +357,7 @@ impl Session {
         size: Size,
         picked: Option<usize>,
         by_part: bool,
-        dragged: Option<usize>,
+        dragged: Option<Cargo>,
         landing: Option<Landing>,
     ) -> Element<'_, Message> {
         let tail = if self.widest > size.width { SCROLL_TAIL } else { 0.0 };
@@ -370,7 +382,7 @@ impl Session {
                 continue;
             };
 
-            let carried = dragged.is_some_and(|part| row.part == Some(part));
+            let carried = dragged.is_some_and(|cargo| row.cargo() == Some(cargo));
             let onto = landing.and_then(|landing| landing.mark(index, self.rows.len() - 1));
 
             list = list.push(row.view(index, picked, by_part, carried, onto, width));
@@ -395,7 +407,7 @@ impl Session {
         .into()
     }
 
-    fn strip<'a>(&'a self, settings: &'a Settings, readout: Readout) -> Element<'a, Message> {
+    fn strip<'a>(&'a self, settings: &'a Settings, readout: Readout, dials: usize) -> Element<'a, Message> {
         let index = self.chosen().and_then(|at| i32::try_from(at).ok());
 
         let part = index
@@ -408,7 +420,7 @@ impl Session {
             Readout::Timeline => self.board(),
         };
 
-        strip(shown, &settings.studio, self.animated(), readout)
+        strip(shown, &settings.studio, self.animated(), readout, dials)
     }
 
     fn board(&self) -> Element<'_, Message> {
@@ -546,7 +558,10 @@ impl Session {
                 .center_x(Length::Fill)
                 .center_y(Length::Fill);
 
-            return column![fields_header(0.0), blank].width(Length::Fill).height(Length::Fill).into();
+            let bare: Element<'_, Message> =
+                column![fields_header(0.0), blank].width(Length::Fill).height(Length::Fill).into();
+
+            return editor::target(bare, Target::AnimFields);
         }
 
         let body = (size.height - KEY_HEAD_HEIGHT).max(0.0);
@@ -568,7 +583,10 @@ impl Session {
                 .height(Length::Fill),
         );
 
-        column![fields_header(tail), scrolled].width(Length::Fill).height(Length::Fill).into()
+        let table: Element<'_, Message> =
+            column![fields_header(tail), scrolled].width(Length::Fill).height(Length::Fill).into();
+
+        editor::target(table, Target::AnimFields)
     }
 
     fn absence(&self) -> &'static str {
@@ -898,6 +916,7 @@ fn dial_row<'a>(
         Dial::Gizmo => dial_combo(anim.gizmo, &Hand::ALL, live, Message::Handed),
         Dial::Onion => dial_combo(anim.onion, &Switch::ALL, live, Message::Onioning),
         Dial::Module => dial_combo(readout, &Readout::ALL, live, Message::Module),
+        Dial::Fault => dial_combo(anim.faults, &Faults::ALL, live, Message::Faulted),
         Dial::Entity => dial_combo(anim.entity, &Scope::ALL, live, Message::Scoped),
         _ => match dial.tier(anim) {
             Some(tier) => dial_combo(tier, &Tier::ALL, live, move |held| Message::Tiered(dial, held)),
@@ -926,14 +945,61 @@ fn dial_row<'a>(
         .into()
 }
 
-fn options<'a>(anim: &'a StudioSettings, animated: bool, readout: Readout) -> Element<'a, Message> {
-    Dial::ALL
+fn options<'a>(
+    anim: &'a StudioSettings,
+    animated: bool,
+    readout: Readout,
+    dials: usize,
+) -> Element<'a, Message> {
+    let pages = Dial::pages();
+    let page = dials.min(pages.saturating_sub(1));
+    let shown = Dial::page(page);
+
+    let listed = shown
         .iter()
         .enumerate()
         .fold(column![panel_head("Option")], |listed, (stripe, dial)| {
             listed.push(dial_row(*dial, readout, anim, animated, stripe))
-        })
-        .width(Length::Fixed(OPTION_WIDTH))
+        });
+
+    let padded = (shown.len()..PAGE_DIALS).fold(listed, |listed, stripe| listed.push(spare_row(stripe)));
+
+    padded.push(pager(page, pages)).width(Length::Fixed(OPTION_WIDTH)).into()
+}
+
+fn spare_row<'a>(stripe: usize) -> Element<'a, Message> {
+    container(Space::new())
+        .width(Length::Fill)
+        .height(Length::Fixed(FACT_ROW_HEIGHT))
+        .style(move |theme: &Theme| theme::zebra_table_row(theme, stripe))
+        .into()
+}
+
+fn pager<'a>(page: usize, pages: usize) -> Element<'a, Message> {
+    let step = |glyph: &'a str, onto: Option<usize>| {
+        button(theme::centered_text(glyph).size(LABEL_SIZE).width(Length::Fill))
+            .width(Length::Fixed(PAGER_STEP))
+            .padding(0)
+            .on_press_maybe(onto.map(Message::Page))
+            .style(theme::pager_step)
+    };
+
+    let counted = theme::centered_text(format!("{}/{}", page + 1, pages))
+        .size(LABEL_SIZE)
+        .width(Length::Fill);
+
+    let body = row![
+        step(PAGE_BACK, page.checked_sub(1)),
+        counted,
+        step(PAGE_NEXT, (page + 1 < pages).then_some(page + 1)),
+    ]
+    .align_y(Vertical::Center);
+
+    container(body)
+        .width(Length::Fill)
+        .height(Length::Fixed(FACT_ROW_HEIGHT))
+        .align_y(Vertical::Center)
+        .style(theme::zebra_table_footer)
         .into()
 }
 
@@ -1002,9 +1068,10 @@ pub(super) fn strip<'a>(
     anim: &'a StudioSettings,
     animated: bool,
     readout: Readout,
+    dials: usize,
 ) -> Element<'a, Message> {
     let seated = container(shown).width(Length::Fill).height(Length::Fixed(timeline::BOARD_HEIGHT));
-    let body = row![seated, options(anim, animated, readout)].spacing(GAP);
+    let body = row![seated, options(anim, animated, readout, dials)].spacing(GAP);
 
     container(body).width(Length::Fill).into()
 }
