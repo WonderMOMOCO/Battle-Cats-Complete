@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+
 use super::*;
 use kore::systems::animation::authoring::Cycle;
 use iced::border::Radius;
@@ -121,6 +123,7 @@ fn stepped(span: f64, body: f32) -> f64 {
     (lifted * power).max(5.0)
 }
 
+#[derive(Clone, PartialEq)]
 pub(super) struct Lane {
     label: &'static str,
     beat: Beat,
@@ -140,6 +143,19 @@ pub struct Window {
 #[derive(Default)]
 pub(super) struct State {
     framed: Option<(usize, Window)>,
+    board: canvas::Cache,
+    ruler: canvas::Cache,
+    seated: RefCell<Option<Seat>>,
+    ruled: RefCell<Option<(f32, Window)>>,
+}
+
+#[derive(PartialEq)]
+struct Seat {
+    lanes: Vec<Lane>,
+    cadence: Cadence,
+    window: Window,
+    part: usize,
+    picked: Option<usize>,
 }
 
 impl State {
@@ -154,14 +170,14 @@ impl State {
         }
     }
 
-    pub(super) fn view<'a>(
+    pub(super) fn view(
         &self,
         part: Option<usize>,
         lanes: Vec<Lane>,
         cadence: Cadence,
         playhead: i32,
         picked: Option<usize>,
-    ) -> Element<'a, Message> {
+    ) -> Element<'_, Message> {
         let Some(part) = part else {
             return framed(plain(), centred(NO_PART_NOTICE));
         };
@@ -171,7 +187,21 @@ impl State {
         }
 
         let window = self.window(part, cadence, &lanes);
-        let ruler = canvas_widget(Ruler { gutter: gutter_of(&lanes), window })
+        let wanted = Seat { lanes: lanes.clone(), cadence, window, part, picked };
+
+        if self.seated.borrow().as_ref() != Some(&wanted) {
+            self.board.clear();
+            self.seated.replace(Some(wanted));
+        }
+
+        let measure = gutter_of(&lanes);
+
+        if self.ruled.borrow().as_ref() != Some(&(measure, window)) {
+            self.ruler.clear();
+            self.ruled.replace(Some((measure, window)));
+        }
+
+        let ruler = canvas_widget(Ruler { gutter: measure, window, cache: &self.ruler })
             .width(Length::Fill)
             .height(Length::Fill);
 
@@ -182,6 +212,7 @@ impl State {
             part,
             playhead: i64::from(playhead),
             picked,
+            cache: &self.board,
         })
         .width(Length::Fill)
         .height(Length::Fill);
@@ -279,12 +310,13 @@ fn framed<'a>(head: Element<'a, Message>, body: Element<'a, Message>) -> Element
     editor::deflect(card, true)
 }
 
-struct Ruler {
+struct Ruler<'a> {
     gutter: f32,
     window: Window,
+    cache: &'a canvas::Cache,
 }
 
-impl canvas::Program<Message> for Ruler {
+impl canvas::Program<Message> for Ruler<'_> {
     type State = ();
 
     fn draw(
@@ -295,7 +327,16 @@ impl canvas::Program<Message> for Ruler {
         bounds: Rectangle,
         _cursor: mouse::Cursor,
     ) -> Vec<Geometry> {
-        let mut frame = canvas::Frame::new(renderer, bounds.size());
+        let ticks = self.cache.draw(renderer, bounds.size(), |frame| {
+            self.lay(frame, theme, bounds);
+        });
+
+        vec![ticks]
+    }
+}
+
+impl Ruler<'_> {
+    fn lay(&self, frame: &mut canvas::Frame, theme: &Theme, bounds: Rectangle) {
         let ink = theme.extended_palette().background.strong.text;
         let body = (bounds.width - self.gutter).max(1.0);
         let middle = bounds.height / 2.0;
@@ -338,18 +379,17 @@ impl canvas::Program<Message> for Ruler {
 
             mark += step;
         }
-
-        vec![frame.into_geometry()]
     }
 }
 
-struct Board {
+struct Board<'a> {
     lanes: Vec<Lane>,
     cadence: Cadence,
     window: Window,
     part: usize,
     playhead: i64,
     picked: Option<usize>,
+    cache: &'a canvas::Cache,
 }
 
 impl Lane {
@@ -364,7 +404,7 @@ impl Lane {
     }
 }
 
-impl Board {
+impl Board<'_> {
     fn gutter(&self) -> f32 {
         gutter_of(&self.lanes)
     }
@@ -437,18 +477,8 @@ impl Board {
     }
 }
 
-impl canvas::Program<Message> for Board {
-    type State = Grip;
-
-    fn draw(
-        &self,
-        _grip: &Grip,
-        renderer: &Renderer,
-        theme: &Theme,
-        bounds: Rectangle,
-        _cursor: mouse::Cursor,
-    ) -> Vec<Geometry> {
-        let mut frame = canvas::Frame::new(renderer, bounds.size());
+impl Board<'_> {
+    fn lay(&self, frame: &mut canvas::Frame, theme: &Theme, bounds: Rectangle) {
         let palette = theme.extended_palette();
         let width = bounds.width;
         let gutter = self.gutter();
@@ -511,7 +541,7 @@ impl canvas::Program<Message> for Board {
 
                 if tick >= card_right {
                     outline(
-                        &mut frame,
+                        frame,
                         &Path::rounded_rectangle(
                             Point::new(tick - SEPARATOR, body),
                             Size::new(SEPARATOR * 2.0, tall),
@@ -566,7 +596,7 @@ impl canvas::Program<Message> for Board {
                     },
                 );
 
-                outline(&mut frame, &block, alpha);
+                outline(frame, &block, alpha);
 
                 if grain < GRAIN_FLOOR {
                     continue;
@@ -678,10 +708,46 @@ impl canvas::Program<Message> for Board {
         };
 
         if let Cycle::Every(_) = self.cadence.cycle {
-            rule(&mut frame, self.at(width, self.cadence.settled as f64), LOOP_INK, MARK_WIDTH);
+            rule(frame, self.at(width, self.cadence.settled as f64), LOOP_INK, MARK_WIDTH);
         }
 
-        rule(&mut frame, self.at(width, 0.0), START_INK, MARK_WIDTH);
+        rule(frame, self.at(width, 0.0), START_INK, MARK_WIDTH);
+    }
+}
+
+impl canvas::Program<Message> for Board<'_> {
+    type State = Grip;
+
+    fn draw(
+        &self,
+        _grip: &Grip,
+        renderer: &Renderer,
+        theme: &Theme,
+        bounds: Rectangle,
+        _cursor: mouse::Cursor,
+    ) -> Vec<Geometry> {
+        let palette = theme.extended_palette();
+        let width = bounds.width;
+        let gutter = self.gutter();
+        let near = |at: f32| at.clamp(-width, width * 2.0);
+
+        let lanes = self.cache.draw(renderer, bounds.size(), |frame| {
+            self.lay(frame, theme, bounds);
+        });
+
+        let mut frame = canvas::Frame::new(renderer, bounds.size());
+        let rule = |frame: &mut canvas::Frame, at: f32, color: Color, thick: f32| {
+            let at = near(at);
+
+            if at < gutter {
+                return;
+            }
+
+            frame.fill(
+                &Path::rectangle(Point::new(at - thick / 2.0, 0.0), Size::new(thick, bounds.height)),
+                color,
+            );
+        };
 
         let folded = self.cadence.fold(self.playhead);
 
@@ -692,7 +758,7 @@ impl canvas::Program<Message> for Board {
 
         rule(&mut frame, self.at(width, folded as f64), ink, PLAYHEAD_WIDTH);
 
-        vec![frame.into_geometry()]
+        vec![lanes, frame.into_geometry()]
     }
 
     fn update(

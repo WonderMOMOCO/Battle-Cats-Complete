@@ -135,6 +135,15 @@ impl Set {
         self.files().first().map_or(Home::Loose, |path| home(path))
     }
 
+    pub fn slot_label(&self, anim: &Path) -> Option<String> {
+        let named = self.addressed().and_then(|unit| slotted_name(&unit, anim));
+
+        match named {
+            Some(name) => Some(name.to_owned()),
+            None => anim.file_stem()?.to_str().map(str::to_owned),
+        }
+    }
+
     pub fn addressed(&self) -> Option<String> {
         if !matches!(self.home(), Home::Game | Home::Mod) {
             return None;
@@ -163,10 +172,7 @@ impl Set {
             .anims
             .iter()
             .map(|anim| {
-                let named = unit
-                    .as_deref()
-                    .and_then(|unit| slot_index(anim, unit))
-                    .and_then(animation::standard);
+                let named = unit.as_deref().and_then(|unit| slotted(unit, anim));
 
                 Clip {
                     name: named.map(|(name, _, _)| name.to_owned()),
@@ -525,8 +531,14 @@ pub fn stem_id(stem: &str) -> Option<i32> {
     (known && tail.len() == 1).then(|| head.parse::<i32>().ok())?
 }
 
-fn slot_index(anim: &Path, unit: &str) -> Option<usize> {
-    anim.file_stem()?.to_str()?.strip_prefix(unit)?.parse().ok()
+fn slotted(unit: &str, anim: &Path) -> Option<(&'static str, usize, animation::Role)> {
+    let index = anim.file_stem()?.to_str()?.strip_prefix(unit)?.parse().ok()?;
+
+    animation::standard(index)
+}
+
+fn slotted_name(unit: &str, anim: &Path) -> Option<&'static str> {
+    slotted(unit, anim).map(|(name, _, _)| name)
 }
 
 pub fn stem_side(stem: &str) -> Option<Side> {
@@ -753,6 +765,26 @@ mod tests {
         assert!(pullable(&seat("game/x.png"), false));
         assert!(!pullable(&seat("game/x.png"), true));
         assert!(pullable(&seat("/tmp/x.png"), true));
+    }
+
+    #[test]
+    fn a_renamed_track_reports_the_label_its_clip_will_carry() {
+        // Renaming in place to a recognised slot renames the button too, so re-selecting
+        // by the old file stem loses the animation the user was editing.
+        let seat = |at: &str| Set {
+            model: Some(PathBuf::from("game/cats/001/c/anim/001_c.mamodel")),
+            anims: vec![PathBuf::from(at)],
+            ..Set::default()
+        };
+
+        let held = seat("game/cats/001/c/anim/001_c02.maanim");
+        assert_eq!(held.slot_label(&held.anims[0]).as_deref(), Some("Attack"));
+
+        let held = seat("game/cats/001/c/anim/001_c07.maanim");
+        assert_eq!(held.slot_label(&held.anims[0]).as_deref(), Some("001_c07"), "no slot, so the stem stands");
+
+        let loose = Set { anims: vec![PathBuf::from("studio/mine/spin.maanim")], ..Set::default() };
+        assert_eq!(loose.slot_label(&loose.anims[0]).as_deref(), Some("spin"), "off a mount nothing is named");
     }
 
     #[test]

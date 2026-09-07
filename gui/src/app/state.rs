@@ -143,6 +143,8 @@ pub(crate) struct AnimState {
     pub last_export_compression: Option<i32>,
     pub controls_expanded: bool,
     pub placement: Placement,
+    pub pan: (f32, f32),
+    pub zoom: f32,
 }
 
 impl Default for AnimState {
@@ -153,6 +155,8 @@ impl Default for AnimState {
             last_export_compression: None,
             controls_expanded: true,
             placement: Placement::default(),
+            pan: (0.0, 0.0),
+            zoom: 1.0,
         }
     }
 }
@@ -160,6 +164,15 @@ impl Default for AnimState {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_state_file_from_before_the_shared_camera_still_opens_at_a_usable_zoom() {
+        // A zoom of zero would deserialize as a blank viewport rather than a default one.
+        let held: AnimState = serde_json::from_str(r#"{"controls_expanded":true}"#).expect("it loads");
+
+        assert_eq!(held.zoom, 1.0);
+        assert_eq!(held.pan, (0.0, 0.0));
+    }
 
     #[test]
     fn a_saved_offset_row_is_dropped_so_the_placement_default_wins() {

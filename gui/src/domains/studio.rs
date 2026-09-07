@@ -1742,6 +1742,7 @@ impl State {
             Message::Gizmo(gizmo::Turn::Drag(sweep)) => session.haul(sweep, session.hand(settings)),
             Message::Gizmo(gizmo::Turn::Zoom(pixels)) => {
                 session.viewer.zoom(pixels);
+                session.viewer.store_camera(anim);
 
                 Task::none()
             }
@@ -2639,6 +2640,7 @@ impl Session {
             .collect();
 
         self.resplice();
+        self.settle_pose();
     }
 
     fn adrift(&self) -> bool {

@@ -49,15 +49,16 @@ impl TreeRow {
     ) -> Element<'_, Message> {
         let alarm = self.alarm;
         let label = text(self.label.as_str())
-            .font(Font::MONOSPACE)
+            .font(glyphs::mono())
             .size(TREE_TEXT_SIZE)
+            .shaping(glyphs::shaping(&self.label))
             .wrapping(text::Wrapping::None);
 
         let label = if self.warn { label.style(text::danger) } else { label };
 
         let body = row![
             text(self.mark)
-                .font(Font::MONOSPACE)
+                .font(glyphs::mono())
                 .size(MARKER_SIZE)
                 .line_height(MARKER_LINE_HEIGHT)
                 .width(Length::Fixed(MARKER_WIDTH)),

@@ -103,7 +103,7 @@ impl Session {
             .map_or("", |row| row.label.as_str());
 
         let carried = text(label)
-            .font(Font::MONOSPACE)
+            .font(glyphs::mono())
             .size(TREE_TEXT_SIZE)
             .wrapping(text::Wrapping::None)
             .style(|theme: &Theme| text::Style {

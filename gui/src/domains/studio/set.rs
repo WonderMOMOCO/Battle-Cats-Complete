@@ -381,7 +381,7 @@ impl State {
             self.manage.retrack(stem);
         }
 
-        self.aim_clip(stem);
+        self.aim_clip(self.manage.set().slot_label(&renamed).or(stem));
 
         self.resettle(Swap::Same)
     }

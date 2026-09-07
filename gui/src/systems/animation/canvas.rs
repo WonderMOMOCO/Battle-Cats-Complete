@@ -17,8 +17,8 @@ use crate::widget::LINE_PIXELS;
 use super::data;
 use super::pipeline::{build_vertices, Painted, Pipeline};
 
-const ZOOM_MIN: f32 = 0.1;
-const ZOOM_MAX: f32 = 10.0;
+pub(super) const ZOOM_MIN: f32 = 0.1;
+pub(super) const ZOOM_MAX: f32 = 10.0;
 const ZOOM_RATE_PER_PIXEL: f32 = 0.0016;
 const FRAME_ADVANCE_PER_TICK: f32 = 0.5;
 

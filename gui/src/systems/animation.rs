@@ -126,6 +126,7 @@ pub struct State {
     playhead_rig: String,
     playhead_clip: Option<usize>,
     playhead_reset: bool,
+    camera: ((f32, f32), f32),
 }
 
 #[derive(Debug, Clone)]
@@ -158,10 +159,12 @@ impl State {
             playhead_rig: String::new(),
             playhead_clip: None,
             playhead_reset: false,
+            camera: ((0.0, 0.0), 1.0),
         }
     }
 
     pub fn sync(&mut self, key: &str, build: impl FnOnce() -> ClipSet, settings: &Settings, anim_state: &AnimState) {
+        self.adopt_camera(anim_state);
         self.data.restore_offset(anim_state.placement);
         self.data.sync(key, build);
         self.data.measure(settings.animation.bounds_cull as f32 / CULL_SCALE);
@@ -205,6 +208,7 @@ impl State {
     }
 
     pub fn preload(&mut self, key: &str, build: impl FnOnce() -> ClipSet, anim_state: &AnimState) -> Task<Message> {
+        self.adopt_camera(anim_state);
         self.data.restore_offset(anim_state.placement);
         Self::preload_task(self.data.preload_request(key, build))
     }
@@ -380,7 +384,33 @@ impl State {
         self.export.tick();
     }
 
+    pub(crate) fn adopt_camera(&mut self, anim_state: &AnimState) {
+        let shared = (anim_state.pan, anim_state.zoom);
+
+        if self.camera == shared {
+            return;
+        }
+
+        self.canvas.pan = iced::Vector::new(shared.0.0, shared.0.1);
+        self.canvas.zoom = shared.1.clamp(canvas::ZOOM_MIN, canvas::ZOOM_MAX);
+        self.camera = shared;
+    }
+
+    pub(crate) fn store_camera(&mut self, anim_state: &mut AnimState) {
+        anim_state.pan = (self.canvas.pan.x, self.canvas.pan.y);
+        anim_state.zoom = self.canvas.zoom;
+        self.camera = (anim_state.pan, anim_state.zoom);
+    }
+
     pub fn update(&mut self, message: Message, settings: &mut Settings, anim_state: &mut AnimState) -> Task<Message> {
+        let task = self.dispatch(message, settings, anim_state);
+
+        self.store_camera(anim_state);
+
+        task
+    }
+
+    fn dispatch(&mut self, message: Message, settings: &mut Settings, anim_state: &mut AnimState) -> Task<Message> {
         match message {
             Message::Canvas(msg) => {
                 self.canvas.update(msg, &self.data);

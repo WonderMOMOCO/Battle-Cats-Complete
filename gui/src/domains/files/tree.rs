@@ -3,12 +3,13 @@ use std::path::{Path, PathBuf};
 
 use iced::alignment::Vertical;
 use iced::widget::{container, operation, responsive, row, scrollable, space, text, Column};
-use iced::{widget, Element, Font, Length, Padding, Size, Task};
+use iced::{widget, Element, Length, Padding, Size, Task};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use kore::Vfs;
 
 use crate::app::theme;
+use crate::common::glyphs;
 use crate::common::row_window::{self, RowWindow};
 use crate::editor;
 use crate::widget::{list_row, smooth_scroll};
@@ -344,12 +345,12 @@ impl State {
             (false, _) => "",
         };
 
-        let name = text(row.name.as_ref()).font(Font::MONOSPACE).size(TEXT_SIZE).wrapping(text::Wrapping::None);
+        let name = text(row.name.as_ref()).font(glyphs::mono()).size(TEXT_SIZE).wrapping(text::Wrapping::None);
 
         let label = if self.has_folders {
             row![
                 text(marker)
-                    .font(Font::MONOSPACE)
+                    .font(glyphs::mono())
                     .size(MARKER_SIZE)
                     .line_height(MARKER_LINE_HEIGHT)
                     .width(Length::Fixed(MARKER_WIDTH)),
