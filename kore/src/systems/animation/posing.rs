@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use nyanko::graphics::rig::{Animation, Model, Rig};
 use nyanko::graphics::tools::part;
 
@@ -37,8 +39,8 @@ pub enum Spot {
 }
 
 pub struct Probe {
-    rig: Rig,
-    anim: Option<Animation>,
+    rig: Arc<Rig>,
+    anim: Option<Arc<Animation>>,
     frame: i32,
     offset: Option<usize>,
     part: usize,
@@ -46,8 +48,19 @@ pub struct Probe {
 }
 
 impl Probe {
-    pub fn new(rig: &Rig, anim: Option<&Animation>, frame: i32, offset: Option<usize>, part: usize) -> Self {
-        Self { rig: rig.clone(), anim: anim.cloned(), frame, offset, part, resting: None }
+    pub fn new(
+        rig: Arc<Rig>,
+        anim: Option<Arc<Animation>>,
+        frame: i32,
+        offset: Option<usize>,
+        part: usize,
+    ) -> Self {
+        Self { rig, anim, frame, offset, part, resting: None }
+    }
+
+    pub fn seeded(mut self, resting: [f32; 8]) -> Self {
+        self.resting = Some(resting);
+        self
     }
 
     pub fn model(&self) -> &Model {
@@ -55,7 +68,7 @@ impl Probe {
     }
 
     fn quad(&self) -> Option<[f32; 8]> {
-        part::resolve(&self.rig, self.anim.as_ref(), self.frame, self.offset)
+        part::resolve(&self.rig, self.anim.as_deref(), self.frame, self.offset)
             .ok()?
             .iter()
             .find(|entry| entry.part == self.part)
@@ -71,11 +84,11 @@ impl Probe {
     }
 
     fn swing(&mut self, field: usize, held: i32, step: i32) -> Option<[f32; 8]> {
-        set_field(&mut self.rig.model, self.part, field, held.wrapping_add(step));
+        set_field(&mut Arc::make_mut(&mut self.rig).model, self.part, field, held.wrapping_add(step));
 
         let moved = self.quad();
 
-        set_field(&mut self.rig.model, self.part, field, held);
+        set_field(&mut Arc::make_mut(&mut self.rig).model, self.part, field, held);
 
         moved
     }
@@ -85,7 +98,7 @@ impl Probe {
 
         probed.pose(self.part, kind, self.frame, held.wrapping_add(step), Some(&self.rig.model));
 
-        let put_back = self.anim.replace((*probed.shared()).clone());
+        let put_back = self.anim.replace(probed.shared());
         let moved = self.quad();
 
         self.anim = put_back;

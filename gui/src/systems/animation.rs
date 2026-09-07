@@ -297,6 +297,14 @@ impl State {
         self.highlight = part;
     }
 
+    pub(crate) fn shared_rig(&self) -> Option<Arc<Rig>> {
+        self.data.held_unit.clone()
+    }
+
+    pub(crate) fn shared_anim(&self) -> Option<Arc<nyanko::graphics::rig::Animation>> {
+        self.data.current_anim.clone()
+    }
+
     pub(crate) fn zoom(&mut self, pixels: f32) {
         self.canvas.update(canvas::Message::Zoomed(pixels), &self.data);
     }

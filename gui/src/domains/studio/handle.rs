@@ -227,9 +227,13 @@ impl Session {
     }
 
     fn probe(&self, part: usize) -> Option<Probe> {
-        let rig = self.viewer.rig()?;
+        let rig = self.viewer.shared_rig()?;
+        let held = Probe::new(rig, self.viewer.shared_anim(), self.viewer.frame(), self.viewer.offset(), part);
 
-        Some(Probe::new(rig, self.viewer.animation(), self.viewer.frame(), self.viewer.offset(), part))
+        Some(match self.placed.iter().find(|posed| posed.part == part) {
+            Some(posed) => held.seeded(posed.quad),
+            None => held,
+        })
     }
 
     fn pivot_reach(&self, part: usize, hand: Gizmo) -> Option<[(f32, f32); 2]> {
@@ -336,7 +340,14 @@ impl Session {
 
     fn key_fields(&mut self, part: usize, moved: &[(usize, i32, i32)]) -> Task<Message> {
         let frame = self.viewer.frame();
-        let model = self.viewer.rig().map(|rig| rig.model.clone());
+        let wanted = i32::try_from(part).ok();
+        let fresh = self.draft.as_ref().is_some_and(|draft| {
+            moved.iter().any(|(_, kind, _)| {
+                wanted.and_then(|at| draft.doc.effective(at, *kind)).is_none()
+            })
+        });
+
+        let model = fresh.then(|| self.viewer.rig().map(|rig| rig.model.clone())).flatten();
 
         let Some(draft) = self.draft.as_mut() else {
             return Task::none();
