@@ -60,7 +60,7 @@ The row is pinned to the part its first column names, usually the root. That par
 ## Option
 The `Option` column sits beside the table in `Entity` mode. Each row is a name and a value; clicking the name cycles the value, which can also be picked from its list. Rows are split across pages, stepped through by the arrows at the bottom of the column. `Gizmo` is covered under Gizmo, `Module` under Timeline, `Fault` under Warnings, and `Rig`, `Hierarchy`, `Selected`, `World` and `Origin` under Colors.
 
-### Onion
+### Onionskin
 Draws the frames around the current one as faded ghosts. Setting it to `Enabled` opens its settings, and closing those sets it back to `Disabled`.
 
 `Before` and `After` are the two directions, each carrying:
