@@ -341,7 +341,8 @@ impl State {
         let frame = self.data.playback_frame(self.canvas.current_frame).floor() as i32;
         let picked = self.highlight;
 
-        part::resolve(unit, self.data.current_anim.as_deref(), frame, self.data.offset())
+        self.data
+            .mapped(frame)
             .map(|mapped| {
                 mapped
                     .into_iter()

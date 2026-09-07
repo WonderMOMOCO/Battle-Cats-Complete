@@ -149,7 +149,7 @@ pub(crate) fn pivot_of(unit: &Rig, part: usize, geometry: &FrameData, quad: &[Po
 pub fn anchor(data: &data::State, frame: f32, part: usize) -> Option<Point> {
     let unit = data.held_unit.as_ref()?;
     let at = data.playback_frame(frame).floor() as i32;
-    let mapped = part::resolve(unit, data.current_anim.as_deref(), at, data.offset()).ok()?;
+    let mapped = data.mapped(at)?;
     let found = mapped.iter().find(|entry| entry.part == part)?;
     let quad = placed_corners(&found.frame);
 

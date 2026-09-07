@@ -1,9 +1,11 @@
+use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use tracing::warn;
 
 use nyanko::graphics::rig::{Animation, BoundingBox, Model, Rig};
+use nyanko::graphics::tools::part;
 
 use kore::common::preview::{self, Stamp};
 use kore::systems::animation::{cycle, loop_frame, restart, restart_frame, Clip, ClipSet, Loop, Offset, Placement, Rigging, Role, NO_OFFSET};
@@ -30,6 +32,27 @@ pub struct State {
     bounds: Option<BoundingBox>,
     measured: Option<(String, Option<usize>, Option<usize>)>,
     cache: RigCache,
+    mapped: RefCell<Option<Mapped>>,
+}
+
+struct Mapped {
+    rig: Arc<Rig>,
+    anim: Option<Arc<Animation>>,
+    frame: i32,
+    offset: Option<usize>,
+    parts: Vec<part::PartFrame>,
+}
+
+impl Mapped {
+    fn serves(&self, rig: &Arc<Rig>, anim: Option<&Arc<Animation>>, frame: i32, offset: Option<usize>) -> bool {
+        let same = match (self.anim.as_ref(), anim) {
+            (Some(held), Some(wanted)) => Arc::ptr_eq(held, wanted),
+            (None, None) => true,
+            _ => false,
+        };
+
+        same && self.frame == frame && self.offset == offset && Arc::ptr_eq(&self.rig, rig)
+    }
 }
 
 impl State {
@@ -90,6 +113,34 @@ impl State {
 
     pub fn restore_offset(&mut self, placement: Placement) {
         self.placement = placement;
+    }
+
+    fn served(&self, rig: &Arc<Rig>, anim: Option<&Arc<Animation>>, frame: i32, offset: Option<usize>) -> Option<Vec<part::PartFrame>> {
+        let held = self.mapped.borrow();
+
+        held.as_ref().filter(|held| held.serves(rig, anim, frame, offset)).map(|held| held.parts.clone())
+    }
+
+    pub fn mapped(&self, frame: i32) -> Option<Vec<part::PartFrame>> {
+        let rig = self.held_unit.as_ref()?;
+        let anim = self.current_anim.as_ref();
+        let offset = self.offset();
+
+        if let Some(parts) = self.served(rig, anim, frame, offset) {
+            return Some(parts);
+        }
+
+        let parts = part::resolve(rig, anim.map(Arc::as_ref), frame, offset).ok()?;
+
+        *self.mapped.borrow_mut() = Some(Mapped {
+            rig: Arc::clone(rig),
+            anim: anim.cloned(),
+            frame,
+            offset,
+            parts: parts.clone(),
+        });
+
+        Some(parts)
     }
 
     pub fn slots(&self) -> &[Option<usize>] {
@@ -302,6 +353,7 @@ impl State {
         self.loaded_clip = None;
         self.bounds = None;
         self.measured = None;
+        self.mapped.replace(None);
     }
 
     pub fn sync(&mut self, key: &str, build: impl FnOnce() -> ClipSet) {

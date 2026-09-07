@@ -7,7 +7,6 @@ use iced::{Element, Event, Length, Point, Rectangle, Vector};
 use image::RgbaImage;
 
 use nyanko::graphics::animate::{resolve_frame, FrameData};
-use nyanko::graphics::tools::part;
 
 use kore::domains::settings::{Scope, StudioSettings};
 
@@ -124,7 +123,7 @@ impl Viewport<'_> {
             return Vec::new();
         }
 
-        let Ok(mapped) = part::resolve(unit, clip, frame, offset) else {
+        let Some(mapped) = self.data.mapped(frame) else {
             return resolve_frame(unit, clip, frame, offset);
         };
 
