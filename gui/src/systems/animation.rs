@@ -422,9 +422,17 @@ impl State {
                 let scroll = self.export_scroll_task();
 
                 if settings.animation.auto_set_camera_region && !was_open && !self.overlay.selecting {
+                    let marks = self.marks(settings);
                     let bounds = self
                         .export
-                        .update(export::Message::UseBounds, &self.data, settings, anim_state, &mut self.export_open)
+                        .update(
+                            export::Message::UseBounds,
+                            &self.data,
+                            settings,
+                            anim_state,
+                            &mut self.export_open,
+                            marks,
+                        )
                         .map(Message::Export);
 
                     return Task::batch([bounds, scroll]);
@@ -443,7 +451,11 @@ impl State {
                 Task::none()
             }
             Message::Export(msg) => {
-                self.export.update(msg, &self.data, settings, anim_state, &mut self.export_open).map(Message::Export)
+                let marks = self.marks(settings);
+
+                self.export
+                    .update(msg, &self.data, settings, anim_state, &mut self.export_open, marks)
+                    .map(Message::Export)
             }
             Message::Overlay(msg) => {
                 match msg {
@@ -551,6 +563,22 @@ impl State {
             container(layers).width(Length::Fill).height(Length::Fill),
             self.overlay.selecting,
         )
+    }
+
+    fn marks(&self, settings: &Settings) -> diagnostics::Shot {
+        diagnostics::Shot {
+            overlays: self.overlays(settings),
+            scope: self.scope(settings),
+            picked: self.highlight,
+            reach: self.data.bounds(),
+        }
+    }
+
+    fn scope(&self, settings: &Settings) -> Scope {
+        match self.authoring {
+            true => settings.studio.entity,
+            false => Scope::Rig,
+        }
     }
 
     fn overlays(&self, settings: &Settings) -> Overlays {

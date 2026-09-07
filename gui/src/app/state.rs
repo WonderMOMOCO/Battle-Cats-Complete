@@ -142,6 +142,8 @@ pub(crate) struct AnimState {
     pub last_export_quality: Option<i32>,
     pub last_export_compression: Option<i32>,
     pub controls_expanded: bool,
+    pub export_background: bool,
+    pub include_debug: bool,
     pub placement: Placement,
     pub pan: (f32, f32),
     pub zoom: f32,
@@ -154,6 +156,8 @@ impl Default for AnimState {
             last_export_quality: None,
             last_export_compression: None,
             controls_expanded: true,
+            export_background: false,
+            include_debug: false,
             placement: Placement::default(),
             pan: (0.0, 0.0),
             zoom: 1.0,
@@ -172,6 +176,30 @@ mod tests {
 
         assert_eq!(held.zoom, 1.0);
         assert_eq!(held.pan, (0.0, 0.0));
+    }
+
+    #[test]
+    fn a_state_file_from_before_the_debug_export_leaves_it_switched_off() {
+        // It opts a render into drawing overlays, so it has to default to off for
+        // everyone who never asked for it, however old their state file is.
+        let held: AnimState = serde_json::from_str(r#"{"controls_expanded":true}"#).expect("it loads");
+
+        assert!(!held.include_debug);
+
+        let held: AnimState = serde_json::from_str(r#"{"include_debug":true}"#).expect("it loads");
+
+        assert!(held.include_debug, "and a deliberate choice round-trips");
+    }
+
+    #[test]
+    fn the_background_preference_survives_a_restart_transparent_by_default() {
+        let held: AnimState = serde_json::from_str(r#"{"controls_expanded":true}"#).expect("it loads");
+
+        assert!(!held.export_background, "a format that can hold alpha still exports with it");
+
+        let held: AnimState = serde_json::from_str(r#"{"export_background":true}"#).expect("it loads");
+
+        assert!(held.export_background);
     }
 
     #[test]

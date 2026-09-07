@@ -23,6 +23,7 @@ use crate::app::theme;
 use crate::widget::{popup, section, smooth_scroll};
 
 use super::data;
+use super::diagnostics;
 use super::offscreen::{self, Camera};
 use super::overlay::Region;
 
@@ -144,6 +145,7 @@ struct ExportForm {
     compression_percent: i32,
     compression_percent_str: String,
     background: bool,
+    debug: bool,
     user_bg_preference: bool,
 }
 
@@ -197,6 +199,7 @@ impl Default for ExportForm {
             compression_percent: 30,
             compression_percent_str: String::new(),
             background: false,
+            debug: false,
             user_bg_preference: false,
         }
     }
@@ -280,6 +283,7 @@ pub enum Message {
     SetQuality(String),
     SetCompression(String),
     ToggleBackground(bool),
+    ToggleDebug(bool),
     BeginExport,
     AbortExport,
     Encoder(JobKey, EncoderStatus),
@@ -437,15 +441,14 @@ impl State {
         self.exporter = ExportForm::with_settings(settings);
         self.exporter.export_mode = previous_mode;
         self.exporter.format = anim_state.last_export_format.clone();
-        if is_forced_opaque(&self.exporter.format) {
-            self.exporter.background = true;
-        } else {
-            self.exporter.background = self.exporter.user_bg_preference;
-        }
+        self.exporter.user_bg_preference = anim_state.export_background;
+        self.exporter.background =
+            is_forced_opaque(&self.exporter.format) || self.exporter.user_bg_preference;
         self.exporter.quality_percent = anim_state.last_export_quality.unwrap_or(80);
         self.exporter.quality_percent_str = anim_state.last_export_quality.map_or_else(String::new, |v| v.to_string());
         self.exporter.compression_percent = anim_state.last_export_compression.unwrap_or(30);
         self.exporter.compression_percent_str = anim_state.last_export_compression.map_or_else(String::new, |v| v.to_string());
+        self.exporter.debug = anim_state.include_debug;
     }
 
     pub fn set_region(&mut self, region: Region) {
@@ -501,7 +504,15 @@ impl State {
         advance_search(&mut self.bounds_job, self.synced_key.as_ref());
     }
 
-    pub fn update(&mut self, message: Message, data: &data::State, settings: &mut Settings, anim_state: &mut AnimState, open: &mut bool) -> Task<Message> {
+    pub fn update(
+        &mut self,
+        message: Message,
+        data: &data::State,
+        settings: &mut Settings,
+        anim_state: &mut AnimState,
+        open: &mut bool,
+        marks: diagnostics::Shot,
+    ) -> Task<Message> {
         match message {
             Message::Popup(msg) => {
                 if self.popup.update(msg, self.spec) {
@@ -522,11 +533,8 @@ impl State {
             Message::SetFormat(format) => {
                 self.exporter.format = format.clone();
                 anim_state.last_export_format = format;
-                if is_forced_opaque(&self.exporter.format) {
-                    self.exporter.background = true;
-                } else {
-                    self.exporter.background = self.exporter.user_bg_preference;
-                }
+                self.exporter.background =
+                    is_forced_opaque(&self.exporter.format) || self.exporter.user_bg_preference;
             }
             Message::SetFileName(name) => self.exporter.file_name = name,
             Message::SetStartFrame(value) => {
@@ -667,9 +675,14 @@ impl State {
                 anim_state.last_export_compression = (!text.is_empty()).then_some(percent);
                 self.exporter.compression_percent_str = text;
             }
+            Message::ToggleDebug(enabled) => {
+                self.exporter.debug = enabled;
+                anim_state.include_debug = enabled;
+            }
             Message::ToggleBackground(enabled) => {
                 self.exporter.background = enabled;
                 self.exporter.user_bg_preference = enabled;
+                anim_state.export_background = enabled;
             }
             Message::BeginExport => {
                 let Some(key) = self.synced_key.clone() else {
@@ -733,6 +746,7 @@ impl State {
                     region_h: self.exporter.region_h,
                     fps: self.exporter.fps,
                     background: self.exporter.background,
+                    debug: self.exporter.debug.then_some(marks),
                     tx: frame_tx,
                     abort: abort.clone(),
                     progress: render_progress.clone(),
@@ -1267,6 +1281,12 @@ impl State {
                 row![
                     background_toggle(&self.exporter),
                     text("Background").size(CONTROL_TEXT_SIZE),
+                ].spacing(FIELD_SPACING).align_y(Alignment::Center),
+                row![
+                    toggler(self.exporter.debug)
+                        .on_toggle(Message::ToggleDebug)
+                        .style(theme::ios_toggle),
+                    text("Include Debug").size(CONTROL_TEXT_SIZE),
                 ].spacing(FIELD_SPACING).align_y(Alignment::Center),
             ].spacing(ROW_SPACING),
         );

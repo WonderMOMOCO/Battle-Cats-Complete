@@ -6,16 +6,22 @@ use std::thread;
 
 use iced::futures::executor::block_on;
 use iced::wgpu;
+use iced::Point;
 use image::RgbaImage;
 use tracing::{error, warn};
 
 use nyanko::graphics::animate::{resolve_frame, FrameData};
 use nyanko::graphics::rig::{Animation, Rig};
+use nyanko::graphics::tools::part;
 
 use kore::systems::animation::export::process::calculate_export_time;
 use kore::systems::animation::export::{EncoderMessage, ExportMode, FrameTiming, ShowcaseLengths};
+use kore::domains::settings::Scope;
 use kore::systems::animation::{multiply_mat3, Role};
 
+use crate::systems::animation;
+
+use super::diagnostics;
 use super::pipeline::{build_vertices, Painted, Pipeline};
 
 #[derive(Clone, Copy, Debug)]
@@ -99,13 +105,42 @@ impl Renderer {
         unit: &Rig,
         animation: Option<&Animation>,
         frame_time: f32,
-        camera: Camera,
-        background: [u8; 4],
-        offset: Option<usize>,
+        take: Take<'_>,
     ) -> Result<Vec<u8>, String> {
-        let mut parts = resolve_frame(unit, animation, frame_time.floor() as i32, offset);
+        let Take { camera, background, offset, debug } = take;
+        let at = frame_time.floor() as i32;
+        let whole = || resolve_frame(unit, animation, at, offset);
+
+        let mapped = debug.and_then(|_| {
+            part::resolve(unit, animation, at, offset)
+                .ok()
+                .map(|held| held.into_iter().map(|entry| (entry.part, entry.frame)).collect::<Vec<_>>())
+        });
+
+        let mut parts = match debug {
+            Some(shot) => scoped(unit, shot, mapped.as_deref(), &whole),
+            None => whole(),
+        };
+
         remap_glow(&mut parts);
-        self.render_parts(unit.sheet.image_data.as_ref(), &parts, camera, background)
+
+        let mut pixels =
+            self.render_parts(unit.sheet.image_data.as_ref(), &parts, camera, background)?;
+
+        if let Some(shot) = debug {
+            let marked: Vec<(Option<usize>, FrameData)> = match mapped {
+                Some(held) => held.into_iter().map(|(part, frame)| (Some(part), frame)).collect(),
+                None => whole().into_iter().map(|frame| (None, frame)).collect(),
+            };
+
+            let to_screen = |x: f32, y: f32| {
+                Point::new((x - camera.region_x) * camera.zoom, (y - camera.region_y) * camera.zoom)
+            };
+
+            diagnostics::paint(&mut pixels, self.width, self.height, unit, &marked, to_screen, shot);
+        }
+
+        Ok(pixels)
     }
 
     fn render_parts(
@@ -235,6 +270,38 @@ impl Renderer {
     }
 }
 
+fn scoped(
+    unit: &Rig,
+    shot: &diagnostics::Shot,
+    mapped: Option<&[(usize, FrameData)]>,
+    whole: &impl Fn() -> Vec<FrameData>,
+) -> Vec<FrameData> {
+    if shot.scope == Scope::Rig {
+        return whole();
+    }
+
+    if shot.scope == Scope::None {
+        return Vec::new();
+    }
+
+    let Some(mapped) = mapped else {
+        return whole();
+    };
+
+    mapped
+        .iter()
+        .filter(|(part, _)| animation::shows(&unit.model, shot.scope, shot.picked, *part))
+        .map(|(_, frame)| frame.clone())
+        .collect()
+}
+
+struct Take<'a> {
+    camera: Camera,
+    background: [u8; 4],
+    offset: Option<usize>,
+    debug: Option<&'a diagnostics::Shot>,
+}
+
 pub struct Job {
     pub unit: Arc<Rig>,
     pub animation: Option<Arc<Animation>>,
@@ -247,6 +314,7 @@ pub struct Job {
     pub region_h: f32,
     pub fps: i32,
     pub background: bool,
+    pub debug: Option<diagnostics::Shot>,
     pub tx: mpsc::Sender<EncoderMessage>,
     pub abort: Arc<AtomicBool>,
     pub progress: Arc<AtomicI32>,
@@ -294,7 +362,17 @@ fn run(job: Job) {
 
         let frame_time = calculate_export_time(&job.timing, animation, local_time, progress);
 
-        match renderer.render_frame(&job.unit, animation, frame_time, job.camera, background, job.offset) {
+        match renderer.render_frame(
+            &job.unit,
+            animation,
+            frame_time,
+            Take {
+                camera: job.camera,
+                background,
+                offset: job.offset,
+                debug: job.debug.as_ref(),
+            },
+        ) {
             Ok(pixels) => {
                 let frame = EncoderMessage::Frame(pixels, renderer.width(), renderer.height(), delay_ms);
                 if job.tx.send(frame).is_err() {
