@@ -37,15 +37,14 @@ pub(super) fn cuts(name: &str) -> String {
 
 pub(super) fn model() -> String {
     let half = BOX_SPAN / 2;
-    let (align_x, align_y) = (half, BOX_SPAN);
 
     format!(
-        "[modelanim:model]\n3\n1\n-1,0,0,0,0,0,{half},{half},1000,1000,0,1000,0,box\n1000,3600,1000\n2\n0,0,{align_x},{align_y},0,0,combat\n0,0,{align_x},{align_y},0,0,gacha\n"
+        "[modelanim:model]\n3\n2\n-1,-1,0,0,0,0,0,0,1000,1000,0,1000,0,root\n0,0,0,1,0,-{half},{half},{half},1000,1000,0,1000,0,box\n1000,3600,1000\n2\n0,0,0,0,5,0,combat\n0,0,0,0,5,0,gacha\n"
     )
 }
 
 pub(super) fn track() -> String {
-    "[modelanim:animation]\n1\n1\n0,11,-1,0,0,spin\n2\n0,0,0,0\n60,3600,0,0\n".to_owned()
+    "[modelanim:animation]\n1\n1\n1,11,-1,0,0,spin\n2\n0,0,0,0\n60,3600,0,0\n".to_owned()
 }
 
 #[cfg(test)]
@@ -64,11 +63,27 @@ mod tests {
         assert_eq!(parsed.sheet(), "Test.png");
 
         let parsed = Model::parse(model().as_bytes()).expect("the model parses");
-        assert_eq!(parsed.parts.len(), 1);
+        assert_eq!(parsed.parts.len(), 2);
         assert_eq!(parsed.alignment.len(), 2);
 
         let parsed = Maanim::parse(track().as_bytes()).expect("the animation parses");
         assert_eq!(parsed.tracks().len(), 1);
+    }
+
+    #[test]
+    fn the_root_is_a_base_the_art_hangs_off_rather_than_a_part_of_its_own() {
+        // 3287 of the 3398 shipped models open on an undrawn `-1,-1` root, and only a
+        // handful of shipped tracks drive part zero. The seed teaches that shape: the
+        // root carries no sprite and no animation, the box is its child.
+        let model = Model::parse(model().as_bytes()).expect("the model parses");
+        let (root, box_part) = (&model.parts[0], &model.parts[1]);
+
+        assert_eq!((root.parent, root.id), (-1, -1), "the root draws nothing");
+        assert_eq!(box_part.parent, 0, "and the only art hangs off it");
+        assert!(model.alignment.iter().all(|row| row.part == 0), "placement measures against the root");
+
+        let track = Maanim::parse(track().as_bytes()).expect("the animation parses");
+        assert!(track.tracks().iter().all(|drive| drive.part != 0), "nothing moves the root");
     }
 
     #[test]
@@ -78,6 +93,9 @@ mod tests {
         // arithmetic here, which would drift the moment the engine read changes.
         let rig = Rig::parse(sheet(), cuts("Test"), model()).expect("the rig parses");
         let placed = animate::resolve_frame(&rig, None, 0, Some(0));
+
+        assert_eq!(placed.len(), 1, "the undrawn root contributes no quad");
+
         let box_part = placed.first().expect("the seed draws one part");
 
         let xs: Vec<f32> = box_part.vertices.iter().step_by(2).copied().collect();
