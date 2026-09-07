@@ -10,6 +10,14 @@ pub(super) struct Held {
     pub(super) ordinal: usize,
 }
 
+#[derive(Clone, Copy)]
+pub(super) struct Frame {
+    pub(super) picked: Option<usize>,
+    pub(super) by_part: bool,
+    pub(super) width: f32,
+    pub(super) font: Font,
+}
+
 pub(super) struct TreeRow {
     pub(super) label: String,
     pub(super) depth: u16,
@@ -20,6 +28,7 @@ pub(super) struct TreeRow {
     pub(super) warn: bool,
     pub(super) bucket: bool,
     pub(super) alarm: Option<Alarm>,
+    pub(super) guide: Guide,
 }
 
 impl TreeRow {
@@ -41,39 +50,33 @@ impl TreeRow {
     pub(super) fn view(
         &self,
         index: usize,
-        picked: Option<usize>,
-        by_part: bool,
+        frame: Frame,
         carried: bool,
         onto: Option<Mark>,
-        width: f32,
     ) -> Element<'_, Message> {
+        let Frame { picked, by_part, width, font } = frame;
         let alarm = self.alarm;
         let label = text(self.label.as_str())
-            .font(glyphs::mono())
+            .font(font)
             .size(TREE_TEXT_SIZE)
             .shaping(glyphs::shaping(&self.label))
             .wrapping(text::Wrapping::None);
 
         let label = if self.warn { label.style(text::danger) } else { label };
 
-        let body = row![
-            text(self.mark)
-                .font(glyphs::mono())
-                .size(MARKER_SIZE)
-                .line_height(MARKER_LINE_HEIGHT)
-                .width(Length::Fixed(MARKER_WIDTH)),
-            label,
-        ]
+        let stem = branches(self.guide, self.depth, INDENT, ROW_HEIGHT, MARKER_SIZE);
+
+        let body = match self.mark {
+            "" => row![stem.reach(MARKER_WIDTH), label],
+            FOLDER_OPEN => row![stem.opened(), marker(self.mark), label],
+            _ => row![stem, marker(self.mark), label],
+        }
         .align_y(Vertical::Center);
 
         let content = container(body)
             .height(Length::Fixed(ROW_HEIGHT))
             .align_y(Vertical::Center)
-            .padding(
-                Padding::default()
-                    .left(ROW_PADDING + INDENT * f32::from(self.depth))
-                    .right(ROW_PADDING),
-            );
+            .padding(Padding::default().left(ROW_PADDING).right(ROW_PADDING));
 
         let held = if by_part { self.part } else { self.track };
         let selected = held.is_some() && held == picked;
@@ -97,6 +100,19 @@ impl TreeRow {
             (_, Some(part)) => editor::target(row, Target::AnimPart(part)),
             _ => row,
         }
+    }
+}
+
+fn marker<'a>(mark: &'static str) -> Element<'a, Message> {
+    let glyph = text(mark)
+        .font(fonts::MISC_SYMBOLS)
+        .size(MARKER_SIZE)
+        .line_height(MARKER_LINE_HEIGHT)
+        .width(Length::Fixed(MARKER_WIDTH));
+
+    match mark == FOLDER_OPEN {
+        true => glyph.style(open_mark).into(),
+        false => glyph.into(),
     }
 }
 
@@ -232,10 +248,30 @@ fn part_label(model: &Model, at: usize) -> String {
 }
 
 fn leaf(label: String, depth: u16, track: Option<usize>, warn: bool, alarm: Option<Alarm>) -> TreeRow {
-    TreeRow { label, depth, mark: "", part: None, owner: None, track, warn, bucket: false, alarm }
+    TreeRow { label, depth, mark: "", part: None, owner: None, track, warn, bucket: false, alarm, guide: Guide::default() }
 }
 
 pub(super) fn listing(
+    doc: Option<&Maanim>,
+    model: Option<&Model>,
+    expanded: &HashSet<usize>,
+    loose_open: bool,
+    blame: &Blame,
+) -> Vec<TreeRow> {
+    let mut listed = listed(doc, model, expanded, loose_open, blame);
+    let mut tracer = Tracer::default();
+
+    for index in (0..listed.len()).rev() {
+        let depth = listed[index].depth;
+        let above = index.checked_sub(1).map(|prev| listed[prev].depth);
+
+        listed[index].guide = tracer.back(depth, above);
+    }
+
+    listed
+}
+
+fn listed(
     doc: Option<&Maanim>,
     model: Option<&Model>,
     expanded: &HashSet<usize>,
@@ -284,6 +320,7 @@ pub(super) fn listing(
             warn: false,
             bucket: false,
             alarm: blame.part(part),
+            guide: Guide::default(),
         });
 
         if !open {
@@ -316,6 +353,7 @@ pub(super) fn listing(
         warn: true,
         bucket: true,
         alarm: blame.bucket(),
+        guide: Guide::default(),
     });
 
     if !loose_open {

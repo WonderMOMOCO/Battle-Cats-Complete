@@ -30,9 +30,9 @@ use crate::editor::{self, Target};
 use crate::systems::animation::{self as viewer, controls, overlay};
 
 use crate::common::feedback::{self, Slot, LOCKED_NOTICE};
-use crate::common::{dialog, glyphs};
+use crate::common::{dialog, fonts, glyphs};
 use crate::common::row_window::{self, RowWindow};
-use crate::widget::{list_row, picture, popup, slide, smooth_scroll, Slide, SLIDE_DURATION};
+use crate::widget::{branches, list_row, open_mark, picture, popup, slide, smooth_scroll, Guide, Slide, Tracer, SLIDE_DURATION};
 
 mod blame;
 mod documents;

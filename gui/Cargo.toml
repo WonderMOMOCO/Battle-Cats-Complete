@@ -32,3 +32,4 @@ sha2 = "0.10.9"
 winres = "0.1.12"
 [dev-dependencies]
 naga = { version = "27", features = ["wgsl-in"] }
+swash = "0.2.10"

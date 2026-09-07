@@ -371,6 +371,7 @@ impl Session {
         );
 
         let width = self.widest.max(size.width - SCROLLBAR_ALLOWANCE);
+        let frame = Frame { picked, by_part, width, font: glyphs::mono() };
         let mut list = Column::with_capacity(range.len() + 3).spacing(ROW_SPACING);
 
         if pad_before > 0.0 {
@@ -385,7 +386,7 @@ impl Session {
             let carried = dragged.is_some_and(|cargo| row.cargo() == Some(cargo));
             let onto = landing.and_then(|landing| landing.mark(index, self.rows.len() - 1));
 
-            list = list.push(row.view(index, picked, by_part, carried, onto, width));
+            list = list.push(row.view(index, frame, carried, onto));
         }
 
         if pad_after > 0.0 {
@@ -977,7 +978,13 @@ fn spare_row<'a>(stripe: usize) -> Element<'a, Message> {
 
 fn pager<'a>(page: usize, pages: usize) -> Element<'a, Message> {
     let step = |glyph: &'a str, onto: Option<usize>| {
-        button(theme::centered_text(glyph).size(LABEL_SIZE).width(Length::Fill))
+        button(
+            theme::centered_text(glyph)
+                .font(fonts::MISC_SYMBOLS)
+                .size(LABEL_SIZE)
+                .line_height(fonts::MISC_SYMBOLS_LINE_HEIGHT)
+                .width(Length::Fill),
+        )
             .width(Length::Fixed(PAGER_STEP))
             .padding(0)
             .on_press_maybe(onto.map(Message::Page))

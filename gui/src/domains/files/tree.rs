@@ -3,16 +3,16 @@ use std::path::{Path, PathBuf};
 
 use iced::alignment::Vertical;
 use iced::widget::{container, operation, responsive, row, scrollable, space, text, Column};
-use iced::{widget, Element, Length, Padding, Size, Task};
+use iced::{widget, Element, Font, Length, Padding, Size, Task};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use kore::Vfs;
 
 use crate::app::theme;
-use crate::common::glyphs;
+use crate::common::{fonts, glyphs};
 use crate::common::row_window::{self, RowWindow};
 use crate::editor;
-use crate::widget::{list_row, smooth_scroll};
+use crate::widget::{branches, list_row, open_mark, smooth_scroll, Guide, Tracer};
 
 use super::{both_ways, Mode, EMPTY_TEXT_SIZE, SCROLLBAR_ALLOWANCE, TEXT_SIZE};
 
@@ -42,6 +42,7 @@ struct Row {
     depth: u16,
     folder: bool,
     expanded: bool,
+    guide: Guide,
 }
 
 type PackGroup = (Box<str>, Vec<Box<str>>);
@@ -275,6 +276,15 @@ impl State {
         self.rows = flatten.rows;
         self.selected_row = flatten.selected_row;
 
+        let mut tracer = Tracer::default();
+
+        for index in (0..self.rows.len()).rev() {
+            let depth = self.rows[index].depth;
+            let above = index.checked_sub(1).map(|prev| self.rows[prev].depth);
+
+            self.rows[index].guide = tracer.back(depth, above);
+        }
+
         !self.rows.is_empty()
     }
 
@@ -305,6 +315,7 @@ impl State {
             row_window::compute_with(self.rows.len(), size.height - tail, self.scroll_offset, ROW_HEIGHT, ROW_SPACING);
 
         let width = self.widest.max(size.width - SCROLLBAR_ALLOWANCE);
+        let font = glyphs::mono();
         let mut list = Column::with_capacity(range.len() + 3).spacing(ROW_SPACING);
 
         if pad_before > 0.0 {
@@ -316,7 +327,7 @@ impl State {
                 continue;
             };
 
-            list = list.push(self.view_row(index, row, width));
+            list = list.push(self.view_row(index, row, width, font));
         }
 
         if pad_after > 0.0 {
@@ -338,24 +349,17 @@ impl State {
             .into()
     }
 
-    fn view_row<'a>(&self, index: usize, row: &'a Row, width: f32) -> Element<'a, Message> {
-        let marker = match (row.folder, row.expanded) {
-            (true, true) => FOLDER_OPEN,
-            (true, false) => FOLDER_SHUT,
-            (false, _) => "",
-        };
-
-        let name = text(row.name.as_ref()).font(glyphs::mono()).size(TEXT_SIZE).wrapping(text::Wrapping::None);
+    fn view_row<'a>(&self, index: usize, row: &'a Row, width: f32, font: Font) -> Element<'a, Message> {
+        let name = text(row.name.as_ref()).font(font).size(TEXT_SIZE).wrapping(text::Wrapping::None);
 
         let label = if self.has_folders {
-            row![
-                text(marker)
-                    .font(glyphs::mono())
-                    .size(MARKER_SIZE)
-                    .line_height(MARKER_LINE_HEIGHT)
-                    .width(Length::Fixed(MARKER_WIDTH)),
-                name,
-            ]
+            let stem = branches(row.guide, row.depth, INDENT, ROW_HEIGHT, MARKER_SIZE);
+
+            match (row.folder, row.expanded) {
+                (true, true) => row![stem.opened(), marker(true), name],
+                (true, false) => row![stem, marker(false), name],
+                (false, _) => row![stem.reach(MARKER_WIDTH), name],
+            }
         } else {
             row![name]
         };
@@ -363,12 +367,25 @@ impl State {
         let content = container(label.align_y(Vertical::Center))
             .height(Length::Fixed(ROW_HEIGHT))
             .align_y(Vertical::Center)
-            .padding(Padding::default().left(ROW_PADDING + INDENT * f32::from(row.depth)).right(ROW_PADDING));
+            .padding(Padding::default().left(ROW_PADDING).right(ROW_PADDING));
 
         editor::target(
             list_row(content, self.selected_row == Some(index), false, Length::Fixed(width), Message::Activate(index)),
             editor::Target::FileRow(index),
         )
+    }
+}
+
+fn marker<'a>(expanded: bool) -> Element<'a, Message> {
+    let glyph = text(if expanded { FOLDER_OPEN } else { FOLDER_SHUT })
+        .font(fonts::MISC_SYMBOLS)
+        .size(MARKER_SIZE)
+        .line_height(MARKER_LINE_HEIGHT)
+        .width(Length::Fixed(MARKER_WIDTH));
+
+    match expanded {
+        true => glyph.style(open_mark).into(),
+        false => glyph.into(),
     }
 }
 
@@ -417,7 +434,7 @@ impl Flatten<'_> {
                 self.selected_row = Some(self.rows.len());
             }
 
-            self.push(Row { name: name.clone(), depth: 0, folder: false, expanded: false });
+            self.push(Row { name: name.clone(), depth: 0, folder: false, expanded: false, guide: Guide::default() });
         }
     }
 
@@ -433,7 +450,7 @@ impl Flatten<'_> {
             let open = self.expanded.contains(Path::new(pack.as_ref()));
 
             self.folders = true;
-            self.push(Row { name: pack.clone(), depth: 0, folder: true, expanded: open });
+            self.push(Row { name: pack.clone(), depth: 0, folder: true, expanded: open, guide: Guide::default() });
 
             if !open {
                 continue;
@@ -448,7 +465,7 @@ impl Flatten<'_> {
                     self.selected_row = Some(self.rows.len());
                 }
 
-                self.push(Row { name: file.clone(), depth: 1, folder: false, expanded: false });
+                self.push(Row { name: file.clone(), depth: 1, folder: false, expanded: false, guide: Guide::default() });
             }
         }
 
@@ -461,7 +478,7 @@ impl Flatten<'_> {
                 self.selected_row = Some(self.rows.len());
             }
 
-            self.push(Row { name: file.clone(), depth: 0, folder: false, expanded: false });
+            self.push(Row { name: file.clone(), depth: 0, folder: false, expanded: false, guide: Guide::default() });
         }
     }
 
@@ -483,7 +500,7 @@ impl Flatten<'_> {
             let open = self.expanded.contains(&path);
 
             self.folders = true;
-            self.push(Row { name: folder, depth, folder: true, expanded: open });
+            self.push(Row { name: folder, depth, folder: true, expanded: open, guide: Guide::default() });
 
             if open {
                 self.walk(&path, depth + 1);
@@ -499,7 +516,7 @@ impl Flatten<'_> {
                 self.selected_row = Some(self.rows.len());
             }
 
-            self.push(Row { name: file, depth, folder: false, expanded: false });
+            self.push(Row { name: file, depth, folder: false, expanded: false, guide: Guide::default() });
         }
     }
 }
