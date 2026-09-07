@@ -295,4 +295,22 @@ mod tests {
         assert_eq!(held.repeats(0, 400), 0..1);
         assert_eq!(held.steady(), 7);
     }
+
+    #[test]
+    fn a_lead_in_moves_the_restart_off_frame_zero() {
+        // Cat 000's walk: a 16 frame sprite cycle alongside one-shot channels that
+        // settle at 3. The first pass runs 0..18 and every pass after it loops 3..18,
+        // which is the frame the timeline draws its loop line on.
+        let held = Cadence::of(&[
+            curve(2, -1, &[0, 4, 8, 12, 16]),
+            curve(5, 1, &[0, 3]),
+            curve(4, 1, &[0, 3]),
+        ]);
+
+        assert_eq!(held.settled, 3);
+        assert_eq!(held.extent, 19);
+        assert_eq!(held.fold(18), 18);
+        assert_eq!(held.fold(19), 3, "the pass after the first restarts at the settle");
+        assert_eq!(held.fold(35), 3);
+    }
 }

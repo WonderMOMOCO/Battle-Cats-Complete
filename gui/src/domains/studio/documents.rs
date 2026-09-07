@@ -1104,22 +1104,38 @@ impl Pose {
             .into()
     }
 
+    pub(super) fn inert(&self, at: usize) -> bool {
+        matches!(at, PLACE_X_FIELD | PLACE_Y_FIELD)
+            && self.part.is_some_and(|part| self.doc.parent(part).is_none())
+    }
+
     pub(super) fn field_row(&self, at: usize, width: f32) -> Element<'_, Message> {
         let named = at == NAME_FIELD;
         let index = if named { String::new() } else { at.to_string() };
         let hint = if named { "" } else { self.hint(at) };
+        let inert = self.inert(at);
 
-        let cell = text_input(hint, self.inputs.get(at).map_or("", String::as_str))
+        let held = text_input(hint, self.inputs.get(at).map_or("", String::as_str))
             .id(self.cursors.get(at).cloned().unwrap_or_else(widget::Id::unique))
-            .on_input(move |typed| Message::Field(at, typed))
             .size(CELL_SIZE)
             .padding(CELL_PADDING)
             .width(Length::Fill)
             .style(theme::rounded_input);
 
+        let cell: Element<'_, Message> = match inert {
+            true => panel::tip(held, ROOT_FIELD_HINT),
+            false => held.on_input(move |typed| Message::Field(at, typed)).into(),
+        };
+
+        let label = text(FIELDS.get(at).copied().unwrap_or_default()).size(LABEL_SIZE);
+        let label = match inert {
+            true => label.style(|theme: &Theme| text::Style { color: Some(theme::weak_text_color(theme)) }),
+            false => label,
+        };
+
         let body = row![
             theme::centered_text(index).size(LABEL_SIZE).width(Length::Fixed(INDEX_WIDTH)),
-            text(FIELDS.get(at).copied().unwrap_or_default()).size(LABEL_SIZE).width(Length::Fixed(FACT_LABEL)),
+            label.width(Length::Fixed(FACT_LABEL)),
             cell,
         ]
         .spacing(ROW_GAP)

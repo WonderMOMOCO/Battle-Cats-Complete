@@ -7,24 +7,24 @@ const PROBE: i32 = 1024;
 const SINGULAR: f32 = 1.0e-4;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default, serde::Serialize, serde::Deserialize)]
-pub enum Hand {
+pub enum Gizmo {
     #[default]
     Channel,
     Model,
 }
 
-impl Hand {
-    pub const ALL: [Hand; 2] = [Hand::Channel, Hand::Model];
+impl Gizmo {
+    pub const ALL: [Gizmo; 2] = [Gizmo::Channel, Gizmo::Model];
 
     pub fn label(self) -> &'static str {
         match self {
-            Hand::Channel => "Channel",
-            Hand::Model => "Model",
+            Gizmo::Channel => "Channel",
+            Gizmo::Model => "Model",
         }
     }
 }
 
-impl std::fmt::Display for Hand {
+impl std::fmt::Display for Gizmo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.label())
     }

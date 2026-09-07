@@ -2,6 +2,7 @@ use super::*;
 
 use iced::Vector;
 
+
 const X_FIELD: usize = 4;
 const Y_FIELD: usize = 5;
 const SCALE_X_FIELD: usize = 8;
@@ -25,10 +26,10 @@ impl Session {
         self.viewer.animation().is_some()
     }
 
-    pub(super) fn hand(&self, settings: &Settings) -> Hand {
+    pub(super) fn hand(&self, settings: &Settings) -> Gizmo {
         match self.animated() {
             true => settings.studio.gizmo,
-            false => Hand::Model,
+            false => Gizmo::Model,
         }
     }
 
@@ -36,7 +37,7 @@ impl Session {
         self.pose.as_ref().and_then(|pose| pose.part)
     }
 
-    pub(super) fn grasp(&mut self, part: usize, grip: gizmo::Grip, hand: Hand) {
+    pub(super) fn grasp(&mut self, part: usize, grip: gizmo::Grip, hand: Gizmo) {
         self.gizmo.show(true);
         self.gizmo.seize(Some(grip));
         self.viewer.pause();
@@ -45,11 +46,9 @@ impl Session {
         if grip == gizmo::Grip::Rotate {
             self.winding = self.wound(part, hand).unwrap_or(1.0);
         }
-
-        self.remember(Tag::Gizmo(part, hand));
     }
 
-    pub(super) fn haul(&mut self, sweep: gizmo::Sweep, hand: Hand) -> Task<Message> {
+    pub(super) fn haul(&mut self, sweep: gizmo::Sweep, hand: Gizmo) -> Task<Message> {
         let entity = self.entity;
 
         let Some(part) = self.chosen_part() else {
@@ -67,15 +66,55 @@ impl Session {
         task
     }
 
-    pub(super) fn tint(&mut self, step: i32, hand: Hand) -> Task<Message> {
+    pub(super) fn rooted(&self, part: usize) -> bool {
+        self.pose.as_ref().is_some_and(|pose| pose.doc.parent(part).is_none())
+    }
+
+    pub(super) fn pinned_notice(&self) -> Option<Notice> {
+        if self.mode != Mode::Entity || self.focus != Focus::Curve {
+            return None;
+        }
+
+        let draft = self.draft.as_ref()?;
+        let held = draft.doc.track(draft.track?)?;
+
+        if !matches!(held.kind, X_KIND | Y_KIND) {
+            return None;
+        }
+
+        let part = usize::try_from(held.part).ok()?;
+
+        self.pinned(part).then(|| (PINNED_NOTICE.to_owned(), None))
+    }
+
+    pub(super) fn pinned(&self, part: usize) -> bool {
+        let Some(row) = self.viewer.offset() else {
+            return false;
+        };
+
+        self.viewer
+            .rig()
+            .and_then(|rig| rig.model.alignment.get(row))
+            .is_some_and(|align| usize::try_from(align.part).is_ok_and(|named| named == part))
+    }
+
+    pub(super) fn tint(&mut self, step: f32, hand: Gizmo) -> Task<Message> {
         let Some(part) = self.chosen_part() else {
             return Task::none();
         };
 
-        self.apply(part, &[(OPACITY_FIELD, OPACITY_KIND, step as f32)], hand)
+        self.apply(part, &[(OPACITY_FIELD, OPACITY_KIND, step)], hand)
     }
 
-    fn shove(&mut self, part: usize, travel: Vector, hand: Hand) -> Task<Message> {
+    fn shove(&mut self, part: usize, travel: Vector, hand: Gizmo) -> Task<Message> {
+        if hand == Gizmo::Model && self.rooted(part) {
+            return Task::done(Message::Refused(ROOT_MOVE_NOTICE));
+        }
+
+        if hand == Gizmo::Channel && self.pinned(part) {
+            return Task::done(Message::Refused(PINNED_NOTICE));
+        }
+
         let Some(travel) = self.worldly(travel) else {
             return Task::none();
         };
@@ -91,7 +130,7 @@ impl Session {
         self.apply(part, &[(X_FIELD, X_KIND, across), (Y_FIELD, Y_KIND, down)], hand)
     }
 
-    fn stretch(&mut self, part: usize, sweep: gizmo::Sweep, hand: Hand) -> Task<Message> {
+    fn stretch(&mut self, part: usize, sweep: gizmo::Sweep, hand: Gizmo) -> Task<Message> {
         let gizmo::Grip::Scale { across, down } = sweep.grip else {
             return Task::none();
         };
@@ -144,20 +183,20 @@ impl Session {
         self.apply(part, &steps, hand)
     }
 
-    fn spin(&mut self, part: usize, spun: f32, hand: Hand) -> Task<Message> {
+    fn spin(&mut self, part: usize, spun: f32, hand: Gizmo) -> Task<Message> {
         let unit = self.viewer.rig().map_or(3600, |rig| rig.model.angle_unit).max(1) as f32;
         let step = spun / std::f32::consts::TAU * unit * self.winding;
 
         self.apply(part, &[(ANGLE_FIELD, ANGLE_KIND, step)], hand)
     }
 
-    fn wound(&self, part: usize, hand: Hand) -> Option<f32> {
+    fn wound(&self, part: usize, hand: Gizmo) -> Option<f32> {
         let spots = [posing::Spot::Corner(0), posing::Spot::Corner(3)];
         let mut probe = self.probe(part)?;
 
         let swept = match hand {
-            Hand::Model => probe.rest_sweep(ANGLE_FIELD, TURN_PROBE, &spots),
-            Hand::Channel => {
+            Gizmo::Model => probe.rest_sweep(ANGLE_FIELD, TURN_PROBE, &spots),
+            Gizmo::Channel => {
                 let doc = &self.draft.as_ref()?.doc;
                 let held = self.held(part, ANGLE_FIELD, ANGLE_KIND, hand)?;
 
@@ -193,7 +232,7 @@ impl Session {
         Some(Probe::new(rig, self.viewer.animation(), self.viewer.frame(), self.viewer.offset(), part))
     }
 
-    fn pivot_reach(&self, part: usize, hand: Hand) -> Option<[(f32, f32); 2]> {
+    fn pivot_reach(&self, part: usize, hand: Gizmo) -> Option<[(f32, f32); 2]> {
         let spots = [posing::Spot::Pivot];
 
         self.reach(part, (X_FIELD, Y_FIELD), (X_KIND, Y_KIND), hand, &spots)?.first().copied()
@@ -204,14 +243,14 @@ impl Session {
         part: usize,
         fields: (usize, usize),
         kinds: (i32, i32),
-        hand: Hand,
+        hand: Gizmo,
         spots: &[posing::Spot],
     ) -> Option<Vec<[(f32, f32); 2]>> {
         let mut probe = self.probe(part)?;
 
         match hand {
-            Hand::Model => probe.rest_reach(fields, spots),
-            Hand::Channel => {
+            Gizmo::Model => probe.rest_reach(fields, spots),
+            Gizmo::Channel => {
                 let doc = &self.draft.as_ref()?.doc;
                 let held = (
                     self.held(part, fields.0, kinds.0, hand)?,
@@ -223,7 +262,7 @@ impl Session {
         }
     }
 
-    fn held(&self, part: usize, field: usize, kind: i32, hand: Hand) -> Option<i32> {
+    fn held(&self, part: usize, field: usize, kind: i32, hand: Gizmo) -> Option<i32> {
         let rest = || {
             let model = self.viewer.rig().map(|rig| &rig.model);
 
@@ -231,8 +270,8 @@ impl Session {
         };
 
         match hand {
-            Hand::Model => self.pose.as_ref()?.doc.field(part, field).or_else(rest),
-            Hand::Channel => {
+            Gizmo::Model => self.pose.as_ref()?.doc.field(part, field).or_else(rest),
+            Gizmo::Channel => {
                 let frame = self.viewer.frame();
 
                 self.draft.as_ref()?.doc.posed(part, kind, frame).or_else(rest)
@@ -253,7 +292,7 @@ impl Session {
         taken as i32
     }
 
-    fn apply(&mut self, part: usize, steps: &[Step], hand: Hand) -> Task<Message> {
+    fn apply(&mut self, part: usize, steps: &[Step], hand: Gizmo) -> Task<Message> {
         let moved: Vec<(usize, i32, i32)> = steps
             .iter()
             .filter(|(_, _, step)| step.is_finite() && *step != 0.0)
@@ -269,9 +308,11 @@ impl Session {
             return Task::none();
         }
 
+        self.remember(Tag::Gizmo(part, hand));
+
         match hand {
-            Hand::Model => self.reset_fields(part, &moved),
-            Hand::Channel => self.key_fields(part, &moved),
+            Gizmo::Model => self.reset_fields(part, &moved),
+            Gizmo::Channel => self.key_fields(part, &moved),
         }
     }
 

@@ -1,4 +1,5 @@
 use super::*;
+use kore::systems::animation::authoring::Cycle;
 use iced::border::Radius;
 use iced::widget::canvas::{self, Geometry, Path, Stroke};
 use iced::widget::{canvas as canvas_widget, column, container, row, text};
@@ -41,6 +42,7 @@ const GRAB: f32 = 6.0;
 const FLOOR: i64 = i32::MIN as i64;
 const CEILING: i64 = i32::MAX as i64;
 const START_INK: Color = Color::from_rgb(0.24, 0.72, 0.36);
+const LOOP_INK: Color = Color::from_rgb(0.46, 0.64, 0.16);
 const FOLDED_INK: Color = Color::from_rgb(0.92, 0.78, 0.20);
 const DIGIT: &str = "0";
 const NO_PART_NOTICE: &str = "Select a part to see its channels";
@@ -674,6 +676,10 @@ impl canvas::Program<Message> for Board {
                 color,
             );
         };
+
+        if let Cycle::Every(_) = self.cadence.cycle {
+            rule(&mut frame, self.at(width, self.cadence.settled as f64), LOOP_INK, MARK_WIDTH);
+        }
 
         rule(&mut frame, self.at(width, 0.0), START_INK, MARK_WIDTH);
 

@@ -48,6 +48,8 @@ const PANEL_PAD: f32 = 8.0;
 const PANEL_ALPHA: f32 = 160.0 / 255.0;
 const PANEL_SHADE: f32 = 0.15;
 const DISABLED_ALPHA: f32 = 0.5;
+const ALARM_TINT: f32 = 0.3;
+const ALARM_EDGE: f32 = 1.0;
 
 const PLAY_GLYPH: &str = "\u{25B6}";
 const PAUSE_GLYPH: &str = "\u{25AE}\u{25AE}";
@@ -196,6 +198,23 @@ fn control_style(t: &Theme, status: button::Status, is_active: bool) -> button::
     }
 }
 
+fn clip_style(t: &Theme, status: button::Status, is_active: bool, alarmed: bool) -> button::Style {
+    let base = control_style(t, status, is_active);
+
+    if !alarmed {
+        return base;
+    }
+
+    let palette = t.palette();
+    let tinted = Color { a: ALARM_TINT, ..palette.danger };
+
+    button::Style {
+        background: Some(Background::Color(tinted)),
+        border: Border { color: palette.danger, width: ALARM_EDGE, ..base.border },
+        ..base
+    }
+}
+
 fn tile<'a>(width: f32, content: impl Into<Element<'a, Message>>) -> Container<'a, Message> {
     container(content)
         .width(Length::Fixed(width))
@@ -292,7 +311,7 @@ fn fitted_size(label: &str) -> f32 {
         .unwrap_or(ANIM_TEXT_FLOOR)
 }
 
-fn clip_tile(data: &data::State, index: usize) -> Element<'_, Message> {
+fn clip_tile(data: &data::State, index: usize, alarmed: bool) -> Element<'_, Message> {
     let Some(clip) = data.clip(index) else {
         return vacant_tile();
     };
@@ -319,11 +338,11 @@ fn clip_tile(data: &data::State, index: usize) -> Element<'_, Message> {
         .height(Length::Fixed(ANIM_BUTTON_H))
         .padding(ANIM_LABEL_INSET)
         .on_press(Message::SelectAnimation(index))
-        .style(move |t: &Theme, status| control_style(t, status, is_active))
+        .style(move |t: &Theme, status| clip_style(t, status, is_active, alarmed))
         .into()
 }
 
-fn anim_grid(data: &data::State) -> Element<'_, Message> {
+fn anim_grid<'a>(data: &'a data::State, alarms: &[usize]) -> Element<'a, Message> {
     let slots = data.slots();
     let mut grid = column![].spacing(GRID_GAP);
 
@@ -331,7 +350,9 @@ fn anim_grid(data: &data::State) -> Element<'_, Message> {
         let mut buttons = row![].spacing(GRID_GAP);
 
         for slot in chunk {
-            buttons = buttons.push(slot.map_or_else(vacant_tile, |index| clip_tile(data, index)));
+            buttons = buttons.push(
+                slot.map_or_else(vacant_tile, |index| clip_tile(data, index, alarms.contains(&index))),
+            );
         }
 
         grid = grid.push(buttons);
@@ -455,7 +476,7 @@ impl State {
         self.step(canvas, data, delta);
     }
 
-    pub fn view<'a>(&'a self, canvas: &'a canvas::State, data: &'a data::State, anim_state: &AnimState) -> Element<'a, Message> {
+    pub fn view<'a>(&'a self, canvas: &'a canvas::State, data: &'a data::State, anim_state: &AnimState, alarms: &[usize]) -> Element<'a, Message> {
         let is_expanded = anim_state.controls_expanded;
         let expand_icon = if is_expanded { "▼" } else { "▲" };
 
@@ -475,7 +496,7 @@ impl State {
 
         let body = column![
             rule::horizontal(1),
-            container(anim_grid(data))
+            container(anim_grid(data, alarms))
                 .width(Length::Fill)
                 .padding(Padding { top: GRID_PAD, right: 0.0, bottom: GRID_PAD, left: 0.0 })
                 .align_x(alignment::Horizontal::Center),

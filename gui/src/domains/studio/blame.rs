@@ -20,6 +20,7 @@ pub(super) struct Blame {
     tainted: HashSet<usize>,
     loose: bool,
     forced: bool,
+    rigged: bool,
 }
 
 impl Blame {
@@ -39,6 +40,8 @@ impl Blame {
 
         found.extend(crash::alignment_faults(model, side));
 
+        let rigged = !found.is_empty();
+
         if let Some(anim) = anim {
             found.extend(crash::anim_faults(anim, model));
 
@@ -47,7 +50,7 @@ impl Blame {
             }
         }
 
-        let mut blame = Self { forced, ..Self::default() };
+        let mut blame = Self { forced, rigged, ..Self::default() };
 
         for sited in found {
             match (sited.track, sited.part) {
@@ -110,6 +113,10 @@ impl Blame {
 
     pub(super) fn bucket(&self) -> Option<Alarm> {
         self.loose.then_some(Alarm::Tainted)
+    }
+
+    pub(super) fn rigged(&self) -> bool {
+        self.rigged
     }
 
     pub(super) fn quiet(&self) -> bool {
@@ -193,7 +200,7 @@ fn sided(fault: &Fault) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use nyanko::graphics::rig::{Alignment, ModelPart};
+    use nyanko::graphics::rig::{Alignment, AnimModification, Keyframe, ModelPart};
 
     use super::*;
 
@@ -231,6 +238,36 @@ mod tests {
 
         assert!(blame.notice(Some(2), None).is_some_and(|(held, _)| held.starts_with(PART_FAULT)));
         assert!(blame.notice(Some(0), None).is_some_and(|(held, _)| held.starts_with(TAINTED_FAULT)));
+    }
+
+    #[test]
+    fn only_the_rigs_own_faults_reach_the_model_button() {
+        // The model clip stands for the mamodel, so it carries the faults the rig has on
+        // its own and never the ones an animation brings.
+        let broken = Model { scale_unit: 0, ..chain(&[609, 609]) };
+
+        assert!(aligned(&broken, Some(609)).rigged());
+        assert!(!aligned(&chain(&[609, 609]), Some(609)).rigged(), "a clean rig marks nothing");
+
+        let tie = Animation {
+            version: 1,
+            modifications: vec![AnimModification {
+                part: 0,
+                loop_count: 1,
+                keyframes: vec![
+                    Keyframe { frame: 0, value: 0, ease: 3, ease_power: 0 },
+                    Keyframe { frame: 5, value: 1, ease: 3, ease_power: 0 },
+                    Keyframe { frame: 5, value: 2, ease: 3, ease_power: 0 },
+                    Keyframe { frame: 9, value: 3, ease: 0, ease_power: 0 },
+                ],
+                ..AnimModification::default()
+            }],
+        };
+
+        let held = Blame::of(&chain(&[609, 609]), Some(&tie), Some(609), Side::Either, false, false);
+
+        assert!(!held.quiet(), "the animation does fault");
+        assert!(!held.rigged(), "but the rig itself does not");
     }
 
     #[test]

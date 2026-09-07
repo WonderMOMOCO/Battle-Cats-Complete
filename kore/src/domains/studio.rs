@@ -135,7 +135,6 @@ impl Set {
         self.files().first().map_or(Home::Loose, |path| home(path))
     }
 
-    /// The unit stem the set's files are filed under, where the mount makes the name the address.
     pub fn addressed(&self) -> Option<String> {
         if !matches!(self.home(), Home::Game | Home::Mod) {
             return None;

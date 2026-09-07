@@ -96,6 +96,10 @@ impl State {
         &self.slots
     }
 
+    pub fn clips(&self) -> impl Iterator<Item = (usize, &Clip)> {
+        self.clips.iter().enumerate()
+    }
+
     pub fn clip(&self, index: usize) -> Option<&Clip> {
         self.clips.get(index)
     }

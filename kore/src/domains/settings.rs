@@ -436,7 +436,7 @@ impl Faults {
         match self {
             Faults::None => "None",
             Faults::Attack => "Attack",
-            Faults::Either => "Either",
+            Faults::Either => "Both",
             Faults::Cat => "Cat",
             Faults::Enemy => "Enemy",
         }
@@ -571,7 +571,7 @@ impl std::fmt::Display for ScrubBehavior {
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(default)]
 pub struct StudioSettings {
-    pub gizmo: crate::systems::animation::posing::Hand,
+    pub gizmo: crate::systems::animation::posing::Gizmo,
     pub entity: Scope,
     pub origin: Shown,
     pub rig: Tier,
@@ -594,7 +594,7 @@ pub struct StudioSettings {
 impl Default for StudioSettings {
     fn default() -> Self {
         Self {
-            gizmo: crate::systems::animation::posing::Hand::default(),
+            gizmo: crate::systems::animation::posing::Gizmo::default(),
             entity: Scope::default(),
             origin: Shown::default(),
             rig: Tier::default(),

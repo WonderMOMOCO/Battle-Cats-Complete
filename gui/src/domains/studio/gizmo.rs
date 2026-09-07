@@ -3,7 +3,8 @@ use iced::widget::canvas as canvas_widget;
 use iced::widget::canvas::{self, Geometry, Path, Stroke};
 use iced::{Color, Element, Length, Point, Rectangle, Renderer, Theme, Vector};
 
-use crate::systems::animation::Posed;
+use crate::systems::animation::{Posed, ZOOM_SCROLL_STRENGTH};
+use crate::widget::{smooth_scroll, LINE_PIXELS};
 
 use super::Message;
 
@@ -66,11 +67,12 @@ pub struct Sweep {
 pub enum Turn {
     Halt,
     Pick(usize),
-    Grab(usize),
+    Seize(usize),
+    Zoom(f32),
     Begin(usize, Grip),
     Drag(Sweep),
     Drop,
-    Fade(i32),
+    Fade(f32),
 }
 
 #[derive(Default)]
@@ -98,10 +100,11 @@ impl State {
         posed: Vec<Posed>,
         camera: (Vector, f32),
     ) -> Element<'a, Message> {
-        canvas_widget(Gizmo { picked, shown: self.shown, posed, camera, held: self.held })
+        let face = canvas_widget(Gizmo { picked, shown: self.shown, posed, camera, held: self.held })
             .width(Length::Fill)
-            .height(Length::Fill)
-            .into()
+            .height(Length::Fill);
+
+        smooth_scroll(face).strength(ZOOM_SCROLL_STRENGTH).into()
     }
 }
 
@@ -233,6 +236,18 @@ pub(super) fn swept(ring: &Ring, from: Point, at: Point, grip: Grip) -> Sweep {
     }
 }
 
+fn seized(track: &mut Track, at: Point, part: Option<usize>) -> Turn {
+    let Some(part) = part else {
+        return Turn::Halt;
+    };
+
+    track.grip = Some(Grip::Move);
+    track.from = at;
+    track.lag = 0.0;
+
+    Turn::Seize(part)
+}
+
 pub(super) fn lagging(origin: Point, at: Point, knob: Point) -> f32 {
     wrapped(turn_at(origin, knob) - turn_at(origin, at))
 }
@@ -310,8 +325,8 @@ pub(super) fn lever(quad: &[Point; 4], origin: Point) -> (Point, Point) {
     (exit, Point::new(exit.x + aim.x / reach * lead, exit.y + aim.y / reach * lead))
 }
 
-pub(super) fn fade(delta: f32) -> i32 {
-    (delta * OPACITY_STEP * 1000.0).round() as i32
+pub(super) fn fade(delta: f32) -> f32 {
+    delta * OPACITY_STEP * 1000.0
 }
 
 pub(super) fn coords(quad: &[Point; 4], at: Point) -> Option<(f32, f32)> {
@@ -456,7 +471,7 @@ impl canvas::Program<Message> for Gizmo {
                 let seat = self.seat(bounds);
 
                 let Some((quad, origin)) = self.held(bounds) else {
-                    let turn = topmost(&self.posed, at, &seat).map_or(Turn::Halt, Turn::Grab);
+                    let turn = seized(track, at, topmost(&self.posed, at, &seat));
 
                     return Some(canvas::Action::publish(Message::Gizmo(turn)).and_capture());
                 };
@@ -470,7 +485,7 @@ impl canvas::Program<Message> for Gizmo {
                         Some(canvas::Action::publish(Message::Gizmo(Turn::Begin(part, grip))).and_capture())
                     }
                     _ => {
-                        let turn = topmost(&self.posed, at, &seat).map_or(Turn::Halt, Turn::Grab);
+                        let turn = seized(track, at, topmost(&self.posed, at, &seat));
 
                         Some(canvas::Action::publish(Message::Gizmo(turn)).and_capture())
                     }
@@ -522,10 +537,17 @@ impl canvas::Program<Message> for Gizmo {
 
                 Some(canvas::Action::publish(Message::Gizmo(Turn::Fade(fade(step)))).and_capture())
             }
-            mouse::Event::WheelScrolled { .. } => {
+            mouse::Event::WheelScrolled { delta } => {
                 track.grip = None;
+                cursor.position_in(bounds)?;
 
-                None
+                let pixels = match delta {
+                    mouse::ScrollDelta::Lines { y, .. } => *y * LINE_PIXELS,
+                    mouse::ScrollDelta::Pixels { y, .. } => *y,
+                };
+
+                (pixels != 0.0)
+                    .then(|| canvas::Action::publish(Message::Gizmo(Turn::Zoom(pixels))).and_capture())
             }
             _ => None,
         }

@@ -86,11 +86,6 @@ impl Offset {
 pub const RAW_OFFSET: &str = "Raw";
 pub const NO_OFFSET: &str = "None";
 
-/// Which alignment row places a rig in the viewer.
-///
-/// The engine has no unplaced mode — every drawn entity runs the anchor
-/// transform, every frame — so the first row is the default and `Bare` is a
-/// deliberate look behind it, never a fallback.
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Placement {
     Bare,

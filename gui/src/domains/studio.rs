@@ -17,11 +17,11 @@ use kore::common::architecture;
 use kore::common::preview::{self, Stamp};
 use kore::domains::settings::{Faults, FrameCount, Scope, Settings, Shown, StudioSettings, Switch, Tier};
 use kore::domains::studio as sets;
-use kore::systems::animation::posing::{self, Hand, Probe};
+use kore::systems::animation::posing::{self, Gizmo, Probe};
 use kore::systems::animation::authoring::{self as authoring, bound, Beat, Cadence, Imgcut, CUT_FIELDS, CUT_NAME_FIELD, ease_label, ease_takes_power, ease_value, key_label, kind_label, loop_label, nameable, Maanim, Mamodel, EASES, FIELDS, NAME_FIELD};
 use image::RgbaImage;
 use nyanko::graphics::rig::{Keyframe, Model, ModelPart, Opaque, Rig, SpriteCut};
-use nyanko::graphics::tools::crash::Side;
+use nyanko::graphics::tools::crash::{self, Side};
 use nyanko::graphics::tools::timeline as curve;
 
 use crate::app::state::{AnimState, StudioState};
@@ -190,6 +190,11 @@ const ENDLESS_ATTACK_DETAIL: &str =
 const UNKNOWN_DETAIL: &str = "The game's animation pass faults on this";
 const FAULT_HINT: &str = "Manage faults under Option page 2";
 const ATTACK_HINT: &str = "Only consider this fault for attacks";
+const ROOT_MOVE_NOTICE: &str = "The root ignores its model X and Y\nSwitch the Gizmo to Channel to move it";
+const ROOT_FIELD_HINT: &str = "The root ignores this column; key an X or Y channel instead";
+const PINNED_NOTICE: &str = "The offset row is pinned to this part\nMoving it cancels out and the game draws it unmoved";
+const PLACE_X_FIELD: usize = 4;
+const PLACE_Y_FIELD: usize = 5;
 const ENTITY_FAULT: &str = "This entity may cause a game crash\nPlease find the issue and resolve it";
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
@@ -435,7 +440,11 @@ pub(crate) struct Plan {
     clip: Option<String>,
 }
 
-pub(crate) fn plan(set: sets::Set, target_mod: Option<String>, clip: Option<String>) -> Plan {
+pub(crate) fn slotted(anim: &Path) -> bool {
+    matches!(sets::home(anim), sets::Home::Game | sets::Home::Mod) && sets::attack_slot(anim)
+}
+
+fn plan(set: sets::Set, target_mod: Option<String>, clip: Option<String>) -> Plan {
     Plan { set, target_mod, clip }
 }
 
@@ -457,6 +466,7 @@ pub enum Message {
     Tiered(Dial, Tier),
     Sighted(Dial, Shown),
     Scoped(Scope),
+    Refused(&'static str),
     Module(Readout),
     Faulted(Faults),
     Page(usize),
@@ -496,7 +506,7 @@ pub enum Message {
     ManagePopup(popup::Message),
     Manage(manage::Message),
     Gizmo(gizmo::Turn),
-    Handed(Hand),
+    Handed(Gizmo),
     Export,
     Exported(bool, usize),
     ExportExpired,
@@ -739,6 +749,7 @@ struct Session {
     entity: Scope,
     placed: Vec<viewer::Posed>,
     blame: Blame,
+    alarms: Vec<usize>,
     faulting: Faults,
 }
 
@@ -859,6 +870,7 @@ impl State {
             entity: Scope::default(),
             placed: Vec::new(),
             blame: Blame::default(),
+            alarms: Vec::new(),
             faulting: Faults::default(),
         });
     }
@@ -1714,11 +1726,13 @@ impl State {
 
                 Task::none()
             }
-            Message::Gizmo(gizmo::Turn::Grab(part)) => {
-                session.viewer.pause();
-                session.gizmo.show(true);
+            Message::Gizmo(gizmo::Turn::Seize(part)) => {
+                let hand = session.hand(settings);
+                let task = session.spotlight(part);
 
-                session.spotlight(part)
+                session.grasp(part, gizmo::Grip::Move, hand);
+
+                task
             }
             Message::Gizmo(gizmo::Turn::Begin(part, grip)) => {
                 session.grasp(part, grip, session.hand(settings));
@@ -1726,6 +1740,11 @@ impl State {
                 Task::none()
             }
             Message::Gizmo(gizmo::Turn::Drag(sweep)) => session.haul(sweep, session.hand(settings)),
+            Message::Gizmo(gizmo::Turn::Zoom(pixels)) => {
+                session.viewer.zoom(pixels);
+
+                Task::none()
+            }
             Message::Gizmo(gizmo::Turn::Drop) => {
                 session.gizmo.seize(None);
 
@@ -1742,6 +1761,7 @@ impl State {
             | Message::ManagePopup(_)
             | Message::Manage(_)
             | Message::Module(_)
+            | Message::Refused(_)
             | Message::Faulted(_)
             | Message::Page(_)
             | Message::Cycle(_)
@@ -1760,6 +1780,11 @@ impl State {
 
                 Some(Task::none())
             }
+            Message::Refused(notice) => {
+                self.raise((*notice).to_owned());
+
+                Some(Task::none())
+            }
             Message::Faulted(faults) => {
                 settings.studio.faults = *faults;
 
@@ -1774,7 +1799,7 @@ impl State {
                 let anim = &mut settings.studio;
 
                 match dial {
-                    Dial::Gizmo => anim.gizmo = stepped(&Hand::ALL, anim.gizmo),
+                    Dial::Gizmo => anim.gizmo = stepped(&Gizmo::ALL, anim.gizmo),
                     Dial::Onion => {
                         let next = stepped(&Switch::ALL, anim.onion);
 
@@ -1912,6 +1937,7 @@ impl State {
         self.session
             .as_ref()
             .and_then(Session::alarm_notice)
+            .or_else(|| self.session.as_ref().and_then(Session::pinned_notice))
             .or_else(|| self.session.as_ref().and_then(Session::entity_notice))
     }
 
@@ -2765,11 +2791,53 @@ impl Session {
     }
 
     fn slotted(&self) -> bool {
-        let Some(anim) = self.draft.as_ref().map(|draft| &draft.backing.read_from) else {
-            return false;
+        self.draft.as_ref().is_some_and(|draft| slotted(&draft.backing.read_from))
+    }
+
+    fn alarming(&self) -> Vec<usize> {
+        let (Some(side), Some(rig)) = (self.faulting.side(), self.viewer.rig()) else {
+            return Vec::new();
         };
 
-        matches!(sets::home(anim), sets::Home::Game | sets::Home::Mod) && sets::attack_slot(anim)
+        let mut found = Vec::new();
+
+        for (index, clip) in self.viewer.clips() {
+            let Some(path) = clip.anim.as_deref() else {
+                if self.blame.rigged() {
+                    found.push(index);
+                }
+
+                continue;
+            };
+
+            let open = self
+                .draft
+                .as_ref()
+                .filter(|draft| draft.backing.read_from == path)
+                .map(|draft| draft.doc.shared());
+
+            let held = match open {
+                Some(held) => Some(held),
+                None => fs::read(path)
+                    .ok()
+                    .and_then(|bytes| Maanim::parse(&bytes).ok())
+                    .map(|doc| doc.shared()),
+            };
+
+            let Some(anim) = held else {
+                continue;
+            };
+
+            let attacking = slotted(path) || self.faulting.attacking();
+            let faulted = !crash::anim_faults(&anim, &rig.model).is_empty()
+                || (attacking && !crash::attack_faults(&anim, side).is_empty());
+
+            if faulted {
+                found.push(index);
+            }
+        }
+
+        found
     }
 
     fn relist(&mut self) {
@@ -2796,6 +2864,8 @@ impl Session {
             }
             _ => Blame::default(),
         };
+
+        self.alarms = self.alarming();
 
         let listed = listing(tracks, model, &self.expanded, self.loose_open, &self.blame);
 

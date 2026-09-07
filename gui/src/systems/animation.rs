@@ -34,7 +34,7 @@ const EXPAND_BUTTON_INSET: f32 = 8.0;
 
 const CONTROLS_INSET_LEFT: f32 = 7.0;
 
-const ZOOM_SCROLL_STRENGTH: f32 = 2.5;
+pub(crate) const ZOOM_SCROLL_STRENGTH: f32 = 2.5;
 const CULL_SCALE: f32 = 100.0;
 
 const DEBUG_LABEL_SIZE: f32 = 12.0;
@@ -241,6 +241,10 @@ impl State {
         self.data.adopt_model(model);
     }
 
+    pub(crate) fn clips(&self) -> impl Iterator<Item = (usize, &kore::systems::animation::Clip)> {
+        self.data.clips()
+    }
+
     pub fn rig(&self) -> Option<&Rig> {
         self.data.held_unit.as_deref()
     }
@@ -291,6 +295,10 @@ impl State {
 
     pub fn set_highlight(&mut self, part: Option<usize>) {
         self.highlight = part;
+    }
+
+    pub(crate) fn zoom(&mut self, pixels: f32) {
+        self.canvas.update(canvas::Message::Zoomed(pixels), &self.data);
     }
 
     pub fn offset(&self) -> Option<usize> {
@@ -498,7 +506,7 @@ impl State {
     }
 
     fn viewer_view<'a>(&'a self, settings: &'a Settings, anim_state: &'a AnimState) -> Element<'a, Message> {
-        let layers = stack![self.stage_view(settings), self.controls_view(anim_state)];
+        let layers = stack![self.stage_view(settings), self.controls_view(anim_state, &[])];
 
         editor::suppress(
             container(layers).width(Length::Fill).height(Length::Fill),
@@ -545,8 +553,12 @@ impl State {
         .into()
     }
 
-    pub(crate) fn controls_view<'a>(&'a self, anim_state: &'a AnimState) -> Element<'a, Message> {
-        let controls_overlay = container(self.controls.view(&self.canvas, &self.data, anim_state).map(Message::Controls))
+    pub(crate) fn controls_view<'a>(
+        &'a self,
+        anim_state: &'a AnimState,
+        alarms: &[usize],
+    ) -> Element<'a, Message> {
+        let controls_overlay = container(self.controls.view(&self.canvas, &self.data, anim_state, alarms).map(Message::Controls))
             .width(Length::Fill)
             .height(Length::Fill)
             .align_x(iced::alignment::Horizontal::Left)
