@@ -4,6 +4,7 @@ use std::fs;
 use nyanko::cat::unit::UnitExplanation;
 use nyanko::chapter::map::MapName;
 use nyanko::enemy::{EnemyName, EnemyPictureBook};
+use rayon::prelude::*;
 
 use crate::common::region;
 use crate::domains::settings::lang;
@@ -52,30 +53,34 @@ pub(crate) fn charts(filename: &str) -> bool {
 }
 
 pub fn cats(diff: &Diff, vfs: &Vfs) -> Vec<Localized> {
+    let arrivals: Vec<((u32, Option<usize>), String)> = diff
+        .files
+        .par_iter()
+        .filter_map(|delta| {
+            let (id, code) = explanation(&delta.file)?;
+            let bytes = quarried(vfs, &delta.file)?;
+            let after = String::from_utf8_lossy(&bytes);
+            let now = named(after.as_bytes());
+
+            let was = match delta.status {
+                Status::Baseline => [false; FORMS],
+                Status::Changed => named(restore(&after, delta).as_bytes()),
+            };
+
+            let spoken: Vec<((u32, Option<usize>), String)> = (0..FORMS)
+                .filter(|form| now[*form] && !was[*form])
+                .map(|form| ((id, Some(form)), code.clone()))
+                .collect();
+
+            Some(spoken)
+        })
+        .flatten()
+        .collect();
+
     let mut found: Spoken = BTreeMap::new();
 
-    for delta in &diff.files {
-        let Some((id, code)) = explanation(&delta.file) else {
-            continue;
-        };
-
-        let Some(bytes) = quarried(vfs, &delta.file) else {
-            continue;
-        };
-
-        let after = String::from_utf8_lossy(&bytes);
-        let now = named(after.as_bytes());
-
-        let was = match delta.status {
-            Status::Baseline => [false; FORMS],
-            Status::Changed => named(restore(&after, delta).as_bytes()),
-        };
-
-        for form in 0..FORMS {
-            if now[form] && !was[form] {
-                record(&mut found, (id, Some(form)), &code);
-            }
-        }
+    for (key, code) in &arrivals {
+        record(&mut found, *key, code);
     }
 
     gather(found)

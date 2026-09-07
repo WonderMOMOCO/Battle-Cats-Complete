@@ -6,6 +6,8 @@ use iced::widget::text::Text;
 use iced::widget::{button, container, markdown, pick_list, progress_bar, scrollable, text, text_editor, text_input, toggler, Button};
 use iced::{font, Background, Border, Color, Length, Padding, Theme};
 
+use crate::widget::popup::GLASS;
+
 pub const HEADER_SEPARATOR: &str = " :: ";
 
 pub const RADIUS_SM: f32 = 4.0;
@@ -261,10 +263,11 @@ pub fn solid_button(background: Color) -> button::Style {
 }
 
 const SIDEBAR_RADIUS: f32 = 10.0;
+const OPAQUE: f32 = 1.0;
 
-fn sidebar_style(theme: &Theme, radius: Radius) -> container::Style {
+fn sidebar_style(theme: &Theme, radius: Radius, alpha: f32) -> container::Style {
     let palette = theme.palette();
-    let background = shade_color(palette.background, 0.35);
+    let background = Color { a: alpha, ..shade_color(palette.background, 0.35) };
     let border_color = shade_color(palette.background, 0.6);
 
     container::Style {
@@ -275,11 +278,15 @@ fn sidebar_style(theme: &Theme, radius: Radius) -> container::Style {
 }
 
 pub fn sidebar_container(theme: &Theme) -> container::Style {
-    sidebar_style(theme, Radius { top_left: SIDEBAR_RADIUS, bottom_left: SIDEBAR_RADIUS, top_right: 0.0, bottom_right: 0.0 })
+    let radius = Radius { top_left: SIDEBAR_RADIUS, bottom_left: SIDEBAR_RADIUS, top_right: 0.0, bottom_right: 0.0 };
+
+    sidebar_style(theme, radius, GLASS)
 }
 
 pub fn left_sidebar_container(theme: &Theme) -> container::Style {
-    sidebar_style(theme, Radius { top_left: 0.0, bottom_left: 0.0, top_right: SIDEBAR_RADIUS, bottom_right: SIDEBAR_RADIUS })
+    let radius = Radius { top_left: 0.0, bottom_left: 0.0, top_right: SIDEBAR_RADIUS, bottom_right: SIDEBAR_RADIUS };
+
+    sidebar_style(theme, radius, OPAQUE)
 }
 
 pub fn list_panel_container(theme: &Theme) -> container::Style {

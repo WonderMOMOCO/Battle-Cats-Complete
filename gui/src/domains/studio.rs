@@ -804,11 +804,22 @@ impl State {
             rows,
             widest,
             listed,
-        } = self
-            .session
-            .take()
-            .filter(|session| session.viewer.loaded_rig() == plan.set.rig_id())
-            .map_or_else(Showing::default, Session::showing);
+        } = self.session.take().map_or_else(Showing::default, |session| {
+            let settled = session.viewer.loaded_rig() == plan.set.rig_id();
+            let showing = session.showing();
+
+            if settled {
+                return showing;
+            }
+
+            Showing {
+                viewer: showing.viewer,
+                rows: showing.rows,
+                widest: showing.widest,
+                listed: showing.listed,
+                ..Showing::default()
+            }
+        });
 
         let held = self.recalled.iter().find(|known| known.key == plan.set.name);
         let expanded = held.map(|held| held.expanded.clone()).unwrap_or_default();
@@ -2843,7 +2854,7 @@ impl Session {
     }
 
     fn relist(&mut self) {
-        if !self.rows.is_empty() && self.viewer.loaded_rig() != self.plan.set.rig_id() {
+        if self.viewer.loaded_rig() != self.plan.set.rig_id() {
             return;
         }
 

@@ -9,15 +9,14 @@ use std::fmt;
 use std::thread;
 use std::time::{Duration, SystemTime};
 
-use iced::advanced::graphics::text::Paragraph;
-use iced::advanced::text::{Alignment as TextAlignment, Paragraph as _, Text as Shaped};
 use iced::alignment::{Horizontal, Vertical};
 use iced::font;
-use iced::widget::text::{LineHeight, Shaping, Wrapping};
+use iced::widget::text::Wrapping;
 use iced::widget::{image as iced_image, operation, scrollable, tooltip, Id};
 use iced::futures::channel::mpsc::unbounded;
-use iced::{Color, ContentFit, Element, Length, Pixels, Size, Task, Theme};
+use iced::{Color, ContentFit, Element, Length, Size, Task, Theme};
 use nyanko::cat::unit::{LevelCurve, TalentCost};
+use rayon::prelude::*;
 use rustc_hash::FxHasher;
 use nyanko::combat::{Entity, REGISTRY};
 
@@ -55,6 +54,7 @@ use shelf::*;
 use crate::domains::stage::category::CategoryExt;
 use crate::common::feedback::{Slot, CONFIRM_LABEL};
 use crate::common::fonts;
+use crate::common::glyphs::Ruler;
 use crate::common::item_icon;
 use crate::common::{ability_icon, img015, skill_name, CustomAssets, SpriteSheet};
 use iced::widget::image::Handle;
@@ -341,6 +341,34 @@ impl Default for State {
     }
 }
 
+struct Sifted {
+    listed: Vec<u32>,
+    sighted: Vec<u32>,
+}
+
+struct Vetted {
+    cats: HashSet<u32>,
+    foes: HashSet<u32>,
+}
+
+fn sift(cats: &[CatEntry], foes: &[EnemyEntry], vfs: &Vfs, settings: &Settings) -> Sifted {
+    let strict = strict_config(settings);
+
+    let listed = cats
+        .par_iter()
+        .filter(|entry| cat_scanner::listable(vfs, entry, &strict))
+        .map(|entry| entry.id)
+        .collect();
+
+    let sighted = foes
+        .par_iter()
+        .filter(|entry| enemy_scanner::listable(vfs, entry.id, &strict))
+        .map(|entry| entry.id)
+        .collect();
+
+    Sifted { listed, sighted }
+}
+
 impl State {
     pub(crate) fn refresh(&mut self, scope: Scope<'_>, window: Size) -> Task<Message> {
         let vfs = &scope.global.vault.vfs;
@@ -365,31 +393,16 @@ impl State {
         Task::batch([self.check_sheets(vfs), self.ensure_tiles(window)])
     }
 
-    fn reconcile(&mut self, cats: &[CatEntry], foes: &[EnemyEntry], vfs: &Vfs, settings: &Settings) {
-        let strict = strict_config(settings);
+    fn reconcile(&mut self, sifted: Sifted) {
+        self.promoted = mining::reconcile(&sifted.listed);
+        self.surfaced = mining::reconcile_foes(&sifted.sighted);
 
-        let listable: Vec<u32> = cats
-            .iter()
-            .filter(|entry| cat_scanner::listable(vfs, entry, &strict))
-            .map(|entry| entry.id)
-            .collect();
-
-        self.promoted = mining::reconcile(&listable);
-
-        if !listable.is_empty() {
-            self.listed = listable;
+        if !sifted.listed.is_empty() {
+            self.listed = sifted.listed;
         }
 
-        let sighted: Vec<u32> = foes
-            .iter()
-            .filter(|entry| enemy_scanner::listable(vfs, entry.id, &strict))
-            .map(|entry| entry.id)
-            .collect();
-
-        self.surfaced = mining::reconcile_foes(&sighted);
-
-        if !sighted.is_empty() {
-            self.spotted = sighted;
+        if !sifted.sighted.is_empty() {
+            self.spotted = sifted.sighted;
         }
     }
 
@@ -493,12 +506,18 @@ impl State {
     }
 
     pub(crate) fn restock(&mut self, scope: Scope<'_>) {
-        self.reconcile(scope.cats, scope.foes, &scope.global.vault.vfs, scope.settings);
+        let sifted = sift(scope.cats, scope.foes, &scope.global.vault.vfs, scope.settings);
+        let vetted = Vetted {
+            cats: sifted.listed.iter().copied().collect(),
+            foes: sifted.sighted.iter().copied().collect(),
+        };
+
+        self.reconcile(sifted);
 
         self.index = scope.cats.iter().enumerate().map(|(slot, entry)| (entry.id, slot)).collect();
         self.foe_index = scope.foes.iter().enumerate().map(|(slot, entry)| (entry.id, slot)).collect();
 
-        self.ready = self.derive(scope.cats, scope.foes, scope.global, scope.settings);
+        self.ready = self.derive(&vetted, scope.cats, scope.foes, scope.global, scope.settings);
         self.terrain = self.survey(scope.registry, &scope.global.vault.vfs);
         self.snapped = mining::has_snapshot();
         self.diggable = mining::capturable();
@@ -518,6 +537,7 @@ impl State {
 
     fn derive(
         &self,
+        vetted: &Vetted,
         cats: &[CatEntry],
         foes: &[EnemyEntry],
         global: GlobalContext<'_>,
@@ -525,18 +545,7 @@ impl State {
     ) -> Ready {
         let vfs = &global.vault.vfs;
         let strict = strict_config(settings);
-
-        let listable: HashSet<u32> = cats
-            .iter()
-            .filter(|entry| cat_scanner::listable(vfs, entry, &strict))
-            .map(|entry| entry.id)
-            .collect();
-
-        let sighted: HashSet<u32> = foes
-            .iter()
-            .filter(|entry| enemy_scanner::listable(vfs, entry.id, &strict))
-            .map(|entry| entry.id)
-            .collect();
+        let Vetted { cats: listable, foes: sighted } = vetted;
 
         let spirits = conjured(cats);
         let mut seen: HashSet<u32> = HashSet::new();
@@ -1011,5 +1020,22 @@ impl State {
         self.portraits.borrow_mut().insert(key, handle.clone());
 
         handle
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // The scan feeds mining::reconcile, which compares it against the stored roster as a
+    // slice; a reordered scan would read as the whole roster arriving at once.
+    #[test]
+    fn the_parallel_scan_keeps_entry_order() {
+        let ids: Vec<u32> = (0..5_000).collect();
+
+        let scanned: Vec<u32> = ids.par_iter().filter(|id| **id % 3 != 0).copied().collect();
+        let expected: Vec<u32> = ids.iter().filter(|id| **id % 3 != 0).copied().collect();
+
+        assert_eq!(scanned, expected);
     }
 }

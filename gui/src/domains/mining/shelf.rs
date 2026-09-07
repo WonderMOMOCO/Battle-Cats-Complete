@@ -82,10 +82,16 @@ impl Shelves {
 
 pub(super) fn shelve(ore: &Diff, vfs: &Vfs) -> Shelves {
     let mut shelves = Shelves::default();
+    let mut ruler = Ruler::new(font::Font { weight: font::Weight::Bold, ..font::Font::DEFAULT }, FILE_NAME_SIZE);
 
-    for held in &ore.touched {
-        let art = pictured(&held.file).then(|| vfs.pristine(&held.file)).flatten();
-        let width = text_width(&held.file);
+    let resolved: Vec<Option<PathBuf>> = ore
+        .touched
+        .par_iter()
+        .map(|held| pictured(&held.file).then(|| vfs.pristine(&held.file)).flatten())
+        .collect();
+
+    for (held, art) in ore.touched.iter().zip(resolved) {
+        let width = ruler.width(&held.file);
 
         match (held.status, art) {
             (Status::Baseline, Some(path)) => {
@@ -105,22 +111,6 @@ pub(super) fn shelve(ore: &Diff, vfs: &Vfs) -> Shelves {
     shelves.moved_art.sort_unstable_by(|left, right| left.name.cmp(&right.name));
 
     shelves
-}
-
-fn text_width(content: &str) -> f32 {
-    Paragraph::with_text(Shaped {
-        content,
-        bounds: Size::INFINITE,
-        size: Pixels(FILE_NAME_SIZE),
-        line_height: LineHeight::default(),
-        font: font::Font { weight: font::Weight::Bold, ..font::Font::DEFAULT },
-        align_x: TextAlignment::Default,
-        align_y: Vertical::Top,
-        shaping: Shaping::default(),
-        wrapping: Wrapping::None,
-    })
-    .min_bounds()
-    .width
 }
 
 fn cell_width(available: f32, columns: usize) -> f32 {

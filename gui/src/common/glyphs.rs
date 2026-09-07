@@ -1,8 +1,11 @@
+use std::collections::HashMap;
 use std::sync::OnceLock;
 
-use iced::advanced::graphics::text::{cosmic_text, font_system};
-use iced::widget::text::Shaping;
-use iced::Font;
+use iced::advanced::graphics::text::{cosmic_text, font_system, Paragraph};
+use iced::advanced::text::{Alignment, Paragraph as _, Text as Shaped};
+use iced::alignment::Vertical;
+use iced::widget::text::{LineHeight, Shaping, Wrapping};
+use iced::{Font, Pixels, Size};
 
 const WIDE: [(u32, u32); 12] = [
     (0x1100, 0x115f),
@@ -54,6 +57,56 @@ pub(crate) fn shaping(label: &str) -> Shaping {
     }
 }
 
+pub(crate) struct Ruler {
+    font: Font,
+    size: f32,
+    advances: HashMap<char, f32>,
+}
+
+impl Ruler {
+    pub(crate) fn new(font: Font, size: f32) -> Self {
+        Self { font, size, advances: HashMap::new() }
+    }
+
+    pub(crate) fn width(&mut self, content: &str) -> f32 {
+        if !content.is_ascii() {
+            return self.shape(content);
+        }
+
+        let mut total = 0.0;
+
+        for glyph in content.chars() {
+            if let Some(held) = self.advances.get(&glyph) {
+                total += *held;
+                continue;
+            }
+
+            let advance = self.shape(glyph.encode_utf8(&mut [0; 4]));
+
+            self.advances.insert(glyph, advance);
+            total += advance;
+        }
+
+        total
+    }
+
+    fn shape(&self, content: &str) -> f32 {
+        Paragraph::with_text(Shaped {
+            content,
+            bounds: Size::INFINITE,
+            size: Pixels(self.size),
+            line_height: LineHeight::default(),
+            font: self.font,
+            align_x: Alignment::Default,
+            align_y: Vertical::Top,
+            shaping: Shaping::default(),
+            wrapping: Wrapping::None,
+        })
+        .min_bounds()
+        .width
+    }
+}
+
 pub(crate) fn columns(text: &str) -> f32 {
     text.chars().map(|glyph| if wide(glyph) { 2.0 } else { 1.0 }).sum()
 }
@@ -80,7 +133,17 @@ mod tests {
     fn the_monospace_family_resolves_to_a_font_with_a_name() {
         // Asking cosmic-text for the generic monospace family makes it rescan for a
         // font covering the script on every single shape, and never cache the miss.
-        assert!(matches!(mono(), Font { family: iced::font::Family::Name(_), .. }));
+        // Resolving the name needs the font system lock every shape also takes, so it
+        // gives up and retries on a later frame rather than blocking on one. Here the
+        // sibling tests hold that lock while the font database loads, so wait them out.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+
+        let resolved = std::iter::repeat_with(mono)
+            .inspect(|_| std::thread::yield_now())
+            .take_while(|_| std::time::Instant::now() < deadline)
+            .find(|named| matches!(named, Font { family: iced::font::Family::Name(_), .. }));
+
+        assert!(resolved.is_some());
     }
 
     #[test]
@@ -91,6 +154,33 @@ mod tests {
         assert_eq!(shaping("Part 3"), Shaping::Basic);
         assert_eq!(shaping("Part 3 \u{00b7} \u{571f}"), Shaping::Auto);
         assert_eq!(shaping("\u{25b8}"), Shaping::Auto);
+    }
+
+    #[test]
+    fn summed_advances_match_shaping_the_whole_name() {
+        // The mining Files tab measures tens of thousands of names, and shaping each one
+        // whole cost about a tenth of a second. Per-character advances have to add up to
+        // the same width or the caption line count moves; only the order the floats are
+        // summed in differs, which is worth a hundredth of a pixel at most.
+        let mut ruler = Ruler::new(Font { weight: iced::font::Weight::Bold, ..Font::DEFAULT }, 13.0);
+
+        for name in ["game/cats/000/f/uni000_f00.png", "Unit_Explanation301_en.csv", "M_+#.tsv", ""] {
+            let summed = ruler.width(name);
+            let shaped = ruler.shape(name);
+
+            assert!((summed - shaped).abs() < 0.01, "{name}: summed {summed} shaped {shaped}");
+        }
+    }
+
+    #[test]
+    fn a_name_outside_ascii_is_shaped_whole() {
+        // Contextual scripts do not add up character by character, so a modder's name
+        // has to fall back to shaping the string in one piece.
+        let mut ruler = Ruler::new(Font::DEFAULT, 13.0);
+        let name = "\u{571f}\u{4e0a}.png";
+
+        assert_eq!(ruler.width(name), ruler.shape(name));
+        assert!(ruler.width(name) > 0.0);
     }
 
     #[test]
