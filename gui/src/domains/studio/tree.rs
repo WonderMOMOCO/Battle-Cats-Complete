@@ -1,7 +1,7 @@
 use nyanko::graphics::rig::AnimModification;
 
 use super::*;
-use iced::widget::{container, row, text};
+use iced::widget::{container, row, space, text};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(super) struct Held {
@@ -66,33 +66,43 @@ impl TreeRow {
 
         let stem = branches(self.guide, self.depth, INDENT, ROW_HEIGHT, MARKER_SIZE);
 
-        let body = match self.mark {
-            "" => row![stem.reach(MARKER_WIDTH), label],
-            FOLDER_OPEN => row![stem.opened(), marker(self.mark), label],
-            _ => row![stem, marker(self.mark), label],
-        }
-        .align_y(Vertical::Center);
+        let (stem, body) = match self.mark {
+            "" => (stem.reach(MARKER_WIDTH), row![label]),
+            FOLDER_OPEN => (stem.opened(), row![marker(self.mark), label]),
+            _ => (stem, row![marker(self.mark), label]),
+        };
 
-        let content = container(body)
+        let span = stem.span();
+
+        let landed = container(body.align_y(Vertical::Center))
+            .width(Length::Fill)
             .height(Length::Fixed(ROW_HEIGHT))
             .align_y(Vertical::Center)
-            .padding(Padding::default().left(ROW_PADDING).right(ROW_PADDING));
+            .style(move |theme: &Theme| seat(theme, carried, onto, alarm));
+
+        let content = container(landed)
+            .height(Length::Fixed(ROW_HEIGHT))
+            .align_y(Vertical::Center)
+            .padding(Padding::default().left(stem.inset()).right(ROW_PADDING));
 
         let held = if by_part { self.part } else { self.track };
         let selected = held.is_some() && held == picked;
+        let rest = Length::Fixed((width - ROW_PADDING - span).max(0.0));
 
         let seated = match self.cargo().is_some() {
             true => {
                 let grip = mouse_area(content).on_press(Message::Press(index));
 
-                list_row(grip, selected, false, Length::Fixed(width), Message::DragEnd)
+                list_row(grip, selected, false, rest, Message::DragEnd)
             }
-            false => list_row(content, selected, false, Length::Fixed(width), Message::Row(index)),
+            false => list_row(content, selected, false, rest, Message::Row(index)),
         };
 
-        let row: Element<'_, Message> = container(seated)
+        let seat = row![space().width(Length::Fixed(ROW_PADDING)), stem, seated].align_y(Vertical::Center);
+
+        let row: Element<'_, Message> = container(seat)
             .width(Length::Fixed(width))
-            .style(move |theme: &Theme| seat(theme, carried, onto, alarm))
+            .height(Length::Fixed(ROW_HEIGHT))
             .into();
 
         match (self.track, self.owner) {

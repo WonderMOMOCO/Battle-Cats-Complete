@@ -33,7 +33,7 @@ pub(crate) use fit_text::fit_column;
 pub(crate) use hint::hover_hint;
 pub(crate) use toggle::{toggle_label, toggle_row};
 pub(crate) use ability_grid::{ability_spacer, icons_per_row};
-pub(crate) use branches::{branches, open_mark, Guide, Tracer};
+pub(crate) use branches::{branches, open_mark, Branches, Guide, Tracer};
 pub(crate) use list_row::list_row;
 pub(crate) use mock_console::ConsoleState;
 pub(crate) use name_box::name_box;

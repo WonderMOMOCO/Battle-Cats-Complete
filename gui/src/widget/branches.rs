@@ -99,8 +99,19 @@ impl Branches {
         (edge - fonts::TRIANGLE_GAP) * self.marker
     }
 
+    pub(crate) fn span(&self) -> f32 {
+        self.width()
+    }
+
+    pub(crate) fn inset(&self) -> f32 {
+        match self.reach > 0.0 {
+            true => fonts::TRIANGLE_LEAD * self.marker,
+            false => 0.0,
+        }
+    }
+
     fn width(&self) -> f32 {
-        self.indent * f32::from(self.depth) + self.reach
+        self.indent * f32::from(self.depth) + self.reach - self.inset()
     }
 
     fn columns(&self) -> f32 {

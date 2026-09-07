@@ -12,7 +12,7 @@ use crate::app::theme;
 use crate::common::{fonts, glyphs};
 use crate::common::row_window::{self, RowWindow};
 use crate::editor;
-use crate::widget::{branches, list_row, open_mark, smooth_scroll, Guide, Tracer};
+use crate::widget::{branches, list_row, open_mark, smooth_scroll, Branches, Guide, Tracer};
 
 use super::{both_ways, Mode, EMPTY_TEXT_SIZE, SCROLLBAR_ALLOWANCE, TEXT_SIZE};
 
@@ -351,26 +351,39 @@ impl State {
 
     fn view_row<'a>(&self, index: usize, row: &'a Row, width: f32, font: Font) -> Element<'a, Message> {
         let name = text(row.name.as_ref()).font(font).size(TEXT_SIZE).wrapping(text::Wrapping::None);
+        let stem = branches(row.guide, row.depth, INDENT, ROW_HEIGHT, MARKER_SIZE);
 
-        let label = if self.has_folders {
-            let stem = branches(row.guide, row.depth, INDENT, ROW_HEIGHT, MARKER_SIZE);
-
-            match (row.folder, row.expanded) {
-                (true, true) => row![stem.opened(), marker(true), name],
-                (true, false) => row![stem, marker(false), name],
-                (false, _) => row![stem.reach(MARKER_WIDTH), name],
-            }
-        } else {
-            row![name]
+        let (stem, label) = match (self.has_folders, row.folder, row.expanded) {
+            (false, ..) => (None, row![name]),
+            (_, true, true) => (Some(stem.opened()), row![marker(true), name]),
+            (_, true, false) => (Some(stem), row![marker(false), name]),
+            (_, false, _) => (Some(stem.reach(MARKER_WIDTH)), row![name]),
         };
+
+        let span = stem.as_ref().map_or(0.0, Branches::span);
+        let inset = stem.as_ref().map_or(0.0, Branches::inset);
 
         let content = container(label.align_y(Vertical::Center))
             .height(Length::Fixed(ROW_HEIGHT))
             .align_y(Vertical::Center)
-            .padding(Padding::default().left(ROW_PADDING).right(ROW_PADDING));
+            .padding(Padding::default().left(inset).right(ROW_PADDING));
+
+        let seat = list_row(
+            content,
+            self.selected_row == Some(index),
+            false,
+            Length::Fixed((width - ROW_PADDING - span).max(0.0)),
+            Message::Activate(index),
+        );
+
+        let mut body = row![space().width(Length::Fixed(ROW_PADDING))].align_y(Vertical::Center);
+
+        if let Some(stem) = stem {
+            body = body.push(stem);
+        }
 
         editor::target(
-            list_row(content, self.selected_row == Some(index), false, Length::Fixed(width), Message::Activate(index)),
+            container(body.push(seat)).width(Length::Fixed(width)).height(Length::Fixed(ROW_HEIGHT)),
             editor::Target::FileRow(index),
         )
     }
