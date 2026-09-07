@@ -7,6 +7,7 @@ pub(crate) const MISC_SYMBOLS_LINE_HEIGHT: f32 = 0.805;
 pub(crate) const TRIANGLE_LEAD: f32 = 0.107;
 pub(crate) const TRIANGLE_MIDDLE: f32 = 0.301;
 pub(crate) const TRIANGLE_REACH: f32 = 0.194;
+pub(crate) const TRIANGLE_ROW: f32 = 6.0 / 7.0;
 pub(crate) const TRIANGLE_GAP: f32 = 0.125;
 
 pub(crate) const UPLOAD: &str = "\u{E000}";

@@ -107,6 +107,10 @@ fn scan(root: &Path, dir: &Path) -> Collected {
 
     if let Ok(relative) = dir.strip_prefix(root) {
         let key = Box::<str>::from(relative.to_string_lossy());
+
+        listing.sort_unstable();
+        nested.sort_unstable();
+
         collected.dirs.insert(key.clone(), listing);
         collected.folders.insert(key, nested);
     }

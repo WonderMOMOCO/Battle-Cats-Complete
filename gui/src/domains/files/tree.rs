@@ -22,7 +22,7 @@ const ROW_SPACING: f32 = 0.0;
 const ROW_PADDING: f32 = 6.0;
 const INDENT: f32 = 12.0;
 
-const MARKER_SIZE: f32 = 22.0;
+const MARKER_SIZE: f32 = ROW_HEIGHT * fonts::TRIANGLE_ROW;
 const MARKER_LINE_HEIGHT: f32 = ROW_HEIGHT / MARKER_SIZE;
 const MARKER_WIDTH: f32 = 16.0;
 
@@ -520,3 +520,4 @@ impl Flatten<'_> {
         }
     }
 }
+

@@ -640,13 +640,9 @@ impl Vfs {
             return None;
         }
 
-        let sorted = |names: Option<&Vec<Box<str>>>| {
-            let mut names = names.cloned().unwrap_or_default();
-            names.sort_unstable();
-            names
-        };
+        let taken = |names: Option<&Vec<Box<str>>>| names.cloned().unwrap_or_default();
 
-        Some(Listing { folders: sorted(folders), files: sorted(files) })
+        Some(Listing { folders: taken(folders), files: taken(files) })
     }
 
     pub fn keys(&self, mount: &str) -> Vec<Box<str>> {
@@ -797,11 +793,7 @@ impl Mount for (&str, &Path) {
         };
 
         if let Some(parent) = relative.parent() {
-            let listing = mount.dirs.entry(parent.to_string_lossy().into()).or_default();
-
-            if !listing.iter().any(|existing| existing.as_ref() == name) {
-                listing.push(name.into());
-            }
+            admit(mount.dirs.entry(parent.to_string_lossy().into()).or_default(), name);
 
             link(mount, parent);
         }
@@ -908,6 +900,12 @@ fn descends(indexed: &MountedDir, dir: &Path, keep: &impl Fn(&str) -> bool) -> b
         .is_some_and(|names| names.iter().any(|name| descends(indexed, &dir.join(name.as_ref()), keep)))
 }
 
+fn admit(listing: &mut Vec<Box<str>>, name: &str) {
+    if let Err(at) = listing.binary_search_by(|existing| existing.as_ref().cmp(name)) {
+        listing.insert(at, name.into());
+    }
+}
+
 fn link(mount: &mut MountedDir, dir: &Path) {
     let mut current = Some(dir);
 
@@ -920,11 +918,7 @@ fn link(mount: &mut MountedDir, dir: &Path) {
             return;
         };
 
-        let listing = mount.folders.entry(parent.to_string_lossy().into()).or_default();
-
-        if !listing.iter().any(|existing| existing.as_ref() == name) {
-            listing.push(name.into());
-        }
+        admit(mount.folders.entry(parent.to_string_lossy().into()).or_default(), name);
 
         current = Some(parent);
     }
@@ -989,6 +983,39 @@ mod tests {
         fn drop(&mut self) {
             let _ = fs::remove_dir_all(&self.0);
         }
+    }
+
+    #[test]
+    fn a_listing_comes_back_sorted_without_browse_having_to_sort_it() {
+        // browse runs for every open directory on every tree rebuild, and the Files page
+        // can hold 150k names, so it must not re-sort what the index already knows. The
+        // index is kept in order on the way in instead; this is the invariant that buys.
+        let scratch = Scratch::new("sorted");
+        let root = &scratch.0;
+        let patch = root.join("patch");
+
+        fs::create_dir_all(patch.join("zeta")).expect("nested dir");
+        fs::create_dir_all(patch.join("alpha")).expect("nested dir");
+
+        for name in ["unit099.csv", "unit001.csv", "unit050.csv"] {
+            fs::write(patch.join(name), "0\n").expect("seed file");
+        }
+
+        for dir in ["zeta", "alpha"] {
+            fs::write(patch.join(dir).join("held.csv"), "0\n").expect("seed file");
+        }
+
+        let vfs = Vfs::with_priority(&[]);
+        vfs.create(root.as_path()).expect("mount the scratch dir");
+
+        let mount = root.file_name().and_then(OsStr::to_str).expect("mount key");
+        let listing = vfs.browse(mount, Path::new("patch")).expect("listing");
+
+        let files: Vec<&str> = listing.files.iter().map(Box::as_ref).collect();
+        let folders: Vec<&str> = listing.folders.iter().map(Box::as_ref).collect();
+
+        assert_eq!(files, ["unit001.csv", "unit050.csv", "unit099.csv"]);
+        assert_eq!(folders, ["alpha", "zeta"]);
     }
 
     #[test]

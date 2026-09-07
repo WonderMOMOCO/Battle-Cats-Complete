@@ -7,7 +7,6 @@ use crate::common::fonts;
 const LINE: f32 = 1.0;
 const GUIDE_ALPHA: f32 = 0.55;
 const OPEN_MARK_ALPHA: f32 = 0.7;
-const TRAIL: f32 = 5.0;
 const LEVELS: u16 = 64;
 
 fn guide_color(theme: &Theme) -> Color {
@@ -46,6 +45,10 @@ impl Tracer {
     }
 }
 
+fn fall(marker: f32) -> f32 {
+    (fonts::TRIANGLE_REACH + fonts::TRIANGLE_GAP) * marker - LINE
+}
+
 fn snap(centre: f32) -> f32 {
     (centre - LINE * 0.5).round()
 }
@@ -80,12 +83,12 @@ impl Branches {
             return 0.0;
         }
 
-        (self.height * 0.5 - (fonts::TRIANGLE_REACH + fonts::TRIANGLE_GAP) * self.marker).max(0.0)
+        (self.height * 0.5 - fall(self.marker)).max(0.0)
     }
 
     fn tip(&self) -> f32 {
         if self.reach > 0.0 {
-            return self.reach - TRAIL;
+            return self.reach - fonts::TRIANGLE_GAP * self.marker;
         }
 
         let edge = match self.opened {
@@ -110,8 +113,8 @@ impl<Message> Widget<Message, Theme, iced::Renderer> for Branches {
         Size { width: Length::Fixed(self.width()), height: Length::Fixed(self.height) }
     }
 
-    fn layout(&mut self, _tree: &mut widget::Tree, _renderer: &iced::Renderer, _limits: &layout::Limits) -> layout::Node {
-        layout::Node::new(Size::new(self.width(), self.height))
+    fn layout(&mut self, _tree: &mut widget::Tree, _renderer: &iced::Renderer, limits: &layout::Limits) -> layout::Node {
+        layout::Node::new(limits.resolve(Length::Fixed(self.width()), Length::Fixed(self.height), Size::ZERO))
     }
 
     fn draw(
@@ -147,9 +150,9 @@ impl<Message> Widget<Message, Theme, iced::Renderer> for Branches {
         }
 
         let elbow = stem(self.depth - 1);
-        let head = (bounds.y - self.rise()).round();
+        let head = bounds.y - self.rise();
         let foot = if self.guide.last { middle + LINE } else { bounds.y + self.height };
-        let close = (bounds.x + self.columns() + self.tip()).round();
+        let close = bounds.x + self.columns() + self.tip();
 
         paint(Rectangle { x: elbow, y: head, width: LINE, height: foot - head });
         paint(Rectangle { x: elbow, y: middle, width: close - elbow, height: LINE });
@@ -224,6 +227,21 @@ mod tests {
         }
 
         assert_eq!(snap(10.5), 10.0, "an odd row has a pixel dead on its centre");
+    }
+
+    // The open arrow tapers to a point, and because its ink box is square it is exactly
+    // d pixels wide d pixels above its apex. So the tip carries less ink than the line
+    // pointing at it until it is LINE wide; measuring the gap from there rather than from
+    // the bare apex is what makes the riser read like the horizontal, which meets a solid
+    // full-height edge instead of a taper.
+    #[test]
+    fn the_riser_measures_from_where_the_arrow_still_has_ink() {
+        for marker in [20.571_f32, 18.0] {
+            let apex = fonts::TRIANGLE_REACH * marker;
+            let gap = fonts::TRIANGLE_GAP * marker;
+
+            assert!((fall(marker) - (apex - LINE + gap)).abs() < 0.001, "{marker}px marker");
+        }
     }
 
     #[test]
