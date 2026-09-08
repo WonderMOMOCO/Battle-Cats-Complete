@@ -25,12 +25,14 @@ use kore::domains::enemy::scanner::EnemyEntry;
 use kore::common::architecture;
 use kore::domains::mods;
 use kore::domains::stage::files as stage_files;
+use kore::domains::stage::authoring as stage_authoring;
 use kore::domains::stage::materials as stage_materials;
 
 use kore::domains::stage::{names, GlobalMapId, GlobalStageId};
 use kore::domains::settings::{ContextScope, EditorMode};
 use kore::Vfs;
 use nyanko::chapter::stage::RewardStructure;
+use nyanko::common;
 use nyanko::graphics::tools::crash::Side;
 
 use crate::app::{theme, BattleCatsApp, Page};
@@ -59,6 +61,7 @@ pub enum Target {
     MapDrops,
     StageDrops,
     TreasureDrop(u32),
+    StageMake,
     CatAttributes,
     EnemyAttributes,
     CatAnimation,
@@ -80,7 +83,6 @@ pub enum Target {
 }
 
 pub(crate) struct Context {
-    enabled: bool,
     values: EditorMode,
     page: Page,
     file: Option<FileTarget>,
@@ -96,6 +98,17 @@ pub(crate) struct Context {
     channels: Option<ChannelTarget>,
     offsets: Option<studio::Offsets>,
     ground: Option<GroundTarget>,
+    making: Option<MakeTarget>,
+}
+
+pub(crate) struct MakeTarget {
+    add_stage: Option<Making>,
+    drop_stage: Option<Making>,
+    add_map: Option<Making>,
+    drop_map: Option<Making>,
+    stages_full: bool,
+    maps_full: bool,
+    fixed: bool,
 }
 
 struct GroundTarget {
@@ -511,13 +524,53 @@ enum Action {
     EditGround(ground::Plan),
     EditProse(prose::Plan),
     Replace { file: String, target_mod: Option<String>, game: Option<PathBuf> },
+    Make(Box<Making>),
+    Unmake(Box<Making>),
     Sync { file: String, target_mod: String, game: PathBuf },
     Open { source: PathBuf },
     Find { source: PathBuf },
 }
 
+// Everything creating or removing a stage touches, resolved from siblings that already
+// exist so a category whose names break the obvious pattern still lands correctly.
+#[derive(Clone)]
+pub(crate) struct Making {
+    target_mod: Option<String>,
+    unlocked: bool,
+    map: u32,
+    stage: u32,
+    global: u32,
+    whole_map: bool,
+    ground: String,
+    data_file: String,
+    name_file: String,
+    plate: String,
+    map_plate: String,
+    name_key: u32,
+    name_cell: usize,
+    story: bool,
+    vanilla: bool,
+    label: String,
+}
+
+impl Making {
+    fn mount(&self) -> &str {
+        self.target_mod.as_deref().unwrap_or(architecture::GAME)
+    }
+
+    fn subject(&self) -> String {
+        match self.whole_map {
+            true => format!("Map {:03}", self.map),
+            false => format!("Stage {:02}", self.stage),
+        }
+    }
+}
+
 enum Outcome {
     Done,
+    // The registry decides which maps and stages exist by globbing their files, so writing or
+    // removing one only shows once the whole stage scan runs again.
+    Rescanned,
     Opened(Page),
     Deferred(Task<Message>),
     Failed,
@@ -589,6 +642,7 @@ fn panels<'a>(items: &'a [Item], trail: &[usize]) -> Vec<&'a [Item]> {
 pub(crate) struct State {
     open: Option<Open>,
     opened: Option<Page>,
+    rescan: bool,
     pending: Option<Trail>,
     confirm: Slot<Trail>,
     failed: Slot<Trail>,
@@ -641,13 +695,10 @@ impl State {
             trace!(
                 page = ?context.page,
                 targeted = context.file.is_some(),
-                nightly = context.enabled,
                 "Right click produced no context menu actions"
             );
 
-            if context.enabled {
-                items.push(Item::disabled(NO_ACTIONS_LABEL, NO_ACTIONS_NOTICE));
-            }
+            items.push(Item::disabled(NO_ACTIONS_LABEL, NO_ACTIONS_NOTICE));
         }
 
         self.confirm.expire();
@@ -706,6 +757,10 @@ impl State {
 
     pub(crate) fn take_opened(&mut self) -> Option<Page> {
         self.opened.take()
+    }
+
+    pub(crate) fn take_rescan(&mut self) -> bool {
+        std::mem::take(&mut self.rescan)
     }
 
     pub(crate) fn popup_view<'a>(
@@ -996,6 +1051,14 @@ impl State {
             Action::Replace { file, target_mod, game } => {
                 replace_image(file, target_mod.as_deref(), game.as_deref())
             }
+            Action::Make(making) => match make(making, vfs) {
+                true => Outcome::Rescanned,
+                false => Outcome::Failed,
+            },
+            Action::Unmake(making) => match unmake(making, vfs) {
+                true => Outcome::Rescanned,
+                false => Outcome::Failed,
+            },
             Action::Sync { file, target_mod, game } => match mods::place(target_mod, game, file) {
                 Ok(path) => {
                     info!(path = %path.display(), "Synced a mod file with game");
@@ -1042,6 +1105,11 @@ impl State {
 
         match outcome {
             Outcome::Done => Task::none(),
+            Outcome::Rescanned => {
+                self.rescan = true;
+
+                Task::none()
+            }
             Outcome::Opened(page) => {
                 self.opened = Some(page);
 
@@ -1088,7 +1156,6 @@ pub(crate) fn context(app: &BattleCatsApp, target: Option<Target>) -> Context {
 
     if app.current_page == Page::Studio || expanded(app) {
         return Context {
-            enabled: app.settings.general.enable_nightly,
             values: app.settings.files.editor_mode,
             page: app.current_page,
             file: None,
@@ -1106,11 +1173,11 @@ pub(crate) fn context(app: &BattleCatsApp, target: Option<Target>) -> Context {
                 .then(|| app.studio_state.offsets())
                 .flatten(),
             ground: None,
+            making: None,
         };
     }
 
     Context {
-        enabled: app.settings.general.enable_nightly,
         values: app.settings.files.editor_mode,
         page: app.current_page,
         file: file_target(app, target),
@@ -1134,6 +1201,7 @@ pub(crate) fn context(app: &BattleCatsApp, target: Option<Target>) -> Context {
         channels: None,
         offsets: None,
         ground: ground_target(app, reached(Target::StageGround)),
+        making: make_target(app, reached(Target::StageMake)),
     }
 }
 
@@ -1476,6 +1544,122 @@ fn material_names(app: &BattleCatsApp) -> Vec<String> {
                 .map_or_else(String::new, |name| format!("{name} %"))
         })
         .collect()
+}
+
+// Creating a stage or a map only makes sense into a mod: the files are new, so there is no
+// vanilla original to place and nothing to fall back on under `game`.
+fn make_target(app: &BattleCatsApp, reached: bool) -> Option<MakeTarget> {
+    if !reached || app.current_page != Page::Stages {
+        return None;
+    }
+
+    let target_mod = app.mods_state.active_mod();
+    let data = &app.stage_state.data;
+    let map = data.selected_map.clone()?;
+    let registry = &data.registry;
+    let held = registry.addresses.get(&map)?;
+
+    let taken: Vec<u32> = registry
+        .stages
+        .keys()
+        .filter(|key| key.category == map.category && key.map == map.map)
+        .map(|key| key.stage)
+        .collect();
+
+    let maps: Vec<u32> =
+        registry.maps.keys().filter(|key| key.category == map.category).map(|key| key.map).collect();
+
+    // The story chapters number their battlegrounds `stageNormal*.csv` and their names one
+    // stage per line in a fixed backwards block, so there is no sibling to renumber and no
+    // slot to add. Zombie Outbreaks borrows the same tables and is fixed for the same reason.
+    let fixed = names::named_by_stage(&map.category.map_prefix());
+
+    let next_stage = stage_authoring::next_free(&taken, stage_authoring::STAGES_PER_MAP);
+    let next_map = stage_authoring::next_free(&maps, stage_authoring::MAPS_PER_CATEGORY);
+
+    let seed = |stage: u32, whole_map: bool, at: u32| -> Option<Making> {
+        if fixed {
+            return None;
+        }
+
+        making(app, &map, held, target_mod.clone(), stage, whole_map, at)
+    };
+
+    Some(MakeTarget {
+        add_stage: next_stage.and_then(|stage| seed(stage, false, map.map)),
+        drop_stage: data
+            .selected_stage
+            .as_ref()
+            .filter(|chosen| chosen.map == map.map && chosen.category == map.category)
+            .and_then(|chosen| seed(chosen.stage, false, map.map)),
+        add_map: next_map.and_then(|at| seed(0, true, at)),
+        drop_map: seed(0, true, map.map),
+        stages_full: next_stage.is_none(),
+        maps_full: next_map.is_none(),
+        fixed,
+    })
+}
+
+fn making(
+    app: &BattleCatsApp,
+    map: &GlobalMapId,
+    held: &kore::domains::stage::MapAddress,
+    target_mod: Option<String>,
+    stage: u32,
+    whole_map: bool,
+    at: u32,
+) -> Option<Making> {
+    let registry = &app.stage_state.data.registry;
+    let prefix = map.category.map_prefix();
+    let image = map.category.image_prefix();
+
+    // Names are renumbered off a sibling that already exists, never spelled from a rule:
+    // Stories of Legend numbers its maps `N` and its stages `RN`, and nothing but an existing
+    // file says so.
+    let sibling = registry
+        .grounds
+        .iter()
+        .find(|(key, _)| key.category == map.category)
+        .map(|(_, name)| name.to_string())?;
+
+    let ground = stage_authoring::renumbered(&sibling, at, Some(stage))?;
+    let data_file = stage_authoring::renumbered(held.data_file.as_deref()?, at, None)?;
+
+    let plate = visible_name(app, &stage_files::stage_banner_file(&map.category, map.map, 0, &image));
+    let plate = stage_authoring::renumbered(&plate, at, Some(stage))?;
+
+    let map_plate = visible_name(app, &stage_files::map_banner_file(map.map, &image));
+    let map_plate = stage_authoring::renumbered(&map_plate, at, None)?;
+
+    let (name_key, name_cell) = names::stage_name_address(&prefix, at, stage);
+
+    // The scanner finds maps by globbing their data tables and stages by globbing their
+    // battlegrounds, and a mod cannot un-glob a file the game ships. Removing a mod's copy of
+    // one only uncovers the original, so the thing would not go away.
+    let defining = match whole_map { true => &data_file, false => &ground };
+    let vanilla = app.vault.vfs.rooted(architecture::GAME, defining).is_some();
+
+    Some(Making {
+        target_mod,
+        unlocked: app.settings.files.unlock_game_mount,
+        vanilla,
+        map: at,
+        stage,
+        global: map.category.global_map_id(at)?,
+        whole_map,
+        ground,
+        data_file,
+        name_file: held.name_file.as_deref()?.to_owned(),
+        plate,
+        map_plate,
+        name_key,
+        name_cell,
+        story: names::named_by_stage(&prefix),
+        label: match whole_map {
+            true => format!("Map {at:03}"),
+            false => format!("Stage {stage:02}"),
+        },
+    })
 }
 
 fn ground_target(app: &BattleCatsApp, reached: bool) -> Option<GroundTarget> {
@@ -2308,6 +2492,187 @@ fn banner_target(app: &BattleCatsApp, id: u32) -> Option<BannerTarget> {
     })
 }
 
+// Creating a stage writes every file it needs, placeholders included: the engine faults on a
+// missing asset, so a stage that exists in one table and nowhere else is worse than no stage.
+// Every file the thing needs, placeholders included. Pure so the list can be checked without
+// a filesystem: a stage that reaches one table and no assets is the crash this exists to stop.
+fn authored(making: &Making) -> Vec<(String, Vec<u8>)> {
+    let mut written = Vec::new();
+
+    if making.whole_map {
+        for held in stage_authoring::blank_plate(&making.map_plate) {
+            written.push((held.name, held.bytes));
+        }
+
+        written.push((making.data_file.clone(), stage_authoring::blank_map_data(making.global)));
+    }
+
+    // A map is born holding its first stage, so both paths write a stage's own files.
+    for held in stage_authoring::blank_plate(&making.plate) {
+        written.push((held.name, held.bytes));
+    }
+
+    written.push((making.ground.clone(), stage_authoring::blank_battleground()));
+
+    written
+}
+
+fn make(making: &Making, vfs: &Vfs) -> bool {
+    let Some(mod_name) = making.target_mod.as_deref() else {
+        warn!("Creating a stage needs an active mod; the game mount has no place to put one");
+
+        return false;
+    };
+
+    for (name, bytes) in authored(making) {
+        let Ok(path) = mods::create(mod_name, &name, &bytes) else {
+            return false;
+        };
+
+        // Published straight away: the rescan reads through the index, and the watcher's
+        // debounce would not have landed by then.
+        if let Err(err) = vfs.create((mod_name, path.as_path())) {
+            warn!(name, "Wrote a file the index would not take: {}", err);
+        }
+    }
+
+    if making.whole_map {
+        return option_row(making, vfs, true) && name_seated(making, vfs, true);
+    }
+
+    data_row(making, vfs, true) && name_seated(making, vfs, true)
+}
+
+// Removal is confined to what the mod itself holds. A vanilla stage's files live under the
+// game mount and unpicking one there is a different, destructive operation.
+fn unmake(making: &Making, vfs: &Vfs) -> bool {
+    let mount = making.mount();
+
+    // A map takes its own table with it; a stage leaves the table it shared and only its own
+    // files go.
+    let held = match making.whole_map {
+        true => vec![making.map_plate.clone(), making.data_file.clone()],
+        false => vec![
+            making.plate.clone(),
+            stage_authoring::cut_name(&making.plate),
+            making.ground.clone(),
+        ],
+    };
+
+    for name in held {
+        let Some(path) = vfs.rooted(mount, &name) else { continue };
+
+        if let Err(err) = fs::remove_file(&path) {
+            warn!(path = %path.display(), "Could not remove a file: {}", err);
+
+            continue;
+        }
+
+        vfs.destroy((mount, path.as_path()));
+    }
+
+    if making.whole_map {
+        return option_row(making, vfs, false) && name_seated(making, vfs, false);
+    }
+
+    data_row(making, vfs, false) && name_seated(making, vfs, false)
+}
+
+// The shared tables are copied into the mod on first touch, exactly as the row editors do,
+// so a table the mod has not adopted yet is never edited in place under `game`.
+fn staged(vfs: &Vfs, target_mod: Option<&str>, name: &str) -> Option<(PathBuf, String)> {
+    let path = match target_mod {
+        Some(mod_name) => {
+            let source = vfs.find(name)?;
+
+            mods::ensure_as(vfs, mod_name, &source, name)
+                .inspect_err(|err| warn!(name, "Could not stage a table into the mod: {}", err))
+                .ok()?
+        }
+        None => vfs.rooted(architecture::GAME, name)?,
+    };
+
+    let bytes = fs::read(&path).ok()?;
+
+    Some((path, common::scrub(&bytes)))
+}
+
+fn rewrite(path: &Path, body: &str) -> bool {
+    fs::write(path, body.as_bytes())
+        .inspect_err(|err| warn!(path = %path.display(), "Could not write a table: {}", err))
+        .is_ok()
+}
+
+fn data_row(making: &Making, vfs: &Vfs, adding: bool) -> bool {
+    let Some((path, body)) = staged(vfs, making.target_mod.as_deref(), &making.data_file) else {
+        return false;
+    };
+
+    let at = figures::MAP_HEADER_LINES + making.stage as usize;
+
+    // Emptied rather than closed up: a stage's row is its line, so removing one would shift
+    // every later stage's data a seat up.
+    let body = match adding {
+        true => stage_authoring::with_line(&body, at, &stage_authoring::blank_stage_row()),
+        false => stage_authoring::blanked_line(&body, at),
+    };
+
+    rewrite(&path, &body)
+}
+
+// A story chapter names one stage per line; every other chapter holds a whole map on one
+// line and names a stage by its cell. `stage_name_rows` is the same scan the name editor
+// addresses through, so the two cannot land on different lines.
+fn name_seat(making: &Making, body: &str, delimiter: char) -> usize {
+    names::stage_name_rows(body, delimiter)
+        .get(&making.name_key)
+        .copied()
+        .unwrap_or(making.name_key as usize)
+}
+
+fn name_seated(making: &Making, vfs: &Vfs, adding: bool) -> bool {
+    let Some((path, body)) = staged(vfs, making.target_mod.as_deref(), &making.name_file) else {
+        return false;
+    };
+
+    let delimiter = prose::separator(&making.name_file);
+    let at = name_seat(making, &body, delimiter);
+
+    // A map is a line here and a stage a cell of it, both addressed by position, so removal
+    // empties rather than closes up for the same reason the data table does.
+    let body = match (adding, making.story) {
+        (true, true) => stage_authoring::with_line(&body, at, &making.label),
+        (false, true) => stage_authoring::blanked_line(&body, at),
+        (true, false) => {
+            stage_authoring::with_cell(&body, delimiter, at, making.name_cell, &making.label)
+        }
+        (false, false) => stage_authoring::blanked_cell(&body, delimiter, at, making.name_cell),
+    };
+
+    rewrite(&path, &body)
+}
+
+fn option_row(making: &Making, vfs: &Vfs, adding: bool) -> bool {
+    let Some((path, body)) = staged(vfs, making.target_mod.as_deref(), stage_files::MAP_OPTION) else {
+        return false;
+    };
+
+    let found = stage_authoring::line_of(&body, ',', 0, making.global);
+
+    let body = match (adding, found) {
+        (true, Some(_)) => return true,
+        (true, None) => {
+            let at = body.lines().count();
+
+            stage_authoring::with_line(&body, at, &stage_authoring::blank_map_option(making.global))
+        }
+        (false, Some(at)) => stage_authoring::without_line(&body, at),
+        (false, None) => return true,
+    };
+
+    rewrite(&path, &body)
+}
+
 fn replace_image(file: &str, target_mod: Option<&str>, game: Option<&Path>) -> Outcome {
     let file = file.to_string();
     let target_mod = target_mod.map(str::to_string);
@@ -2534,4 +2899,67 @@ fn file_target(app: &BattleCatsApp, target: Option<Target>) -> Option<FileTarget
         active_mod,
         mod_copy,
     })
+}
+
+#[cfg(test)]
+mod authoring_tests {
+    use super::*;
+
+    fn seed(whole_map: bool) -> Making {
+        Making {
+            target_mod: Some("MyMod".to_owned()),
+            unlocked: false,
+            map: 3,
+            stage: 0,
+            global: 3003,
+            whole_map,
+            ground: "stageRV003_00.csv".to_owned(),
+            data_file: "MapStageDataV_003.csv".to_owned(),
+            name_file: "StageName_RV.csv".to_owned(),
+            plate: "mapsn003_00_v_en.png".to_owned(),
+            map_plate: "mapname003_v_en.png".to_owned(),
+            name_key: 3,
+            name_cell: 0,
+            story: false,
+            vanilla: false,
+            label: "Stage 00".to_owned(),
+        }
+    }
+
+    fn names(made: &[(String, Vec<u8>)]) -> Vec<&str> {
+        made.iter().map(|(name, _)| name.as_str()).collect()
+    }
+
+    // The engine faults on a missing asset, so a new stage has to reach disk with its plate,
+    // its cut and its battleground -- never a row in one table and nothing else.
+    #[test]
+    fn a_new_stage_writes_every_file_it_needs() {
+        let made = authored(&seed(false));
+
+        assert_eq!(
+            names(&made),
+            vec!["mapsn003_00_v_en.png", "mapsn003_00_v_en.imgcut", "stageRV003_00.csv"],
+        );
+
+        assert!(made.iter().all(|(_, bytes)| !bytes.is_empty()), "no placeholder may be empty");
+    }
+
+    // A map is born holding its first stage: a table with no stage rows is an EmptyFile to
+    // nyanko, and a map with no battleground never reaches the list at all.
+    #[test]
+    fn a_new_map_writes_its_own_files_and_its_first_stage() {
+        let made = authored(&seed(true));
+
+        assert_eq!(
+            names(&made),
+            vec![
+                "mapname003_v_en.png",
+                "mapname003_v_en.imgcut",
+                "MapStageDataV_003.csv",
+                "mapsn003_00_v_en.png",
+                "mapsn003_00_v_en.imgcut",
+                "stageRV003_00.csv",
+            ],
+        );
+    }
 }

@@ -35,6 +35,7 @@ pub(crate) fn stage_name_targets(cat_prefix: &str) -> Vec<String> {
 pub const MAP_NAME: &str = "Map_Name.csv";
 pub const DROP_ITEM: &str = "DropItem.csv";
 pub const DROP_CHARA: &str = "drop_chara.csv";
+pub const MAP_OPTION: &str = "Map_option.csv";
 pub const GATYA_ITEM_BUY: &str = "Gatyaitembuy.csv";
 pub const GATYA_ITEM_NAME: &str = "GatyaitemName.csv";
 

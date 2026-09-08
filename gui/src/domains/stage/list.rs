@@ -208,7 +208,7 @@ impl State {
             columns = columns.push(column_body(COLUMN_WIDTH, stage_col, stage_count, "No Stages Found!"));
         }
 
-        column![
+        let panel = column![
             filter_btn,
             rule::horizontal(RULE_THICKNESS),
             smooth_scroll(
@@ -219,8 +219,11 @@ impl State {
         ]
             .spacing(FILTER_RULE_GAP)
             .width(Length::Fixed(sidebar_width(data)))
-            .height(Length::Fill)
-            .into()
+            .height(Length::Fill);
+
+        // Creating and removing stages and maps belongs to the list they appear in. A row
+        // claims first, so right-clicking one still edits that row's name.
+        editor::target(panel, editor::Target::StageMake)
     }
 }
 

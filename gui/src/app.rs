@@ -1423,11 +1423,17 @@ impl BattleCatsApp {
                     .update(msg, &self.vault.vfs, &mut self.studio_state)
                     .map(Message::Editor);
 
+                let rescan = self.editor.take_rescan().then(|| {
+                    let active = self.mods_state.active_mod();
+
+                    self.stage_state.rescan(&self.settings, &self.vault, active).map(Message::Stage)
+                });
+
                 let Some(page) = self.editor.take_opened() else {
-                    return task;
+                    return Task::batch([task].into_iter().chain(rescan));
                 };
 
-                Task::batch([task, self.navigate(page)])
+                Task::batch([task, self.navigate(page)].into_iter().chain(rescan))
             }
             Message::Settings(msg) => {
                 if matches!(msg, gui_settings::Message::General(gui_settings::general::Message::ManualUpdateCheck)) {

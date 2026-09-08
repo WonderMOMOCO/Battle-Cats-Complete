@@ -10,7 +10,7 @@ use kore::systems::animation::authoring;
 
 use crate::domains::studio;
 
-use super::{classify, figures, ground, prose, Action, AnimTarget, CatTarget, Context, EnemyTarget, FileTarget, Format, GroundTarget, Item, LevelTarget, ProseTarget, Scope};
+use super::{classify, figures, ground, prose, Action, AnimTarget, CatTarget, Context, EnemyTarget, FileTarget, Format, GroundTarget, Item, LevelTarget, MakeTarget, Making, ProseTarget, Scope};
 
 const BINARY_NOTICE: &str = "Cannot open binary format";
 const NO_CHANNEL_NOTICE: &str = "This part has no channels in this animation";
@@ -19,6 +19,14 @@ const NO_OFFSET_NOTICE: &str = "This model declares no offset rows to remove";
 const NOT_DRAWN_NOTICE: &str = "This part is not drawn on the current frame";
 const EVERY_CHANNEL_NOTICE: &str = "This part already has every channel";
 const NO_CLIP_NOTICE: &str = "Select an animation clip to add channels";
+const FULL_NOTICE: &str =
+    "Every slot the engine addresses is taken: 500 maps to a category, and 100 stages to a map";
+const VANILLA_NOTICE: &str =
+    "The game ships this one, and a mod cannot hide a file the game ships. Unlock the game mount to remove it for real";
+const NO_MOD_NOTICE: &str =
+    "Creating a stage writes new files, so it needs an active mod to write them into";
+const FIXED_CHAPTER_NOTICE: &str =
+    "The story chapters declare their stages in stageNormal files the engine names itself, so no stage or map can be added to one";
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Verb {
@@ -152,10 +160,6 @@ struct Payload<'a> {
 pub(super) fn items(context: &Context) -> Vec<Item> {
     let mut items = Vec::new();
 
-    if !context.enabled {
-        return items;
-    }
-
     if context.page == Page::Files
         && let Some(file) = context.file.as_ref()
     {
@@ -172,11 +176,72 @@ pub(super) fn items(context: &Context) -> Vec<Item> {
         return channels(&target.channels);
     }
 
+    if let Some(target) = context.making.as_ref() {
+        items.extend(making(target));
+    }
+
     let payloads = payloads(context);
     let style = Style::for_payloads(&payloads);
 
     for payload in &payloads {
         items.extend(payload.render(style));
+    }
+
+    items
+}
+
+// Creating and removing a stage or a map. Removal is confined to what the mod itself holds,
+// so a vanilla stage is never unpicked out from under the game mount.
+fn making(target: &MakeTarget) -> Vec<Item> {
+    let mut items = Vec::new();
+
+    if target.fixed {
+        return vec![
+            Item::disabled("New stage".to_owned(), FIXED_CHAPTER_NOTICE),
+            Item::disabled("New map".to_owned(), FIXED_CHAPTER_NOTICE),
+        ];
+    }
+
+    // Creating writes files, so it needs a mod to write them into; removing follows the same
+    // mount rules as every other Delete, which means the game mount asks to be unlocked first.
+    let mut adding = |held: &Option<Making>, full: bool, what: &str| {
+        let Some(held) = held else {
+            // Nothing to offer at all is not the same as every slot being taken, and only the
+            // second has a reason worth printing.
+            if full {
+                items.push(Item::disabled(format!("New {what}"), FULL_NOTICE));
+            }
+
+            return;
+        };
+
+        let seat = mount(held.target_mod.as_deref(), held.unlocked);
+
+        match seat.target {
+            Some(_) => items.push(Item::new(
+                format!("New \"{}\"", held.subject()),
+                Action::Make(Box::new(held.clone())),
+            )),
+            None => items.push(Item::disabled(format!("New {what}"), NO_MOD_NOTICE)),
+        }
+    };
+
+    adding(&target.add_stage, target.stages_full, "stage");
+    adding(&target.add_map, target.maps_full, "map");
+
+    for held in [&target.drop_stage, &target.drop_map].into_iter().flatten() {
+        let seat = mount(held.target_mod.as_deref(), held.unlocked);
+        let label = format!("Remove \"{}\" from \"{}\"", held.subject(), seat.name);
+
+        // Removing a mod's copy of something the game also ships just uncovers the original,
+        // so it is refused rather than left looking like it worked.
+        if seat.target.is_some() && held.vanilla {
+            items.push(Item::disabled(label, VANILLA_NOTICE));
+
+            continue;
+        }
+
+        items.push(seat.item(label, Action::Unmake(Box::new(held.clone())), Confirm::Overwrite));
     }
 
     items

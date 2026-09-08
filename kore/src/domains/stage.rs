@@ -1,3 +1,4 @@
+pub mod authoring;
 pub mod cost;
 pub mod filter;
 pub mod fixedlineup;

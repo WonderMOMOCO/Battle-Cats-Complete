@@ -9,8 +9,12 @@ const STORY_PREFIXES: [&str; 4] = ["EC", "W", "Space", "Z"];
 // The story chapters put one stage per line and read the first cell; every other chapter
 // puts a whole map on one line and reads the cell at the stage index. Both the scan and the
 // editor address a name through this, so the two cannot drift.
+pub fn named_by_stage(prefix: &str) -> bool {
+    STORY_PREFIXES.contains(&prefix)
+}
+
 pub fn stage_name_address(prefix: &str, map_id: u32, stage_id: u32) -> (u32, usize) {
-    if !STORY_PREFIXES.contains(&prefix) {
+    if !named_by_stage(prefix) {
         return (map_id, stage_id as usize);
     }
 

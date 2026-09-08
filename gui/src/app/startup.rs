@@ -96,8 +96,6 @@ impl BattleCatsApp {
             let _ = fs::remove_file(state_dir.join("meta.json"));
         }
 
-        nightly::register_nightly_usage();
-
         ExceptionList::sync_on_boot();
         info!(ms = split(&mut phase), "Boot phase: exception list synced");
 
@@ -108,6 +106,7 @@ impl BattleCatsApp {
         }
 
         lang::ensure_complete_list(&mut app.settings.general.language_priority);
+        nightly::settle(&mut app.settings.general.enable_nightly);
 
         debug!("Cleaning up temp update files");
         updater::cleanup_temp_files();

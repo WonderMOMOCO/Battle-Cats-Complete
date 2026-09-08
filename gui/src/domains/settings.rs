@@ -133,9 +133,7 @@ impl State {
                 match tab {
                     Tab::General => {
                         lang::ensure_complete_list(&mut core_settings.general.language_priority);
-                        if !nightly::features_available() {
-                            core_settings.general.enable_nightly = false;
-                        }
+                        nightly::settle(&mut core_settings.general.enable_nightly);
                     }
                     Tab::Cats => self.default_cat_level_buffer = core_settings.cat_data.default_level.to_string(),
                     Tab::Files => return self.disk.update(disk::Message::Refresh).map(Message::Disk),
