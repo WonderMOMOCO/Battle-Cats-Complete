@@ -161,15 +161,15 @@ fn fmt_effective_range(stats: &Entity) -> String {
                 let start = anchor;
                 let end = anchor + span;
                 let (min_r, max_r) = if start < end { (start, end) } else { (end, start) };
-                range_strings.push(format!("{}~{}", min_r, max_r));
+                range_strings.push(fmt_compress(min_r, max_r));
             } else if stats.long_distance_1_span != 0 || stats.long_distance_1_anchor != 0 {
                 let start = stats.long_distance_1_anchor;
                 let end = stats.long_distance_1_anchor + stats.long_distance_1_span;
                 let (min_r, max_r) = if start < end { (start, end) } else { (end, start) };
-                range_strings.push(format!("{}~{}", min_r, max_r));
+                range_strings.push(fmt_compress(min_r, max_r));
             } else {
                 let near_bound = pick(stats.faction, -320, -stats.hitbox_width);
-                range_strings.push(format!("{}~{}", near_bound, stats.standing_range));
+                range_strings.push(fmt_compress(near_bound, stats.standing_range));
             }
         }
     }
@@ -330,14 +330,14 @@ fn read_band(stats: &Entity) -> Option<String> {
         .map(|(_, anchor, span)| {
             let edge = anchor + span;
 
-            format!("{}~{}", anchor.min(edge), anchor.max(edge))
+            fmt_compress(anchor.min(edge), anchor.max(edge))
         })
         .collect();
 
     if reach.is_empty() {
         let near = pick(stats.faction, -320, -stats.hitbox_width);
 
-        return Some(format!("{}~{}", near, stats.standing_range));
+        return Some(fmt_compress(near, stats.standing_range));
     }
 
     Some(reach.join(", "))

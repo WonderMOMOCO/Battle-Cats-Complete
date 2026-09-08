@@ -10,7 +10,7 @@ use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
-use crate::common::architecture;
+use crate::common::{architecture, io};
 use crate::{Conflict, Vault, Vfs, VfsError};
 
 use super::mods::export::ExportState;
@@ -150,6 +150,8 @@ fn slot(mod_name: &str, name: &OsStr) -> PathBuf {
 }
 
 fn copy_into(mod_name: &str, source: &Path, destination: PathBuf) -> Result<PathBuf, std::io::Error> {
+    io::recase(&destination);
+
     fs::copy(source, &destination)?;
 
     debug!(mod_name, path = %destination.display(), "Copied a file into a mod");

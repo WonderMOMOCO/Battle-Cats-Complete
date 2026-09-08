@@ -1142,6 +1142,28 @@ mod tests {
     }
 
     #[test]
+    fn a_name_the_game_cannot_read_must_not_resolve_here_either() {
+        // Windows folds case, so a modder can end up with "Uni000_f00.png" sitting where
+        // "uni000_f00.png" belongs. The game reads the exact name and would show nothing,
+        // so neither may we: a case-insensitive fallback here would paint a working icon
+        // over a mod that is broken on device. The repair is renaming the file, and that
+        // happens on the write path, in mods::place.
+        let scratch = Scratch::new("miscased");
+        let root = &scratch.0;
+
+        fs::write(root.join("patch").join("Uni000_f00.png"), "icon\n").expect("seed the stray spelling");
+
+        let vfs = Vfs::with_priority(&[]);
+        vfs.create(root.as_path()).expect("mount the scratch dir");
+
+        let mount = root.file_name().and_then(OsStr::to_str).expect("mount key");
+
+        assert_eq!(vfs.rooted(mount, "uni000_f00.png"), None);
+        assert_eq!(vfs.find("uni000_f00.png"), None);
+        assert_eq!(vfs.rooted(mount, "Uni000_f00.png"), Some(root.join("patch").join("Uni000_f00.png")));
+    }
+
+    #[test]
     fn rooted_falls_back_to_the_shallowest_conflicting_copy() {
         let scratch = Scratch::new("rooted");
         let root = &scratch.0;
