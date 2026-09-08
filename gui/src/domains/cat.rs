@@ -12,7 +12,6 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread;
-use std::time::Duration;
 
 use iced::alignment::{Horizontal, Vertical};
 use iced::futures::channel::mpsc;
@@ -161,7 +160,7 @@ pub struct State {
     custom_assets: CustomAssets,
 
     dynamic_stats: StatsMemo,
-    header_icon_cache: RefCell<HashMap<PathBuf, HeaderIcon>>,
+    header_icon_cache: header_icon::Cache,
     header_icon_dummy: HeaderIcon,
 
     scan_progress: Option<(usize, usize)>,
@@ -341,11 +340,11 @@ impl State {
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
-        if self.selected_tab == DetailTab::Animation {
-            iced::time::every(Duration::from_millis(16)).map(|_| Message::AnimationTick)
-        } else {
-            Subscription::none()
+        if self.selected_tab != DetailTab::Animation {
+            return Subscription::none();
         }
+
+        iced::time::every(self.animation.pace()).map(|_| Message::AnimationTick)
     }
 
     pub fn start_load(&mut self, settings: &Settings, vault: &Arc<Vault>, active_mod: Option<String>, cached: bool) -> Task<Message> {
@@ -617,7 +616,7 @@ impl State {
                 self.selected_tab = tab;
 
                 if tab == DetailTab::Animation {
-                    return self.export_scroll_task();
+                    return Task::batch([Task::done(Message::AnimationTick), self.export_scroll_task()]);
                 }
 
                 Task::none()

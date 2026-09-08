@@ -19,7 +19,8 @@ const HEADER_MARGIN_Y: f32 = 30.0;
 const DEFAULT_BODY_ALPHA: f32 = 1.0;
 
 pub const GLASS: f32 = 0.95;
-const FRAME_BORDER_WIDTH: f32 = 3.0;
+pub(crate) const FRAME_BORDER: f32 = 3.0;
+const FRAME_BORDER_WIDTH: f32 = FRAME_BORDER;
 const MINIMUM_WINDOW: Size = Size::new(800.0, 600.0);
 const GRIP_OUTSET: f32 = 5.0;
 const GRIP_INSET: f32 = FRAME_BORDER_WIDTH;
@@ -77,16 +78,19 @@ pub enum Kind {
     LevelCurve,
     Talents,
     TalentCosts,
+    Combos,
     Explanation,
     EnemyName,
     EnemyDescription,
+    ComboName,
+    TalentText,
     Animator,
     StudioManage,
     StudioOnion,
     StudioShipout,
 }
 
-pub(crate) const KIND_COUNT: usize = 29;
+pub(crate) const KIND_COUNT: usize = 32;
 
 const KINDS: [Kind; KIND_COUNT] = [
     Kind::CatFilter,
@@ -110,9 +114,12 @@ const KINDS: [Kind; KIND_COUNT] = [
     Kind::LevelCurve,
     Kind::Talents,
     Kind::TalentCosts,
+    Kind::Combos,
     Kind::Explanation,
     Kind::EnemyName,
     Kind::EnemyDescription,
+    Kind::ComboName,
+    Kind::TalentText,
     Kind::Animator,
     Kind::UtilityAnimationSettings,
     Kind::StudioManage,
@@ -144,10 +151,13 @@ impl Kind {
             Self::UnitBuy => "unit_buy",
             Self::Talents => "talents",
             Self::TalentCosts => "talent_costs",
+            Self::Combos => "combos",
             Self::LevelCurve => "level_curve",
             Self::Explanation => "explanation",
             Self::EnemyName => "enemy_name",
             Self::EnemyDescription => "enemy_description",
+            Self::ComboName => "combo_name",
+            Self::TalentText => "talent_text",
             Self::Animator => "animator",
             Self::StudioManage => "studio_manage",
             Self::StudioOnion => "studio_onion",
@@ -496,6 +506,13 @@ impl State {
         let (_, size) = self.resolved(spec, bounds);
 
         size.width - FRAME_BORDER_WIDTH * 2.0
+    }
+
+    pub(crate) fn body_height(&self, spec: Spec, window: Size) -> f32 {
+        let bounds = if window.width < 1.0 || window.height < 1.0 { MINIMUM_WINDOW } else { window };
+        let (_, size) = self.resolved(spec, bounds);
+
+        size.height - FRAME_BORDER_WIDTH * 2.0 - HEADER_HEIGHT
     }
 
     fn resolved(&self, spec: Spec, window: Size) -> (Point, Size) {

@@ -10,6 +10,7 @@ mod pipeline;
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
 
 use iced::widget::{button, column, container, stack, text, Space};
 use iced::{Alignment, Background, Border, Color, Element, Length, Padding, Size, Task, Theme};
@@ -24,6 +25,9 @@ use crate::app::state::AnimState;
 use crate::app::theme;
 use crate::editor;
 use crate::widget::{smooth_scroll, toggle_row};
+
+pub const PLAYING_TICK: Duration = Duration::from_millis(16);
+pub const RESTING_TICK: Duration = Duration::from_millis(200);
 
 const FRAME_BORDER_WIDTH: f32 = 4.0;
 const FRAME_BORDER_RADIUS: f32 = 5.0;
@@ -376,6 +380,12 @@ impl State {
 
     pub fn is_expanded(&self) -> bool {
         self.is_expanded
+    }
+
+    pub fn pace(&self) -> Duration {
+        let live = self.playing() || self.holding() || self.export.busy();
+
+        if live { PLAYING_TICK } else { RESTING_TICK }
     }
 
     pub fn tick(&mut self) {

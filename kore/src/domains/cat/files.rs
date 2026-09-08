@@ -4,11 +4,12 @@ pub const SKILL_ACQUISITION: &str = "SkillAcquisition.csv";
 pub const SKILL_LEVEL: &str = "SkillLevel.csv";
 pub const SKILL_DESCRIPTIONS: &str = "SkillDescriptions.csv";
 pub(crate) const UNIT_EVOLVE: &str = "unitevolve.csv";
-pub(crate) const NYANCOMBO_DATA: &str = "NyancomboData.csv";
-pub(crate) const NYANCOMBO_NAME: &str = "Nyancombo.csv";
+pub const NYANCOMBO_DATA: &str = "NyancomboData.csv";
+pub const NYANCOMBO_NAME: &str = "Nyancombo.csv";
 pub(crate) const NYANCOMBO_EFFECT: &str = "Nyancombo1.csv";
 pub(crate) const NYANCOMBO_BAND: &str = "Nyancombo2.csv";
 pub(crate) const NYANCOMBO_FILTER: &str = "NyancomboFilter.tsv";
+pub(crate) const NYANCOMBO_PARAM: &str = "NyancomboParam.tsv";
 pub(crate) const EMPTY_ICON: &str = "uni.png";
 
 #[derive(Copy, Clone, PartialEq)]

@@ -9,7 +9,7 @@ use crate::widget::smooth_scroll;
 
 use super::resolved::Rule;
 use super::schema::{COST_HEAD, COST_LEVELS};
-use super::{cards, Draft, Frame, Marks, Message};
+use super::{cards, Address, Draft, Frame, Marks, Message};
 
 const NOTICE: &str =
     "Cost curves are shared by every unit; dimmed ids are ones this unit's talents never reference";
@@ -93,7 +93,7 @@ fn curve_key<'a>(id: u32, current: bool, referenced: bool) -> Element<'a, Messag
         .style(move |theme: &Theme, status| {
             theme::header_toggle_button(theme, status, current, referenced)
         })
-        .on_press(Message::Rowed(id))
+        .on_press(Message::Aimed(Address::Keyed(id)))
         .into()
 }
 

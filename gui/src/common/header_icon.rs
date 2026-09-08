@@ -25,13 +25,20 @@ impl HeaderIcon {
     }
 }
 
-pub(crate) type Cache = RefCell<HashMap<PathBuf, HeaderIcon>>;
+pub(crate) type Cache = RefCell<HashMap<PathBuf, Option<HeaderIcon>>>;
 
 pub(crate) fn load(cache: &Cache, path: &PathBuf) -> Option<HeaderIcon> {
     if let Some(cached) = cache.borrow().get(path) {
-        return Some(cached.clone());
+        return cached.clone();
     }
 
+    let icon = decode(path);
+    cache.borrow_mut().insert(path.clone(), icon.clone());
+
+    icon
+}
+
+fn decode(path: &PathBuf) -> Option<HeaderIcon> {
     if !path.exists() {
         return None;
     }
@@ -44,13 +51,10 @@ pub(crate) fn load(cache: &Cache, path: &PathBuf) -> Option<HeaderIcon> {
         return None;
     }
 
-    let icon = HeaderIcon {
+    Some(HeaderIcon {
         handle: Handle::from_rgba(width, height, rgba.into_raw()),
         width: width as f32,
         height: height as f32,
-    };
-
-    cache.borrow_mut().insert(path.clone(), icon.clone());
-
-    Some(icon)
+    })
 }
+

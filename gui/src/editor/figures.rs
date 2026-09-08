@@ -1,5 +1,6 @@
 mod cards;
 mod combat;
+mod combos;
 mod costs;
 mod resolved;
 mod schema;
@@ -21,6 +22,7 @@ use nyanko::common;
 use tracing::warn;
 
 use kore::common::preview::{self, Stamp};
+use kore::domains::cat::scanner::CatEntry;
 use kore::domains::{mods, settings::EditorMode};
 use kore::{Vault, Vfs};
 
@@ -40,6 +42,8 @@ const TALENT_SIZE: Size = Size::new(760.0, 540.0);
 const TALENT_POPUP: popup::Spec = popup::Spec::new(popup::Kind::Talents, TALENT_SIZE);
 const COSTS_SIZE: Size = Size::new(364.0, 520.0);
 const COSTS_POPUP: popup::Spec = popup::Spec::new(popup::Kind::TalentCosts, COSTS_SIZE);
+pub(super) const COMBO_SIZE: Size = Size::new(420.0, 296.0);
+const COMBO_POPUP: popup::Spec = popup::Spec::new(popup::Kind::Combos, COMBO_SIZE);
 
 pub(super) fn kind(subject: Subject) -> popup::Kind {
     spec(subject).kind()
@@ -53,6 +57,7 @@ fn spec(subject: Subject) -> popup::Spec {
         Subject::Curve => CURVE_POPUP,
         Subject::Talents => TALENT_POPUP,
         Subject::Costs => COSTS_POPUP,
+        Subject::Combo => COMBO_POPUP,
     }
 }
 
@@ -120,7 +125,7 @@ fn split_row(line: &str, delimiter: char, schema: &schema::Schema) -> Row {
     Row { cells, written, stored, comment }
 }
 
-fn vacant(plan: &Plan, delimiter: char) -> String {
+fn vacant(plan: &Plan, lines: &[String], delimiter: char) -> String {
     let mut fields: Vec<String> =
         (0..plan.schema.known()).map(|index| plan.schema.fallback(index).to_string()).collect();
 
@@ -128,6 +133,11 @@ fn vacant(plan: &Plan, delimiter: char) -> String {
         && let Some(first) = fields.first_mut()
     {
         *first = id.to_string();
+    }
+
+    if plan.schema.subject() == Subject::Combo {
+        combos::seed(&mut fields, plan.schema, plan.anchor);
+        combos::seed_key(&mut fields, plan.schema, lines, delimiter);
     }
 
     fields.join(&delimiter.to_string())
@@ -190,16 +200,25 @@ pub enum Message {
     CommentChanged(String),
     SearchChanged(String),
     HuntChanged(String),
-    Rowed(u32),
+    Aimed(Address),
+    Slotted(usize, i32, i32),
+    Removed,
     Sync,
-    SyncExpired,
+    ConfirmExpired,
     Persisted(u64, PathBuf, Option<Stamp>),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) enum Address {
+enum Intent {
+    Sync,
+    Remove,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Address {
     Line(usize),
     Keyed(u32),
+    Appended,
 }
 
 impl Address {
@@ -207,12 +226,15 @@ impl Address {
         match self {
             Address::Line(row) => Some(row),
             Address::Keyed(id) => lines.iter().position(|line| leading(line, delimiter) == Some(id)),
+            Address::Appended => None,
         }
     }
 
     fn insertion(self, lines: &[String], delimiter: char) -> Option<usize> {
-        let Address::Keyed(id) = self else {
-            return None;
+        let id = match self {
+            Address::Appended => return Some(lines.len()),
+            Address::Keyed(id) => id,
+            Address::Line(_) => return None,
         };
 
         let at = lines
@@ -232,7 +254,7 @@ impl Address {
     fn key(self) -> Option<u32> {
         match self {
             Address::Keyed(id) => Some(id),
-            Address::Line(_) => None,
+            Address::Line(_) | Address::Appended => None,
         }
     }
 }
@@ -249,6 +271,7 @@ pub(crate) struct Plan {
     target_mod: Option<String>,
     schema: &'static schema::Schema,
     values: EditorMode,
+    anchor: Option<(i32, i32)>,
 }
 
 impl Plan {
@@ -262,10 +285,15 @@ impl Plan {
             && self.target_mod == other.target_mod
             && self.label == other.label
             && self.values == other.values
+            && self.anchor == other.anchor
     }
 
-    fn rowed(self, id: u32) -> Plan {
-        Plan { address: Address::Keyed(id), ..self }
+    fn rowed(self, address: Address) -> Plan {
+        Plan { address, ..self }
+    }
+
+    pub(super) fn anchored(self, anchor: Option<(i32, i32)>) -> Plan {
+        Plan { anchor, ..self }
     }
 
     fn source(&self, vfs: &Vfs) -> PathBuf {
@@ -281,11 +309,16 @@ pub(crate) type Marks = [u8; schema::TALENT_SLOTS];
 #[derive(Clone, Copy)]
 pub(super) struct Frame<'a> {
     width: f32,
+    height: f32,
+    offset: f32,
     query: &'a str,
     armed: bool,
+    removing: bool,
     cap: Option<i32>,
     used: Marks,
+    cats: &'a [CatEntry],
     names: &'a talents::Names,
+    catalogue: &'a combos::Catalogue,
     vault: &'a Vault,
     picker: Option<usize>,
     hunt: &'a str,
@@ -297,9 +330,10 @@ pub(super) struct State {
     frame: popup::State,
     query: String,
     offset: f32,
-    confirm: Slot<()>,
-    pinned: Option<u32>,
+    confirm: Slot<Intent>,
+    pinned: Option<Address>,
     names: talents::Names,
+    catalogue: combos::Catalogue,
     picker: Option<usize>,
     hunt: String,
 }
@@ -345,11 +379,12 @@ impl State {
 
     fn reload(&mut self, plan: Plan, vfs: &Vfs) {
         self.draft = Draft::load(plan, vfs);
-        self.pinned = self.draft.as_ref().and_then(|draft| draft.keyed);
+        self.pinned = self.draft.as_ref().and_then(Draft::pin);
     }
 
     pub(super) fn relocalize(&self) {
         self.names.forget();
+        self.catalogue.forget();
     }
 
     pub(super) fn drafting(&self) -> bool {
@@ -398,8 +433,8 @@ impl State {
         };
 
         let plan = match self.pinned {
-            Some(id) => plan.rowed(id),
-            None => plan,
+            Some(address) if plan.anchor == current.plan.anchor => plan.rowed(address),
+            _ => plan,
         };
 
         if current.plan.target_mod.is_none() != plan.target_mod.is_none() {
@@ -461,36 +496,67 @@ impl State {
             Message::Picker(index) => {
                 self.picker = index;
                 self.hunt.clear();
+                self.offset = 0.0;
             }
-            Message::Rowed(id) => {
-                let switched = self.draft.as_mut().filter(|draft| draft.keyed != Some(id)).map(|draft| {
-                    draft.persist_now(vfs);
+            Message::Aimed(address) => {
+                let Some(draft) = self.draft.as_mut().filter(|draft| draft.aimed() != address) else {
+                    return Task::none();
+                };
 
-                    draft.plan.clone().rowed(id)
-                });
+                draft.persist_now(vfs);
 
-                if let Some(plan) = switched {
+                if draft.aim(address) {
                     self.offset = 0.0;
-                    self.reload(plan, vfs);
+                    self.picker = None;
+                }
+            }
+            Message::Slotted(index, unit, form) => {
+                self.picker = None;
+                self.hunt.clear();
+
+                if let Some(draft) = self.draft.as_mut() {
+                    draft.slotted(index, unit, form);
                 }
             }
             Message::Scrolled(offset) => self.offset = offset,
             Message::SearchChanged(query) => self.query = query,
-            Message::HuntChanged(query) => self.hunt = query,
+            Message::HuntChanged(query) => {
+                self.hunt = query;
+                self.offset = 0.0;
+            }
             Message::CommentChanged(value) => {
                 if let Some(draft) = self.draft.as_mut() {
                     draft.set_comment(value);
                 }
             }
-            Message::SyncExpired => self.confirm.expire(),
+            Message::ConfirmExpired => self.confirm.expire(),
             Message::Sync => {
-                if !self.confirm.take(&()) {
-                    return self.confirm.set((), Message::SyncExpired);
+                if !self.confirm.take(&Intent::Sync) {
+                    return self.confirm.set(Intent::Sync, Message::ConfirmExpired);
                 }
 
                 if let Some(draft) = self.draft.as_mut() {
                     draft.sync();
                 }
+            }
+            Message::Removed => {
+                if !self.confirm.take(&Intent::Remove) {
+                    return self.confirm.set(Intent::Remove, Message::ConfirmExpired);
+                }
+
+                let Some(draft) = self.draft.as_mut() else {
+                    return Task::none();
+                };
+
+                if !draft.remove() {
+                    return Task::none();
+                }
+
+                draft.persist_now(vfs);
+                draft.aim(Address::Appended);
+
+                self.offset = 0.0;
+                self.picker = None;
             }
             Message::Persisted(token, path, stamp) => {
                 if let Some(draft) = self.draft.as_mut()
@@ -510,6 +576,8 @@ impl State {
             }
         }
 
+        self.pinned = self.draft.as_ref().and_then(Draft::pin);
+
         self.draft.as_mut().map_or(Task::none(), |draft| draft.persist_if_dirty(vfs))
     }
 
@@ -518,20 +586,28 @@ impl State {
         window: Size,
         cap: Option<i32>,
         used: Marks,
+        cats: &'a [CatEntry],
         vault: &'a Vault,
     ) -> Option<Element<'a, Message>> {
         let draft = self.draft.as_ref()?;
         let spec = spec(draft.plan.subject());
         let width = self.frame.body_width(spec, window);
-        let armed = self.confirm.is_set();
+        let height = self.frame.body_height(spec, window);
+        let armed = self.confirm.armed_for(&Intent::Sync);
+        let removing = self.confirm.armed_for(&Intent::Remove);
         let query = self.query.as_str();
         let frame = Frame {
             width,
+            height,
+            offset: self.offset,
             query,
             armed,
+            removing,
             cap,
             used,
+            cats,
             names: &self.names,
+            catalogue: &self.catalogue,
             vault,
             picker: self.picker,
             hunt: &self.hunt,
@@ -590,7 +666,7 @@ impl Draft {
             return None;
         };
 
-        let blank = vacant(&plan, delimiter);
+        let blank = vacant(&plan, &lines, delimiter);
         let raw = match lines.get(row).filter(|_| !absent) {
             Some(line) => line.as_str(),
             None if plan.schema.creates() => blank.as_str(),
@@ -788,7 +864,7 @@ impl Draft {
         let delimiter = Separator::detect(&body).unwrap_or(Separator::Comma).char();
         let vanilla: Vec<String> = body.lines().map(str::to_owned).collect();
 
-        let blank = vacant(&self.plan, delimiter);
+        let blank = vacant(&self.plan, &vanilla, delimiter);
         let located = self.address().locate(&vanilla, delimiter).and_then(|row| vanilla.get(row));
 
         let raw = match located {
@@ -839,6 +915,7 @@ impl Draft {
             self.row = self.plan.address.insertion(&self.lines, self.delimiter).unwrap_or(self.row);
             self.lines.insert(self.row, line);
             self.absent = false;
+            self.plan = self.plan.clone().rowed(Address::Line(self.row));
         } else if empty && self.plan.schema.creates() {
             self.lines.remove(self.row);
             self.absent = true;
@@ -981,6 +1058,34 @@ impl Draft {
         self.keyed.map_or(self.plan.address, Address::Keyed)
     }
 
+    fn aimed(&self) -> Address {
+        if self.absent {
+            return self.plan.address;
+        }
+
+        self.keyed.map_or(Address::Line(self.row), Address::Keyed)
+    }
+
+    fn aim(&mut self, address: Address) -> bool {
+        if let Some(row) = address.locate(&self.lines, self.delimiter) {
+            return self.retarget(row);
+        }
+
+        if !self.plan.schema.creates() {
+            return false;
+        }
+
+        let Some(row) = address.insertion(&self.lines, self.delimiter) else {
+            return false;
+        };
+
+        let blank = vacant(&self.plan, &self.lines, self.delimiter);
+        self.plan = self.plan.clone().rowed(address);
+        self.adopt(&blank, row, true);
+
+        true
+    }
+
     fn keys(&self) -> &[u32] {
         &self.keys
     }
@@ -988,6 +1093,131 @@ impl Draft {
     fn keyed(&self) -> Option<u32> {
         self.keyed
     }
+
+    fn pin(&self) -> Option<Address> {
+        if let Some(id) = self.keyed {
+            return Some(Address::Keyed(id));
+        }
+
+        (self.plan.schema.appends() && !self.absent).then_some(Address::Line(self.row))
+    }
+
+    fn row(&self) -> usize {
+        self.row
+    }
+
+    fn at(&self, field: &str) -> Option<usize> {
+        self.plan.schema.index_of(field)
+    }
+
+    fn slotted(&mut self, index: usize, unit: i32, form: i32) {
+        let wanted: Vec<(usize, i32)> = [(index, unit), (index + 1, form)]
+            .into_iter()
+            .filter(|(slot, raw)| self.cells.get(*slot) != Some(raw))
+            .collect();
+
+        if wanted.is_empty() {
+            return;
+        }
+
+        self.overwrite(&wanted);
+
+        let packing = combos::packed(self.plan.schema, &self.cells);
+        self.overwrite(&packing);
+
+        self.stage();
+    }
+
+    fn overwrite(&mut self, cells: &[(usize, i32)]) {
+        for (slot, raw) in cells.iter().copied() {
+            let Some(cell) = self.cells.get_mut(slot) else {
+                continue;
+            };
+
+            *cell = raw;
+            self.record(slot, raw);
+
+            let display = shown(self.plan.schema, slot, raw, self.plan.values, self.rule(slot));
+
+            if let Some(field) = self.inputs.get_mut(slot) {
+                *field = display;
+            }
+        }
+    }
+
+    fn anchor(&self) -> Option<(i32, i32)> {
+        self.plan.anchor
+    }
+
+    fn absent(&self) -> bool {
+        self.absent
+    }
+
+    fn retarget(&mut self, row: usize) -> bool {
+        let Some(line) = self.lines.get(row).cloned() else {
+            return false;
+        };
+
+        self.plan = self.plan.clone().rowed(Address::Line(row));
+        self.adopt(&line, row, false);
+
+        true
+    }
+
+    fn adopt(&mut self, line: &str, row: usize, absent: bool) {
+        let Row { cells, written, stored, comment } = split_row(line, self.delimiter, self.plan.schema);
+
+        self.row = row;
+        self.absent = absent;
+        self.cells = cells;
+        self.written = written;
+        self.stored = stored;
+        self.touched = 0;
+        self.comment = comment;
+        self.keyed = self
+            .plan
+            .schema
+            .switches()
+            .then(|| self.lines.get(row).and_then(|line| leading(line, self.delimiter)))
+            .flatten();
+
+        self.rules = (0..self.cells.len())
+            .map(|index| {
+                resolved::rule(self.plan.subject(), index, self.plan.schema.field(index), &self.cells)
+            })
+            .collect();
+
+        self.inputs = (0..self.cells.len())
+            .map(|index| {
+                shown(self.plan.schema, index, self.cells[index], self.plan.values, self.rules[index])
+            })
+            .collect();
+
+        self.buffer = None;
+    }
+
+    fn remove(&mut self) -> bool {
+        if self.absent || self.row >= self.lines.len() {
+            return false;
+        }
+
+        if self.row + 1 == self.lines.len() {
+            self.lines.remove(self.row);
+            self.dirty = true;
+
+            return true;
+        }
+
+        let Some(index) = self.plan.schema.index_of(combos::SERIES) else {
+            return false;
+        };
+
+        self.overwrite(&[(index, combos::RETIRED)]);
+        self.stage();
+
+        true
+    }
+
 
     fn stored(&self) -> usize {
         self.stored
@@ -1018,6 +1248,7 @@ impl Draft {
             Subject::Curve => unitlevel::view(self, width, armed, cap),
             Subject::Talents => talents::view(self, frame),
             Subject::Costs => costs::view(self, frame),
+            Subject::Combo => combos::view(self, frame),
         }
     }
 }
@@ -1030,7 +1261,15 @@ pub(super) fn plan(
     target_mod: Option<String>,
     values: EditorMode,
 ) -> Plan {
-    Plan { address, label, game: game.to_path_buf(), target_mod, schema: schema::of(subject), values }
+    Plan {
+        address,
+        label,
+        game: game.to_path_buf(),
+        target_mod,
+        schema: schema::of(subject),
+        values,
+        anchor: None,
+    }
 }
 
 #[cfg(test)]
@@ -1145,6 +1384,39 @@ mod tests {
             Address::Line(0).nearest(&lines, ','),
             None,
             "only a keyed subject may be re-pointed at another row",
+        );
+    }
+
+    const VANILLA_COMBO: &str = "3066,6,-1,781,1,689,0,-1,-1,-1,-1,-1,-1,7,1,-1";
+
+    #[test]
+    fn a_combo_row_is_written_back_byte_for_byte() {
+        let row = split_row(VANILLA_COMBO, ',', schema::of(Subject::Combo));
+
+        assert_eq!(rebuild(&row, 0), VANILLA_COMBO, "a no-op commit must not rewrite the combo");
+    }
+
+    #[test]
+    fn a_combo_slot_names_the_columns_nyanko_publishes() {
+        let schema = schema::of(Subject::Combo);
+
+        for slot in 0..super::schema::COMBO_SLOTS {
+            for field in [super::schema::combo_unit(slot), super::schema::combo_form(slot)] {
+                assert!(
+                    schema.index_of(&field).is_some(),
+                    "combo: the slot view addresses {field}, which nyanko no longer publishes",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn only_talents_may_delete_their_own_row() {
+        let combo = schema::of(Subject::Combo);
+
+        assert!(
+            !combo.vacant(&vec![-1; combo.known()]),
+            "an emptied combo must be left in the file, not removed under it",
         );
     }
 
@@ -1333,7 +1605,7 @@ mod tests {
         };
 
         let seed = plan(Subject::Buy, Address::Line(0), "test".to_owned(), &path, None, EditorMode::Resolved);
-        std::fs::write(&path, format!("{}\n", super::vacant(&seed, ',')))
+        std::fs::write(&path, format!("{}\n", super::vacant(&seed, &[], ',')))
             .expect("failed to seed the temp fixture file");
         let seeded = std::fs::read(&path).expect("seeded fixture should be readable");
 
@@ -1374,7 +1646,7 @@ mod tests {
         };
 
         let seed = plan(Subject::Buy, Address::Line(0), "test".to_owned(), &path, None, EditorMode::Resolved);
-        std::fs::write(&path, format!("{}\n", super::vacant(&seed, ',')))
+        std::fs::write(&path, format!("{}\n", super::vacant(&seed, &[], ',')))
             .expect("failed to seed the temp fixture file");
 
         let vfs = Vfs::with_priority(&[]);
@@ -1414,7 +1686,7 @@ mod tests {
 
         let seed = plan(Subject::Buy, Address::Line(0), "test".to_owned(), &path, None, EditorMode::Resolved);
         std::fs::write(&path, format!("{}
-", super::vacant(&seed, ',')))
+", super::vacant(&seed, &[], ',')))
             .expect("failed to seed the temp fixture file");
 
         let vfs = Vfs::with_priority(&[]);
@@ -1502,4 +1774,166 @@ mod tests {
             dirty: false,
         }
     }
+}
+
+#[cfg(test)]
+mod append_tests {
+    use std::fs;
+
+    use kore::domains::settings::EditorMode;
+    use kore::Vfs;
+
+    use super::schema::{self, Subject};
+    use super::{plan, Address, Draft};
+
+    // The empty entry is the only way to make a combo now, so editing it has to write the
+    // row, give it a live key and re-address the popup onto it without a further click.
+    #[test]
+    fn editing_the_empty_entry_materialises_a_combo_and_selects_it() {
+        let root = std::env::temp_dir().join(format!("bcc-combo-new-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).expect("scratch");
+        let file = root.join("NyancomboData.csv");
+
+        fs::write(&file, "3066,6,-1,781,1,-1,-1,-1,-1,-1,-1,-1,-1,7,1,-1\n").expect("seed");
+
+        let vfs = Vfs::with_priority(&[String::new()]);
+        let made = plan(Subject::Combo, Address::Appended, "t".to_owned(), &file, None, EditorMode::Resolved)
+            .anchored(Some((44, 0)));
+
+        let mut state = super::State::default();
+        state.begin(made, 0, &vfs);
+
+        let schema = schema::of(Subject::Combo);
+        let anchored = schema.index_of("slot_1_unit_id").expect("published slot column");
+        let second = schema.index_of("slot_2_unit_id").expect("published slot column");
+
+        let draft = state.draft.as_ref().expect("the blank combo opens");
+        assert!(draft.absent(), "nothing is written until something is edited");
+        assert_eq!(draft.reads_at(anchored), Some(44), "the blank opens holding its own unit");
+        assert_eq!(fs::read_to_string(&file).expect("read").lines().count(), 1, "and wrote nothing");
+
+        let _ = state.update(super::Message::Slotted(second, 90, 2), &vfs);
+
+        assert_eq!(state.draft.as_ref().map(super::Draft::row), Some(1), "the popup moved onto it");
+        assert_eq!(state.draft.as_ref().map(super::Draft::absent), Some(false), "and it is real now");
+        assert_eq!(state.pinned, Some(Address::Line(1)), "so a refresh cannot rebase it");
+
+        state.flush_now(&vfs);
+
+        let written = fs::read_to_string(&file).expect("read back");
+        let lines: Vec<&str> = written.lines().collect();
+
+        assert_eq!(lines.len(), 2, "the edit materialised the row");
+        assert!(lines[1].starts_with("3067,6,"), "with the next key in its series: {:?}", lines[1]);
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn removing_a_combo_returns_the_popup_to_the_empty_entry() {
+        let root = std::env::temp_dir().join(format!("bcc-combo-back-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).expect("scratch");
+        let file = root.join("NyancomboData.csv");
+
+        fs::write(&file, "0,1,-1,44,0,-1,-1,-1,-1,-1,-1,-1,-1,5,0,-1\n1,1,-1,90,2,-1,-1,-1,-1,-1,-1,-1,-1,7,1,-1\n")
+            .expect("seed");
+
+        let vfs = Vfs::with_priority(&[String::new()]);
+        let made = plan(Subject::Combo, Address::Line(0), "t".to_owned(), &file, None, EditorMode::Resolved)
+            .anchored(Some((44, 0)));
+
+        let mut state = super::State::default();
+        state.begin(made, 0, &vfs);
+
+        let _ = state.update(super::Message::Removed, &vfs);
+        assert!(!state.draft.as_ref().is_some_and(super::Draft::absent), "the first press only arms it");
+
+        let _ = state.update(super::Message::Removed, &vfs);
+
+        let draft = state.draft.as_ref().expect("the popup stays open");
+        assert!(draft.absent(), "and lands back on the empty entry rather than closing");
+        assert_eq!(state.pinned, None, "an unwritten combo pins nothing");
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn switching_unit_or_form_retargets_the_combo_popup_instead_of_holding_its_row() {
+        let root = std::env::temp_dir().join(format!("bcc-combo-anchor-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).expect("scratch");
+        let file = root.join("NyancomboData.csv");
+
+        fs::write(&file, "0,1,-1,44,0,-1,-1,-1,-1,-1,-1,-1,-1,5,0,-1\n1,1,-1,90,2,-1,-1,-1,-1,-1,-1,-1,-1,7,1,-1\n")
+            .expect("seed");
+
+        let vfs = Vfs::with_priority(&[String::new()]);
+        let opened = plan(Subject::Combo, Address::Line(0), "t".to_owned(), &file, None, EditorMode::Resolved)
+            .anchored(Some((44, 0)));
+
+        let mut state = super::State::default();
+        state.begin(opened, 0, &vfs);
+        assert_eq!(state.pinned, Some(Address::Line(0)), "the popup pins the combo it opened on");
+
+        let same = plan(Subject::Combo, Address::Line(1), "t".to_owned(), &file, None, EditorMode::Resolved)
+            .anchored(Some((44, 0)));
+        state.sync(Some(same), &vfs);
+        assert_eq!(
+            state.draft.as_ref().map(super::Draft::row),
+            Some(0),
+            "the same unit and form must not drag the popup off the combo being edited",
+        );
+
+        let moved = plan(Subject::Combo, Address::Line(1), "t".to_owned(), &file, None, EditorMode::Resolved)
+            .anchored(Some((90, 2)));
+        state.sync(Some(moved), &vfs);
+        assert_eq!(
+            state.draft.as_ref().map(super::Draft::row),
+            Some(1),
+            "a different unit or form re-targets the popup onto that unit's combo",
+        );
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    // The shipped file keeps 126 superseded rows rather than deleting them, because the
+    // localized name tables are addressed by line. Removing one must do the same.
+    #[test]
+    fn removing_a_combo_mid_file_retires_it_instead_of_shifting_every_name_below() {
+        let root = std::env::temp_dir().join(format!("bcc-combo-remove-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).expect("scratch");
+        let file = root.join("NyancomboData.csv");
+
+        let seeded = "0,1,-1,44,0,-1,-1,-1,-1,-1,-1,-1,-1,5,0,-1\n1,1,-1,90,2,-1,-1,-1,-1,-1,-1,-1,-1,7,1,-1\n";
+        fs::write(&file, seeded).expect("seed");
+
+        let vfs = Vfs::with_priority(&[String::new()]);
+        let made = plan(Subject::Combo, Address::Line(0), "t".to_owned(), &file, None, EditorMode::Resolved);
+        let mut draft = Draft::load(made, &vfs).expect("the seeded combo loads");
+
+        assert!(draft.remove(), "a written combo can be removed");
+        draft.persist_now(&vfs);
+
+        let written = fs::read_to_string(&file).expect("read back");
+        let lines: Vec<&str> = written.lines().collect();
+
+        assert_eq!(lines.len(), 2, "the line stays so every name below keeps its address");
+        assert!(lines[0].starts_with("0,-1,"), "and is retired by its series: {:?}", lines[0]);
+        assert!(lines[1].starts_with("1,1,"), "the combo below is untouched: {:?}", lines[1]);
+
+        let last = plan(Subject::Combo, Address::Line(1), "t".to_owned(), &file, None, EditorMode::Resolved);
+        let mut tail = Draft::load(last, &vfs).expect("the last combo loads");
+
+        assert!(tail.remove(), "the last row can go outright");
+        tail.persist_now(&vfs);
+
+        let after = fs::read_to_string(&file).expect("read back");
+        assert_eq!(after.lines().count(), 1, "nothing below it, so nothing to keep aligned");
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
 }

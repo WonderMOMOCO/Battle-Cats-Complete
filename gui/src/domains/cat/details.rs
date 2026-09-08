@@ -217,7 +217,7 @@ impl State {
             slots = slots.push(self.view_member(member, cat_id));
         }
 
-        container(
+        let card = container(
             row![
                 container(block).width(Length::Fill).center_x(Length::Fill),
                 slots,
@@ -227,8 +227,9 @@ impl State {
         )
             .padding(COMBO_CARD_PADDING)
             .width(Length::Fill)
-            .style(theme::card_container_outlined)
-            .into()
+            .style(theme::card_container_outlined);
+
+        editor::target(card, editor::Target::CatCombo(combo.line))
     }
 
     fn view_member(&self, member: &ComboMember, cat_id: u32) -> Element<'static, Message> {

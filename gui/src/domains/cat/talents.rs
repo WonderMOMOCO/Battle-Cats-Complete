@@ -110,7 +110,7 @@ pub struct ViewCtx<'a, 'b> {
 pub struct State {
     icons: ability_icon::Cache,
     np_icons: ability_icon::Cache,
-    skill_name_cache: RefCell<HashMap<String, Handle>>,
+    skill_name_cache: skill_name::Cache,
     expanded: HashMap<(u32, u8), bool>,
 }
 

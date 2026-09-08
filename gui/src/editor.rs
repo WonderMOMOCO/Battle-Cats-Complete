@@ -14,6 +14,7 @@ use rustc_hash::FxHashMap;
 use tracing::{info, trace, warn};
 
 use kore::domains::cat::animation as cat_animation;
+use kore::domains::cat::combo as cat_combo;
 use kore::domains::cat::files as cat_files;
 use kore::domains::cat::waiter as cat_waiter;
 use kore::domains::enemy::animation as enemy_animation;
@@ -45,6 +46,7 @@ pub enum Target {
     CatLevels,
     CatForms,
     CatTalents,
+    CatCombo(usize),
     CatAttributes,
     EnemyAttributes,
     CatAnimation,
@@ -93,6 +95,7 @@ struct LevelTarget {
     asset: Asset,
     label: String,
     address: figures::Address,
+    anchor: Option<(i32, i32)>,
     unlocked: bool,
     active_mod: Option<String>,
 }
@@ -113,7 +116,12 @@ const TALENT_FILES: [(figures::Subject, &str); 2] = [
     (figures::Subject::Costs, cat_files::SKILL_LEVEL),
 ];
 
+const ACQUISITION_ONLY: [(figures::Subject, &str); 1] =
+    [(figures::Subject::Talents, cat_files::SKILL_ACQUISITION)];
+
 const FIRST_COST: u32 = 1;
+
+const FIRST_TALENT_TEXT: usize = 1;
 
 struct AssetFile {
     name: String,
@@ -272,6 +280,7 @@ struct ProseTarget {
     asset: Asset,
     label: String,
     row: usize,
+    rows: Vec<usize>,
     unlocked: bool,
     active_mod: Option<String>,
 }
@@ -659,7 +668,7 @@ impl State {
 
             let slot = &self.figures[subject.slot()];
 
-            if let Some(view) = slot.view(window, cap, used, &app.vault) {
+            if let Some(view) = slot.view(window, cap, used, &app.cat_state.data.cats, &app.vault) {
                 views.push((slot.raised(), figures::kind(subject), view.map(move |inner| Message::Figures(subject, inner))));
             }
         }
@@ -1011,11 +1020,12 @@ pub(crate) fn context(app: &BattleCatsApp, target: Option<Target>) -> Context {
         enemies: enemy_payloads(app, reached(Target::EnemyAttributes)),
         icon: icon_target(app, icon_subject(app, target, broad)),
         banner: banner_subject(app, target, broad).and_then(|id| banner_target(app, id)),
-        assets: talent_assets(app, reached(Target::CatTalents)),
+        assets: Vec::new(),
         prose: prose_payloads(app, target, broad),
         levels: level_payloads(app, reached(Target::CatLevels), reached(Target::CatForms))
             .into_iter()
             .chain(talent_payloads(app, reached(Target::CatTalents)))
+            .chain(combo_payloads(app, target, broad))
             .collect(),
         animation: anim_target(app, reached(Target::CatAnimation), reached(Target::EnemyAnimation)),
         channels: None,
@@ -1161,10 +1171,9 @@ fn figures_tab(app: &BattleCatsApp, subject: figures::Subject) -> bool {
     match subject {
         figures::Subject::Cat => app.cat_state.selected_tab == DetailTab::Abilities,
         figures::Subject::Enemy => app.enemy_state.selected_tab == EnemyTab::Abilities,
-        figures::Subject::Buy
-        | figures::Subject::Curve
-        | figures::Subject::Talents
-        | figures::Subject::Costs => true,
+        figures::Subject::Combo => app.cat_state.selected_tab == DetailTab::Details,
+        figures::Subject::Costs => talents_tab(app),
+        figures::Subject::Buy | figures::Subject::Curve | figures::Subject::Talents => true,
     }
 }
 
@@ -1188,6 +1197,10 @@ fn icon_subject(app: &BattleCatsApp, target: Option<Target>, broad: bool) -> Opt
 }
 
 fn prose_payloads(app: &BattleCatsApp, target: Option<Target>, broad: bool) -> Vec<ProseTarget> {
+    if let Some(Target::CatCombo(line)) = target {
+        return combo_name_target(app, Some(line)).into_iter().collect();
+    }
+
     if !broad {
         let Some(subject) = prose_subject(target) else {
             return Vec::new();
@@ -1203,6 +1216,7 @@ fn prose_payloads(app: &BattleCatsApp, target: Option<Target>, broad: bool) -> V
         .collect()
 }
 
+
 fn level_payloads(app: &BattleCatsApp, levels: bool, forms: bool) -> Vec<LevelTarget> {
     let files: &[(figures::Subject, &str)] = match (levels, forms) {
         (true, _) => &LEVEL_FILES,
@@ -1213,12 +1227,72 @@ fn level_payloads(app: &BattleCatsApp, levels: bool, forms: bool) -> Vec<LevelTa
     roster_payloads(app, files)
 }
 
+fn combo_payloads(app: &BattleCatsApp, target: Option<Target>, broad: bool) -> Vec<LevelTarget> {
+    if !figures_tab(app, figures::Subject::Combo) {
+        return Vec::new();
+    }
+
+    let line = match target {
+        Some(Target::CatCombo(line)) => Some(line),
+        _ if broad || !combo_joined(app) => None,
+        _ => return Vec::new(),
+    };
+
+    combo_target(app, line).into_iter().collect()
+}
+
+fn combo_joined(app: &BattleCatsApp) -> bool {
+    app.app_state.cat.selected_cat.is_some_and(|id| combo_line(app, id).is_some())
+}
+
+fn combo_target(app: &BattleCatsApp, line: Option<usize>) -> Option<LevelTarget> {
+    if app.current_page != Page::Cats {
+        return None;
+    }
+
+    let id = app.app_state.cat.selected_cat?;
+    let files = asset_files(app, cat_files::NYANCOMBO_DATA);
+
+    if files.is_empty() {
+        return None;
+    }
+
+    let address = line.map_or(figures::Address::Appended, figures::Address::Line);
+
+    Some(LevelTarget {
+        subject: figures::Subject::Combo,
+        asset: Asset::Variants { key: cat_files::NYANCOMBO_DATA.to_owned(), files },
+        label: [cat_label(app, id).as_str(), cat_files::NYANCOMBO_DATA].join(theme::HEADER_SEPARATOR),
+        address,
+        anchor: combo_anchor(app, id),
+        unlocked: app.settings.files.unlock_game_mount,
+        active_mod: app.mods_state.active_mod(),
+    })
+}
+
+fn combo_anchor(app: &BattleCatsApp, id: u32) -> Option<(i32, i32)> {
+    let form = i32::try_from(app.app_state.cat.selected_form).ok()?;
+
+    Some((i32::try_from(id).ok()?, form))
+}
+
+fn combo_line(app: &BattleCatsApp, id: u32) -> Option<usize> {
+    cat_combo::combo_lines(&app.vault, id, app.app_state.cat.selected_form).first().copied()
+}
+
 fn talent_payloads(app: &BattleCatsApp, reached: bool) -> Vec<LevelTarget> {
     if !reached || !talented(app) {
         return Vec::new();
     }
 
-    roster_payloads(app, &TALENT_FILES)
+    let files: &[(figures::Subject, &str)] =
+        if talents_tab(app) { &TALENT_FILES } else { &ACQUISITION_ONLY };
+
+    roster_payloads(app, files)
+}
+
+fn talents_tab(app: &BattleCatsApp) -> bool {
+    app.cat_state.selected_tab == DetailTab::Talents
 }
 
 fn talented(app: &BattleCatsApp) -> bool {
@@ -1291,6 +1365,7 @@ fn roster_payloads(app: &BattleCatsApp, files: &[(figures::Subject, &str)]) -> V
                 asset: Asset::Variants { key: name.to_owned(), files },
                 label: [label.as_str(), name].join(theme::HEADER_SEPARATOR),
                 address: address(app, subject, id),
+                anchor: None,
                 unlocked: app.settings.files.unlock_game_mount,
                 active_mod: app.mods_state.active_mod(),
             })
@@ -1298,18 +1373,47 @@ fn roster_payloads(app: &BattleCatsApp, files: &[(figures::Subject, &str)]) -> V
         .collect()
 }
 
-fn talent_assets(app: &BattleCatsApp, reached: bool) -> Vec<AssetTarget> {
-    if !reached || app.current_page != Page::Cats || !talented(app) {
-        return Vec::new();
+fn talent_text_target(app: &BattleCatsApp) -> Option<ProseTarget> {
+    if app.current_page != Page::Cats {
+        return None;
     }
 
-    let unlocked = app.settings.files.unlock_game_mount;
-    let active_mod = app.mods_state.active_mod();
+    let id = app.app_state.cat.selected_cat?;
+    let rows = talent_texts(app);
 
-    exception(app, cat_files::SKILL_DESCRIPTIONS.to_owned())
-        .map(|described| AssetTarget { asset: Asset::Exception(described), unlocked, active_mod })
-        .into_iter()
-        .collect()
+    Some(ProseTarget {
+        subject: prose::Subject::TalentText,
+        asset: Asset::Exception(exception(app, cat_files::SKILL_DESCRIPTIONS.to_owned())?),
+        label: [cat_label(app, id).as_str(), cat_files::SKILL_DESCRIPTIONS].join(theme::HEADER_SEPARATOR),
+        row: rows.first().copied().unwrap_or(FIRST_TALENT_TEXT),
+        rows,
+        unlocked: app.settings.files.unlock_game_mount,
+        active_mod: app.mods_state.active_mod(),
+    })
+}
+
+fn talent_texts(app: &BattleCatsApp) -> Vec<usize> {
+    let Some(talents) = app
+        .app_state
+        .cat
+        .selected_cat
+        .and_then(|id| app.cat_state.data.cats.iter().find(|cat| cat.id == id))
+        .and_then(|cat| cat.talent_data.as_ref())
+    else {
+        return Vec::new();
+    };
+
+    let mut held: Vec<usize> = talents
+        .groups
+        .iter()
+        .filter(|group| group.ability_id != 0)
+        .map(|group| usize::from(group.text_id))
+        .collect();
+
+    held.sort_unstable();
+    held.dedup();
+
+    held
 }
 
 fn level_cap(app: &BattleCatsApp) -> Option<i32> {
@@ -1356,6 +1460,8 @@ fn prose_targets(app: &BattleCatsApp, subject: prose::Subject) -> Vec<ProseTarge
 fn prose_tab(app: &BattleCatsApp, subject: prose::Subject) -> bool {
     match subject {
         prose::Subject::EnemyDescription => app.enemy_state.selected_tab == EnemyTab::Details,
+        prose::Subject::ComboName => app.cat_state.selected_tab == DetailTab::Details,
+        prose::Subject::TalentText => talents_tab(app),
         prose::Subject::Explanation | prose::Subject::EnemyName => true,
     }
 }
@@ -1365,6 +1471,8 @@ fn prose_subject(target: Option<Target>) -> Option<prose::Subject> {
         Target::CatExplanation => Some(prose::Subject::Explanation),
         Target::EnemyName => Some(prose::Subject::EnemyName),
         Target::EnemyDescription => Some(prose::Subject::EnemyDescription),
+        Target::CatCombo(_) => Some(prose::Subject::ComboName),
+        Target::CatTalents => Some(prose::Subject::TalentText),
         _ => None,
     }
 }
@@ -1374,7 +1482,33 @@ fn prose_target(app: &BattleCatsApp, subject: prose::Subject) -> Option<ProseTar
         prose::Subject::Explanation => explanation_target(app, app.app_state.cat.selected_cat?),
         prose::Subject::EnemyName => enemy_name_target(app),
         prose::Subject::EnemyDescription => enemy_description_target(app),
+        prose::Subject::ComboName => combo_name_target(app, None),
+        prose::Subject::TalentText => talent_text_target(app),
     }
+}
+
+fn combo_name_target(app: &BattleCatsApp, line: Option<usize>) -> Option<ProseTarget> {
+    if app.current_page != Page::Cats {
+        return None;
+    }
+
+    let id = app.app_state.cat.selected_cat?;
+    let row = line.or_else(|| combo_line(app, id))?;
+    let files = asset_files(app, cat_files::NYANCOMBO_NAME);
+
+    if files.is_empty() {
+        return None;
+    }
+
+    Some(ProseTarget {
+        subject: prose::Subject::ComboName,
+        asset: Asset::Variants { key: cat_files::NYANCOMBO_NAME.to_owned(), files },
+        label: [cat_label(app, id).as_str(), cat_files::NYANCOMBO_NAME].join(theme::HEADER_SEPARATOR),
+        row,
+        rows: Vec::new(),
+        unlocked: app.settings.files.unlock_game_mount,
+        active_mod: app.mods_state.active_mod(),
+    })
 }
 
 fn mod_copy(app: &BattleCatsApp, file: &str) -> Option<PathBuf> {
@@ -1389,6 +1523,7 @@ fn enemy_name_target(app: &BattleCatsApp) -> Option<ProseTarget> {
         asset: Asset::Exception(exception(app, enemy_files::NAMES.to_owned())?),
         label: enemy_label(app, id),
         row: id as usize,
+        rows: Vec::new(),
         unlocked: app.settings.files.unlock_game_mount,
         active_mod: app.mods_state.active_mod(),
     })
@@ -1407,6 +1542,7 @@ fn enemy_description_target(app: &BattleCatsApp) -> Option<ProseTarget> {
         asset: Asset::Variants { key: enemy_files::PICTURE_BOOK.to_owned(), files },
         label: enemy_label(app, id),
         row: id as usize,
+        rows: Vec::new(),
         unlocked: app.settings.files.unlock_game_mount,
         active_mod: app.mods_state.active_mod(),
     })
@@ -1453,6 +1589,7 @@ fn explanation_target(app: &BattleCatsApp, id: u32) -> Option<ProseTarget> {
         asset: Asset::Variants { key, files },
         label,
         row: form,
+        rows: Vec::new(),
         unlocked: app.settings.files.unlock_game_mount,
         active_mod: app.mods_state.active_mod(),
     })
@@ -1677,9 +1814,14 @@ fn current_plan(app: &BattleCatsApp, subject: figures::Subject) -> Option<figure
         figures::Subject::Buy
         | figures::Subject::Curve
         | figures::Subject::Talents
-        | figures::Subject::Costs => {
+        | figures::Subject::Costs
+        | figures::Subject::Combo => {
             let sources = match subject {
-                figures::Subject::Talents | figures::Subject::Costs => talent_payloads(app, true),
+                figures::Subject::Talents | figures::Subject::Costs => match talented(app) {
+                    true => roster_payloads(app, &TALENT_FILES),
+                    false => Vec::new(),
+                },
+                figures::Subject::Combo => combo_target(app, None).into_iter().collect(),
                 _ => level_payloads(app, true, false),
             };
 

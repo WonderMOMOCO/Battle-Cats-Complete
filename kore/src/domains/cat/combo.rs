@@ -26,21 +26,34 @@ impl ComboMember {
 }
 
 pub struct CatCombo {
+    pub line: usize,
     pub name: String,
     pub effect: String,
     pub restriction: Option<String>,
     pub members: [ComboMember; 5],
 }
 
+fn joins(row: &NyancomboData, cat_id: u32, form: usize) -> bool {
+    let (Ok(target), Ok(reached)) = (i32::try_from(cat_id), i32::try_from(form)) else {
+        return false;
+    };
+
+    row.is_active() && row.members().any(|slot| slot.unit_id == target && slot.form <= reached)
+}
+
+pub fn combo_lines(vault: &Vault, cat_id: u32, form: usize) -> Vec<usize> {
+    vault
+        .vds
+        .cats
+        .combos(&vault.vfs)
+        .iter()
+        .enumerate()
+        .filter(|(_, row)| joins(row, cat_id, form))
+        .map(|(line, _)| line)
+        .collect()
+}
+
 pub fn combos(ctx: GlobalContext<'_>, cat_id: u32, form: usize) -> Vec<CatCombo> {
-    let Ok(target) = i32::try_from(cat_id) else {
-        return Vec::new();
-    };
-
-    let Ok(reached) = i32::try_from(form) else {
-        return Vec::new();
-    };
-
     trace!(cat_id = cat_id, form = form, "resolving the combos a cat takes part in");
 
     let vfs = &ctx.vault.vfs;
@@ -53,13 +66,8 @@ pub fn combos(ctx: GlobalContext<'_>, cat_id: u32, form: usize) -> Vec<CatCombo>
     let unitbuy = vds.cats.unitbuy(vfs);
     let groups = vds.stages.charagroups(vfs);
 
-    let joined: Vec<(usize, &NyancomboData)> = rows
-        .iter()
-        .enumerate()
-        .filter(|(_, row)| {
-            row.is_active() && row.members().any(|slot| slot.unit_id == target && slot.form <= reached)
-        })
-        .collect();
+    let joined: Vec<(usize, &NyancomboData)> =
+        rows.iter().enumerate().filter(|(_, row)| joins(row, cat_id, form)).collect();
 
     if joined.is_empty() {
         return Vec::new();
@@ -90,7 +98,7 @@ pub fn combos(ctx: GlobalContext<'_>, cat_id: u32, form: usize) -> Vec<CatCombo>
                 member(vfs, &unitbuy, &mut explanations, slot, empty_icon.as_deref())
             });
 
-            CatCombo { name, effect: format!("{effect}{band}"), restriction, members }
+            CatCombo { line, name, effect: format!("{effect}{band}"), restriction, members }
         })
         .collect()
 }

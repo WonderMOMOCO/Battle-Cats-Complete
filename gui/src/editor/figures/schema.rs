@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::sync::LazyLock;
 
-use nyanko::cat::unit::UnitBuy;
+use nyanko::cat::unit::{NyancomboData, UnitBuy};
 use nyanko::cat::unitid;
 use nyanko::combat::Scale;
 use nyanko::common::{Column, FromColumn};
@@ -19,12 +19,20 @@ pub enum Subject {
     Curve,
     Talents,
     Costs,
+    Combo,
 }
 
-pub(crate) const COUNT: usize = 6;
+pub(crate) const COUNT: usize = 7;
 
-pub(crate) const SUBJECTS: [Subject; COUNT] =
-    [Subject::Cat, Subject::Enemy, Subject::Buy, Subject::Curve, Subject::Talents, Subject::Costs];
+pub(crate) const SUBJECTS: [Subject; COUNT] = [
+    Subject::Cat,
+    Subject::Enemy,
+    Subject::Buy,
+    Subject::Curve,
+    Subject::Talents,
+    Subject::Costs,
+    Subject::Combo,
+];
 
 impl Subject {
     pub(crate) fn slot(self) -> usize {
@@ -35,13 +43,19 @@ impl Subject {
             Subject::Curve => 3,
             Subject::Talents => 4,
             Subject::Costs => 5,
+            Subject::Combo => 6,
         }
     }
 
     pub(crate) fn page(self) -> Page {
         match self {
             Subject::Enemy => Page::Enemies,
-            Subject::Cat | Subject::Buy | Subject::Curve | Subject::Talents | Subject::Costs => Page::Cats,
+            Subject::Cat
+            | Subject::Buy
+            | Subject::Curve
+            | Subject::Talents
+            | Subject::Costs
+            | Subject::Combo => Page::Cats,
         }
     }
 }
@@ -63,6 +77,8 @@ pub(super) static TALENTS: Schema = Schema { subject: Subject::Talents, comments
 
 pub(super) static COSTS: Schema = Schema { subject: Subject::Costs, comments: false };
 
+pub(super) static COMBO: Schema = Schema { subject: Subject::Combo, comments: false };
+
 pub(super) fn of(subject: Subject) -> &'static Schema {
     match subject {
         Subject::Cat => &CAT,
@@ -71,6 +87,7 @@ pub(super) fn of(subject: Subject) -> &'static Schema {
         Subject::Curve => &CURVE,
         Subject::Talents => &TALENTS,
         Subject::Costs => &COSTS,
+        Subject::Combo => &COMBO,
     }
 }
 
@@ -185,6 +202,28 @@ const BUY_NAMES: &[(&str, &str)] = &[
     ("egg_id_evolved", "Egg ID Evolved"),
 ];
 
+const COMBO_NAMES: &[(&str, &str)] = &[
+    ("combo_id", "Combo ID"),
+    ("charagroup_id", "Restriction Group"),
+    ("slot_1_unit_id", "Slot 1 Unit"),
+    ("slot_2_unit_id", "Slot 2 Unit"),
+    ("slot_3_unit_id", "Slot 3 Unit"),
+    ("slot_4_unit_id", "Slot 4 Unit"),
+    ("slot_5_unit_id", "Slot 5 Unit"),
+    ("effect_type", "Effect"),
+    ("effect_level", "Power"),
+];
+
+pub(super) const COMBO_SLOTS: usize = 5;
+
+pub(super) fn combo_unit(slot: usize) -> String {
+    format!("slot_{}_unit_id", slot + 1)
+}
+
+pub(super) fn combo_form(slot: usize) -> String {
+    format!("slot_{}_form", slot + 1)
+}
+
 static CAT_LABELS: LazyLock<Vec<String>> = LazyLock::new(|| labels(&CAT_ORDER, CAT_NAMES));
 
 static ENEMY_LABELS: LazyLock<Vec<String>> = LazyLock::new(|| labels(&ENEMY_ORDER, ENEMY_NAMES));
@@ -196,6 +235,10 @@ static CAT_ORDER: LazyLock<Vec<Entry>> = LazyLock::new(|| order(unitid::COLUMNS)
 static ENEMY_ORDER: LazyLock<Vec<Entry>> = LazyLock::new(|| order(t_unit::COLUMNS));
 
 static BUY_ORDER: LazyLock<Vec<Entry>> = LazyLock::new(|| order(UnitBuy::COLUMNS));
+
+static COMBO_ORDER: LazyLock<Vec<Entry>> = LazyLock::new(|| order(NyancomboData::COLUMNS));
+
+static COMBO_LABELS: LazyLock<Vec<String>> = LazyLock::new(|| labels(&COMBO_ORDER, COMBO_NAMES));
 
 fn order<T>(columns: &'static [Column<T>]) -> Vec<Entry> {
     let mut sorted: Vec<Entry> = columns
@@ -243,6 +286,7 @@ impl Schema {
             Subject::Cat => &CAT_ORDER,
             Subject::Enemy => &ENEMY_ORDER,
             Subject::Buy => &BUY_ORDER,
+            Subject::Combo => &COMBO_ORDER,
             Subject::Curve | Subject::Talents | Subject::Costs => &[],
         }
     }
@@ -289,6 +333,7 @@ impl Schema {
         let table = match self.subject {
             Subject::Cat => &CAT_LABELS,
             Subject::Enemy => &ENEMY_LABELS,
+            Subject::Combo => &COMBO_LABELS,
             _ => &BUY_LABELS,
         };
 
@@ -298,15 +343,19 @@ impl Schema {
     }
 
     pub(super) fn creates(&self) -> bool {
-        self.subject == Subject::Talents
+        matches!(self.subject, Subject::Talents | Subject::Combo)
     }
 
     pub(super) fn switches(&self) -> bool {
         self.subject == Subject::Costs
     }
 
+    pub(super) fn appends(&self) -> bool {
+        self.subject == Subject::Combo
+    }
+
     pub(super) fn vacant(&self, cells: &[i32]) -> bool {
-        if !self.creates() {
+        if self.subject != Subject::Talents {
             return false;
         }
 

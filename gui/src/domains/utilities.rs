@@ -15,7 +15,6 @@ const SIDEBAR_WIDTH: f32 = 110.0;
 const SIDEBAR_PADDING: f32 = 8.0;
 const ROW_GAP: f32 = 4.0;
 const LABEL_SIZE: f32 = 14.0;
-const TICK_MS: u64 = 16;
 
 const TOOLS: [(&str, Tool); 3] = [("Imgcut", Tool::Imgcut), ("Animation", Tool::Animation), ("Clone", Tool::Clone)];
 
@@ -49,8 +48,7 @@ impl State {
             return Subscription::none();
         }
 
-        iced::time::every(std::time::Duration::from_millis(TICK_MS))
-            .map(|_| Message::Animation(animation::Message::Tick))
+        iced::time::every(self.animation.pace()).map(|_| Message::Animation(animation::Message::Tick))
     }
 
     pub fn update(&mut self, message: Message, settings: &mut Settings, app_state: &mut AppState) -> Task<Message> {
@@ -59,7 +57,9 @@ impl State {
                 self.tool = tool;
 
                 if tool == Tool::Animation {
-                    return self.export_scroll_task();
+                    let tick = Task::done(Message::Animation(animation::Message::Tick));
+
+                    return Task::batch([tick, self.export_scroll_task()]);
                 }
 
                 Task::none()

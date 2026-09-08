@@ -1840,3 +1840,4 @@ mod tests {
         assert_eq!(claimed.len(), popup::KIND_COUNT, "a popup kind is claimed by nobody, or a popup is missing from ActivePopup::ALL");
     }
 }
+

@@ -211,9 +211,12 @@ impl<M> canvas::Program<M> for Parts<'_> {
             })
             .collect();
 
-        let anchor_of = |wanted: usize| {
-            placed.iter().find(|(index, _, _)| *index == Some(wanted)).map(|(_, _, origin)| *origin)
-        };
+        let anchors: rustc_hash::FxHashMap<usize, Point> = placed
+            .iter()
+            .filter_map(|(index, _, origin)| Some(((*index)?, *origin)))
+            .collect();
+
+        let anchor_of = |wanted: usize| anchors.get(&wanted).copied();
 
         let ground = to_screen(0.0, 0.0);
 

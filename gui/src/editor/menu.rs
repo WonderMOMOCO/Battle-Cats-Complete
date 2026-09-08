@@ -6,6 +6,7 @@ use iced::{Border, Element, Length, Padding, Pixels, Size, Theme};
 use crate::app::theme;
 use crate::common::feedback::{CONFIRM_LABEL, CONFIRM_SHORT_LABEL, FAILURE_LABEL};
 use crate::common::fonts;
+use crate::common::glyphs;
 
 use super::{Item, Message, Trail};
 
@@ -16,7 +17,6 @@ const FRAME_PADDING: f32 = 4.0 * SCALE;
 const ITEM_PADDING_X: f32 = 10.0 * SCALE;
 const ITEM_PADDING_Y: f32 = 5.0 * SCALE;
 const BORDER_WIDTH: f32 = 1.0;
-const SHAPING: text::Shaping = text::Shaping::Advanced;
 const WRAPPING: text::Wrapping = text::Wrapping::None;
 const SAFETY: f32 = 1.0;
 const TOOLTIP_PADDING: f32 = 8.0 * SCALE;
@@ -108,7 +108,7 @@ fn label_bounds(renderer: &iced::Renderer, label: &str) -> Size {
         font: renderer.default_font(),
         align_x: text::Alignment::Left,
         align_y: alignment::Vertical::Top,
-        shaping: SHAPING,
+        shaping: glyphs::shaping(label),
         wrapping: WRAPPING,
     })
     .min_bounds()
@@ -142,10 +142,8 @@ fn entry<'a, M: Clone + 'a>(
 ) -> Element<'a, M> {
     let mark = marks.at(&trail);
 
-    let label = text_widget(mark.label(item.label.as_str(), item.terse))
-        .size(TEXT_SIZE)
-        .shaping(SHAPING)
-        .wrapping(WRAPPING);
+    let shown = mark.label(item.label.as_str(), item.terse);
+    let label = text_widget(shown).size(TEXT_SIZE).shaping(glyphs::shaping(shown)).wrapping(WRAPPING);
 
     let content: Element<'a, M> = if item.opens() {
         row![
@@ -173,7 +171,7 @@ fn entry<'a, M: Clone + 'a>(
 
     let wrapped: Element<'a, M> = match item.hint.as_deref() {
         Some(hint) => {
-            let bubble = container(text_widget(hint).size(TEXT_SIZE).shaping(SHAPING))
+            let bubble = container(text_widget(hint).size(TEXT_SIZE).shaping(glyphs::shaping(hint)))
                 .padding(TOOLTIP_PADDING)
                 .style(container::bordered_box);
 

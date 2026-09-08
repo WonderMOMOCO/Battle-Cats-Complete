@@ -85,6 +85,7 @@ mod tests {
         combo_effects: Option<u8>,
         combo_bands: Option<u8>,
         combo_filters: Option<u8>,
+        combo_params: Option<u8>,
     }
 
     #[derive(Default, Serialize)]
@@ -100,6 +101,7 @@ mod tests {
         combo_effects: Option<u8>,
         combo_bands: Option<u8>,
         combo_filters: Option<u8>,
+        combo_params: Option<u8>,
     }
 
     #[derive(Default, Serialize)]

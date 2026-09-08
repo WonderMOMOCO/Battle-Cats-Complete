@@ -2,7 +2,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use iced::widget::{button, column, container, scrollable, text_input};
+use iced::alignment::Horizontal;
+use iced::widget::{button, column, container, pick_list, scrollable, text, text_input};
 use iced::{Element, Length, Padding, Size, Task};
 use nyanko::combat::Separator;
 use nyanko::common;
@@ -32,6 +33,19 @@ const EXPLANATION_LABELS: &[&str] = &[
 
 const ENEMY_NAME_LABELS: &[&str] = &["Name..."];
 
+const COMBO_NAME_LABELS: &[&str] = &["Combo Name..."];
+
+const TALENT_TEXT_LABELS: &[&str] = &["Description Line 1...", "Description Line 2..."];
+
+const TALENT_BREAK: &str = "<br>";
+
+const TALENT_TEXT_NOTICE: &str =
+    "Descriptions are shared by every unit; editing one changes it for every talent that references this text id";
+
+const NOTICE_SIZE: f32 = 11.0;
+const NOTICE_LINES: f32 = 2.0;
+const NOTICE_HEIGHT: f32 = NOTICE_SIZE * 1.3 * NOTICE_LINES;
+
 const ENEMY_DESCRIPTION_LABELS: &[&str] = &[
     "Description Line 1...",
     "Description Line 2...",
@@ -51,16 +65,23 @@ fn next_token() -> u64 {
     NEXT_TOKEN.fetch_add(1, Ordering::Relaxed)
 }
 
-pub(super) const COUNT: usize = 3;
+pub(super) const COUNT: usize = 5;
 
-pub(super) const SUBJECTS: [Subject; COUNT] =
-    [Subject::Explanation, Subject::EnemyName, Subject::EnemyDescription];
+pub(super) const SUBJECTS: [Subject; COUNT] = [
+    Subject::Explanation,
+    Subject::EnemyName,
+    Subject::EnemyDescription,
+    Subject::ComboName,
+    Subject::TalentText,
+];
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Subject {
     Explanation,
     EnemyName,
     EnemyDescription,
+    ComboName,
+    TalentText,
 }
 
 impl Subject {
@@ -70,7 +91,7 @@ impl Subject {
 
     pub(super) fn page(self) -> Page {
         match self {
-            Self::Explanation => Page::Cats,
+            Self::Explanation | Self::ComboName | Self::TalentText => Page::Cats,
             Self::EnemyName | Self::EnemyDescription => Page::Enemies,
         }
     }
@@ -80,6 +101,8 @@ impl Subject {
             Self::Explanation => EXPLANATION_LABELS,
             Self::EnemyName => ENEMY_NAME_LABELS,
             Self::EnemyDescription => ENEMY_DESCRIPTION_LABELS,
+            Self::ComboName => COMBO_NAME_LABELS,
+            Self::TalentText => TALENT_TEXT_LABELS,
         }
     }
 
@@ -88,35 +111,54 @@ impl Subject {
             Self::Explanation => popup::Kind::Explanation,
             Self::EnemyName => popup::Kind::EnemyName,
             Self::EnemyDescription => popup::Kind::EnemyDescription,
+            Self::ComboName => popup::Kind::ComboName,
+            Self::TalentText => popup::Kind::TalentText,
         }
     }
 
     fn delimited(self) -> bool {
-        !matches!(self, Self::EnemyName)
+        !matches!(self, Self::EnemyName | Self::ComboName)
+    }
+
+    fn pins(self) -> bool {
+        matches!(self, Self::ComboName | Self::TalentText)
+    }
+
+    fn wrapped(self) -> Option<&'static str> {
+        matches!(self, Self::TalentText).then_some(TALENT_BREAK)
+    }
+
+    fn chooses(self) -> f32 {
+        f32::from(u8::from(matches!(self, Self::TalentText)))
+    }
+
+    fn notice(self) -> Option<&'static str> {
+        matches!(self, Self::TalentText).then_some(TALENT_TEXT_NOTICE)
     }
 
     fn skipped(self) -> usize {
         match self {
-            Self::EnemyDescription => 1,
-            Self::Explanation | Self::EnemyName => 0,
+            Self::EnemyDescription | Self::TalentText => 1,
+            Self::Explanation | Self::EnemyName | Self::ComboName => 0,
         }
     }
 
     fn width(self) -> f32 {
         match self {
-            Self::EnemyName => NARROW_WIDTH,
-            Self::Explanation | Self::EnemyDescription => POPUP_WIDTH,
+            Self::EnemyName | Self::ComboName => NARROW_WIDTH,
+            Self::Explanation | Self::EnemyDescription | Self::TalentText => POPUP_WIDTH,
         }
     }
 }
 
 fn spec(subject: Subject) -> popup::Spec {
-    let fields = subject.labels().len() as f32;
+    let fields = subject.labels().len() as f32 + subject.chooses();
     let height = FIELD_HEIGHT * fields
         + GAP * (fields - 1.0)
         + SYNC_HEIGHT
         + GAP
         + BODY_PADDING * 3.0
+        + subject.notice().map_or(0.0, |_| NOTICE_HEIGHT + GAP)
         + popup::CHROME_HEIGHT;
 
     popup::Spec::new(subject.kind(), Size::new(subject.width(), height))
@@ -125,6 +167,7 @@ fn spec(subject: Subject) -> popup::Spec {
 #[derive(Debug, Clone)]
 pub enum Message {
     Popup(popup::Message),
+    Aimed(usize),
     Changed(usize, String),
     Sync,
     SyncExpired,
@@ -135,6 +178,7 @@ pub enum Message {
 pub(crate) struct Plan {
     subject: Subject,
     row: usize,
+    rows: Vec<usize>,
     label: String,
     file: String,
     game: PathBuf,
@@ -144,6 +188,10 @@ pub(crate) struct Plan {
 impl Plan {
     pub(super) fn subject(&self) -> Subject {
         self.subject
+    }
+
+    pub(super) fn over(self, rows: Vec<usize>) -> Plan {
+        Plan { rows, ..self }
     }
 
     fn matches(&self, other: &Plan) -> bool {
@@ -166,6 +214,7 @@ pub(super) struct State {
     draft: Option<Draft>,
     frame: popup::State,
     confirm: Slot<()>,
+    pinned: Option<usize>,
 }
 
 struct Draft {
@@ -187,7 +236,16 @@ impl State {
     pub(super) fn begin(&mut self, plan: Plan, nudge: usize, vfs: &Vfs) {
         self.frame = popup::cascaded(nudge);
         self.confirm.expire();
+        self.reload(plan, vfs);
+    }
+
+    fn reload(&mut self, plan: Plan, vfs: &Vfs) {
         self.draft = Draft::load(plan, vfs);
+        self.pinned = self
+            .draft
+            .as_ref()
+            .filter(|draft| draft.plan.subject.pins())
+            .map(|draft| draft.plan.row);
     }
 
     pub(super) fn flush(&mut self, vfs: &Vfs) -> Task<Message> {
@@ -233,8 +291,15 @@ impl State {
             return;
         }
 
-        if !current.plan.matches(plan) || preview::stamp(&current.read_from) != Some(current.stamp) {
-            self.draft = Draft::load(plan.clone(), vfs);
+        let held = self.pinned.filter(|row| plan.rows.is_empty() || plan.rows.contains(row));
+
+        let plan = match held {
+            Some(row) => Plan { row, ..plan.clone() },
+            None => plan.clone(),
+        };
+
+        if !current.plan.matches(&plan) || preview::stamp(&current.read_from) != Some(current.stamp) {
+            self.reload(plan, vfs);
         }
     }
 
@@ -253,6 +318,16 @@ impl State {
 
                     return task;
                 }
+            }
+            Message::Aimed(row) => {
+                let Some(draft) = self.draft.as_mut().filter(|draft| draft.plan.row != row) else {
+                    return Task::none();
+                };
+
+                draft.persist_now(vfs);
+
+                let plan = Plan { row, ..draft.plan.clone() };
+                self.reload(plan, vfs);
             }
             Message::Changed(index, value) => {
                 if let Some(draft) = self.draft.as_mut() {
@@ -392,7 +467,8 @@ impl Draft {
             self.lines.push(String::new());
         }
 
-        let joined = join(&self.head, &self.fields, &self.tail, self.delimiter);
+        let joined =
+            join(&self.head, &self.fields, &self.tail, self.delimiter, self.plan.subject.wrapped());
         let Some(slot) = self.lines.get_mut(self.plan.row) else {
             self.failed = true;
 
@@ -461,8 +537,52 @@ impl Draft {
         self.writing = false;
     }
 
+    fn picker(&self) -> Option<Element<'_, Message>> {
+        if self.plan.rows.len() < 2 {
+            return None;
+        }
+
+        let held: Vec<Aim> = self.plan.rows.iter().map(|row| self.aim(*row)).collect();
+        let current = held.iter().find(|aim| aim.row == self.plan.row).cloned()?;
+
+        Some(
+            pick_list(held, Some(current), |aim: Aim| Message::Aimed(aim.row))
+                .width(Length::Fill)
+                .padding(PADDING)
+                .text_size(INPUT_SIZE)
+                .style(theme::combo_box)
+                .menu_style(theme::combo_box_menu)
+                .into(),
+        )
+    }
+
+    fn aim(&self, row: usize) -> Aim {
+        let spoken = self
+            .lines
+            .get(row)
+            .and_then(|line| line.split(self.delimiter.unwrap_or(PIPE)).nth(self.plan.subject.skipped()))
+            .map(|text| text.replace(TALENT_BREAK, " "))
+            .filter(|text| !text.trim().is_empty());
+
+        Aim { row, label: spoken.unwrap_or_else(|| format!("Text {row}")) }
+    }
+
     fn body(&self, armed: bool) -> Element<'_, Message> {
         let mut rows = column![].spacing(GAP);
+
+        if let Some(notice) = self.plan.subject.notice() {
+            rows = rows.push(
+                text(notice)
+                    .size(NOTICE_SIZE)
+                    .align_x(Horizontal::Center)
+                    .width(Length::Fill)
+                    .style(text::secondary),
+            );
+        }
+
+        if let Some(picker) = self.picker() {
+            rows = rows.push(picker);
+        }
 
         for (index, label) in self.plan.subject.labels().iter().enumerate() {
             let field = text_input(label, self.fields.get(index).map_or("", String::as_str))
@@ -499,6 +619,30 @@ impl Draft {
     }
 }
 
+const PIPE: char = '|';
+
+#[derive(Clone, PartialEq, Eq)]
+pub(super) struct Aim {
+    row: usize,
+    label: String,
+}
+
+impl std::fmt::Display for Aim {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "{}  {}", self.row, fitted(&self.label))
+    }
+}
+
+fn fitted(label: &str) -> String {
+    const ROOM: usize = 48;
+
+    if label.chars().count() <= ROOM {
+        return label.to_owned();
+    }
+
+    label.chars().take(ROOM).chain("...".chars()).collect()
+}
+
 const JAPANESE: &str = "ja";
 
 fn separator(name: &str) -> char {
@@ -514,7 +658,7 @@ fn localized(name: &str) -> Separator {
 fn parse(body: &str, index: usize, delimiter: Option<char>, subject: Subject) -> (Vec<String>, Vec<String>, Vec<String>) {
     let skip = subject.skipped();
     let source = body.lines().nth(index).unwrap_or_default();
-    let (head, fields, tail) = row(source, delimiter, skip, subject.labels().len());
+    let (head, fields, tail) = row(source, delimiter, skip, subject.labels().len(), subject.wrapped());
 
     if skip == 0 || filled(&head) {
         return (head, fields, tail);
@@ -522,7 +666,7 @@ fn parse(body: &str, index: usize, delimiter: Option<char>, subject: Subject) ->
 
     let borrowed = body
         .lines()
-        .map(|line| row(line, delimiter, skip, 0).0)
+        .map(|line| row(line, delimiter, skip, 0, None).0)
         .find(|candidate| filled(candidate));
 
     (borrowed.unwrap_or(head), fields, tail)
@@ -532,24 +676,59 @@ fn filled(head: &[String]) -> bool {
     head.iter().any(|field| !field.trim().is_empty())
 }
 
-fn row(line: &str, delimiter: Option<char>, skip: usize, count: usize) -> (Vec<String>, Vec<String>, Vec<String>) {
+fn row(
+    line: &str,
+    delimiter: Option<char>,
+    skip: usize,
+    count: usize,
+    wrapped: Option<&str>,
+) -> (Vec<String>, Vec<String>, Vec<String>) {
     let Some(delimiter) = delimiter else {
         return (Vec::new(), vec![line.trim().to_owned()], Vec::new());
     };
 
     let mut parts = line.split(delimiter);
     let head = (0..skip).map(|_| parts.next().unwrap_or_default().to_owned()).collect();
-    let fields = (0..count).map(|_| parts.next().unwrap_or_default().trim().to_owned()).collect();
 
-    (head, fields, parts.map(str::to_owned).collect())
+    let Some(marker) = wrapped else {
+        let fields = (0..count).map(|_| parts.next().unwrap_or_default().trim().to_owned()).collect();
+
+        return (head, fields, parts.map(str::to_owned).collect());
+    };
+
+    let held: Vec<&str> = parts.collect();
+    let whole = held.join(&delimiter.to_string());
+    let mut broken = whole.split(marker);
+    let fields = (0..count).map(|_| broken.next().unwrap_or_default().trim().to_owned()).collect();
+
+    (head, fields, Vec::new())
 }
 
-fn join(head: &[String], fields: &[String], tail: &[String], delimiter: Option<char>) -> String {
+fn join(
+    head: &[String],
+    fields: &[String],
+    tail: &[String],
+    delimiter: Option<char>,
+    wrapped: Option<&str>,
+) -> String {
     let Some(delimiter) = delimiter else {
         return fields.first().cloned().unwrap_or_default();
     };
 
-    let parts: Vec<&str> = head.iter().chain(fields).chain(tail).map(String::as_str).collect();
+    let Some(marker) = wrapped else {
+        let parts: Vec<&str> = head.iter().chain(fields).chain(tail).map(String::as_str).collect();
+
+        return parts.join(&delimiter.to_string());
+    };
+
+    let mut written: Vec<&str> = fields.iter().map(String::as_str).collect();
+
+    while written.last().is_some_and(|last| last.is_empty()) {
+        written.pop();
+    }
+
+    let body = written.join(marker);
+    let parts: Vec<&str> = head.iter().map(String::as_str).chain(std::iter::once(body.as_str())).collect();
 
     parts.join(&delimiter.to_string())
 }
@@ -562,5 +741,56 @@ pub(super) fn plan(
     game: &Path,
     target_mod: Option<String>,
 ) -> Plan {
-    Plan { subject, row, label, file, game: game.to_path_buf(), target_mod }
+    Plan { subject, row, rows: Vec::new(), label, file, game: game.to_path_buf(), target_mod }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{join, row, Subject, TALENT_BREAK};
+
+    const PIPE: Option<char> = Some('|');
+
+    // textID|text, with at most one <br> in the text across every shipped locale.
+    // The id is skipped so it cannot be typed over, and the break becomes the second field.
+    #[test]
+    fn a_description_splits_its_id_off_and_its_break_into_a_second_line() {
+        let line = "12|Gain the \"Weaken\" ability.<br>Level up to Weaken enemies for even longer!";
+        let (head, fields, tail) = row(line, PIPE, 1, 2, Some(TALENT_BREAK));
+
+        assert_eq!(head, ["12"]);
+        assert_eq!(fields[0], "Gain the \"Weaken\" ability.");
+        assert_eq!(fields[1], "Level up to Weaken enemies for even longer!");
+        assert!(tail.is_empty());
+
+        assert_eq!(join(&head, &fields, &tail, PIPE, Some(TALENT_BREAK)), line);
+    }
+
+    #[test]
+    fn a_description_with_one_line_does_not_grow_a_break() {
+        let line = "4|Gain the \"Only Attacks\" ability.";
+        let (head, fields, tail) = row(line, PIPE, 1, 2, Some(TALENT_BREAK));
+
+        assert_eq!(fields[1], "", "the second line is empty, not the whole text again");
+        assert_eq!(join(&head, &fields, &tail, PIPE, Some(TALENT_BREAK)), line, "and no <br> is added");
+    }
+
+    // The file is roster-wide: one text id is referenced by talents on unrelated units,
+    // so the popup has to say so the way the cost curves do.
+    #[test]
+    fn only_the_roster_wide_subject_carries_a_notice() {
+        assert!(Subject::TalentText.notice().is_some());
+
+        for subject in [Subject::Explanation, Subject::EnemyName, Subject::EnemyDescription, Subject::ComboName] {
+            assert_eq!(subject.notice(), None, "{subject:?} edits a row that belongs to what it names");
+        }
+    }
+
+    #[test]
+    fn only_the_talent_text_is_broken_on_a_marker() {
+        assert_eq!(Subject::TalentText.wrapped(), Some(TALENT_BREAK));
+
+        for subject in [Subject::Explanation, Subject::EnemyName, Subject::EnemyDescription, Subject::ComboName] {
+            assert_eq!(subject.wrapped(), None, "{subject:?} has no inner break");
+        }
+    }
 }

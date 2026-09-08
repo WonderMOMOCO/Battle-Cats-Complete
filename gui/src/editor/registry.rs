@@ -632,14 +632,16 @@ fn plans(target: &ProseTarget, scopes: &[Scope<'_>], target_mod: Option<&str>) -
         .map(|scope| {
             let source = scope.source.or(scope.present)?;
 
-            Some(prose::plan(
+            let made = prose::plan(
                 target.subject,
                 target.row,
                 [target.label.as_str(), scope.name].join(theme::HEADER_SEPARATOR),
                 scope.name.to_owned(),
                 source,
                 target_mod.map(str::to_owned),
-            ))
+            );
+
+            Some(made.over(target.rows.clone()))
         })
         .collect()
 }
@@ -664,7 +666,9 @@ pub(super) fn level_plan(
 ) -> Option<figures::Plan> {
     let source = scope.source.or(scope.present)?;
 
-    Some(figures::plan(level.subject, level.address, level.label.clone(), source, target_mod, values))
+    let made = figures::plan(level.subject, level.address, level.label.clone(), source, target_mod, values);
+
+    Some(made.anchored(level.anchor))
 }
 
 fn files(items: &mut Vec<Item>, file: &FileTarget) {

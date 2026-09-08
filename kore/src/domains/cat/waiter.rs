@@ -2,7 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use nyanko::cat::unitid;
-use nyanko::cat::unit::{Nyancombo, NyancomboData, NyancomboFilter, UnitExplanation};
+use nyanko::cat::unit::{Nyancombo, NyancomboData, NyancomboFilter, NyancomboParam, UnitExplanation};
 use nyanko::combat::{Entity, Separator};
 use tracing::trace;
 
@@ -121,6 +121,43 @@ pub(crate) fn nyancombofilter(vfs: &Vfs) -> Vec<NyancomboFilter> {
     };
 
     NyancomboFilter::parse(&bytes, None).unwrap_or_default()
+}
+
+pub(crate) fn nyancomboparam(vfs: &Vfs) -> Vec<NyancomboParam> {
+    trace!("loading the cat combo effect magnitudes");
+
+    let Some(file_path) = vfs.find(files::NYANCOMBO_PARAM) else {
+        return Vec::new();
+    };
+
+    let Ok(bytes) = fs::read(&file_path) else {
+        return Vec::new();
+    };
+
+    NyancomboParam::parse(&bytes, None).unwrap_or_default()
+}
+
+pub fn nyancombo_source(vfs: &Vfs, line: usize) -> Option<PathBuf> {
+    let table = ComboText::Name;
+    let mut fallback = None;
+
+    for file_path in vfs.list(table.file()) {
+        let Ok(bytes) = fs::read(&file_path) else {
+            continue;
+        };
+
+        if Nyancombo::parse_row(&bytes, line, table.separator(&file_path))
+            .is_some_and(|entry| entry.text.is_some())
+        {
+            return Some(file_path);
+        }
+
+        if fallback.is_none() {
+            fallback = Some(file_path);
+        }
+    }
+
+    fallback.or_else(|| vfs.find(table.file()))
 }
 
 pub(crate) fn nyancombo(vfs: &Vfs, table: ComboText) -> Vec<Option<String>> {

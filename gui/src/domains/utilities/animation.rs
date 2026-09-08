@@ -74,6 +74,10 @@ impl Default for State {
 }
 
 impl State {
+    pub(super) fn pace(&self) -> std::time::Duration {
+        self.viewer.pace()
+    }
+
     pub fn update(&mut self, message: Message, settings: &mut Settings, app_state: &mut AppState) -> Task<Message> {
         match message {
             Message::PickPng => Task::perform(dialog::file("PNG Image", &["png"]), Message::PngPicked),

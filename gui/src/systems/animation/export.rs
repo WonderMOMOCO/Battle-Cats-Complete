@@ -476,6 +476,10 @@ impl State {
         }
     }
 
+    pub(super) fn busy(&self) -> bool {
+        !self.jobs.is_empty() || self.bounds_job.is_some()
+    }
+
     pub fn tick(&mut self) {
         if let Some(key) = &self.synced_key
             && let Some(job) = self.jobs.get_mut(key) {

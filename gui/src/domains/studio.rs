@@ -27,7 +27,7 @@ use nyanko::graphics::tools::timeline as curve;
 use crate::app::state::{AnimState, StudioState};
 use crate::app::theme;
 use crate::editor::{self, Target};
-use crate::systems::animation::{self as viewer, controls, overlay};
+use crate::systems::animation::{self as viewer, controls, overlay, PLAYING_TICK, RESTING_TICK};
 
 use crate::common::feedback::{self, Slot, LOCKED_NOTICE};
 use crate::common::{dialog, fonts, glyphs};
@@ -90,8 +90,6 @@ const KEY_ROW_HEIGHT: f32 = 44.0;
 const KEY_ROW_PAD: f32 = 3.0;
 const KEY_ROW_INSET: f32 = 2.0;
 
-const PLAYING_TICK: Duration = Duration::from_millis(16);
-const RESTING_TICK: Duration = Duration::from_millis(200);
 const RECALL_CAP: usize = 5;
 const HISTORY_SETS: usize = 3;
 const NOTICE_EXPIRY: Duration = Duration::from_secs(6);
