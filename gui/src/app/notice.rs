@@ -11,11 +11,8 @@ const HASH_BYTES: usize = 8;
 const SCROLLBAR_GAP: f32 = 8.0;
 
 // If "NOTICE_CONTENT" is empty, no notice appears
-pub(super) const NOTICE_TITLE: &str = "NOTICE: REIMPORT ASAP";
+pub(super) const NOTICE_TITLE: &str = "NOTICE";
 pub(super) const NOTICE_CONTENT: &str = r#"
-As of v2.5.0, the internal format of the `.json` file that keeps track of imported files (to prevent duplicate imports upon game updates) has changed. It is impossible to merge the old format into the new format as files were not aware of what packs they live inside with the old `json` format. Reimport ASAP is **deeply recommended** to build the new manifest file.
-
-An Android import now will also properly set you up to diff the next game update using the new `Mining` page when one drops in the future.
 "#;
 
 pub(super) fn parse_content() -> Vec<markdown::Item> {
