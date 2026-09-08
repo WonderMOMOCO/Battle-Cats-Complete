@@ -18,11 +18,12 @@ use crate::domains::settings::ScannerConfig;
 use crate::{Vfs, Vault};
 
 use super::files;
+use super::names;
 use super::waiter::{
     battleground, certification_preset, drop_chara, lockskipdata, mapstagedata, scatcpusetting,
     stagename
 };
-use super::{GlobalMapId, GlobalStageId, Map, Stage, StageRegistry};
+use super::{GlobalMapId, GlobalStageId, Map, MapAddress, Stage, StageRegistry};
 
 const MAP_STAGE_DATA: &str = "MapStageData";
 const STAGE: &str = "stage";
@@ -107,6 +108,19 @@ struct CategoryInfo {
     data_prefix: String,
     category: Category,
     stage_names: HashMap<u32, StageNameEntry>,
+    stage_name_file: Option<String>,
+}
+
+fn resolve_stage_names(vfs: &Vfs, prefix: &str) -> (HashMap<u32, StageNameEntry>, Option<String>) {
+    for file in files::stage_name_targets(prefix) {
+        let names = stagename(vfs, &file);
+
+        if !names.is_empty() {
+            return (names, Some(file));
+        }
+    }
+
+    (HashMap::new(), None)
 }
 
 struct MapJob {
@@ -206,17 +220,10 @@ pub fn scan_single(vault: &Vault, category: &Category, map_id: u32) -> StageRegi
         .find(|found| Category::from_prefix(found) == *category)
         .unwrap_or_else(|| prefix.clone());
 
-    let mut stage_names = HashMap::new();
+    let (stage_names, stage_name_file) = resolve_stage_names(vfs, &prefix);
 
-    for file in files::stage_name_targets(&prefix) {
-        stage_names = stagename(vfs, &file);
-
-        if !stage_names.is_empty() {
-            break;
-        }
-    }
-
-    let info = CategoryInfo { prefix, data_prefix, category: category.clone(), stage_names };
+    let info =
+        CategoryInfo { prefix, data_prefix, category: category.clone(), stage_names, stage_name_file };
     let registry = Mutex::new(StageRegistry::default());
 
     process_map(&registry, &info, map_id, &ctx);
@@ -301,17 +308,10 @@ fn enumerate_maps(vfs: &Vfs) -> (Vec<CategoryInfo>, Vec<MapJob>) {
 
         debug!("Scanning category {} ({} maps)", prefix, map_ids.len());
 
-        let mut stage_names = HashMap::new();
-
-        for file in files::stage_name_targets(&prefix) {
-            stage_names = stagename(vfs, &file);
-            if !stage_names.is_empty() {
-                break;
-            }
-        }
+        let (stage_names, stage_name_file) = resolve_stage_names(vfs, &prefix);
 
         let category_index = categories.len();
-        categories.push(CategoryInfo { prefix, data_prefix, category, stage_names });
+        categories.push(CategoryInfo { prefix, data_prefix, category, stage_names, stage_name_file });
 
         for map_id in map_ids {
             jobs.push(MapJob { category_index, map_id });
@@ -457,6 +457,7 @@ fn process_map(reg_mtx: &Mutex<StageRegistry>, info: &CategoryInfo, map_id: u32,
     }
 
     let mut proxy_stage_names = None;
+    let mut proxy_name_file = None;
 
     if cat_prefix == "Z" {
         let proxy_prefix = match map_id {
@@ -469,17 +470,17 @@ fn process_map(reg_mtx: &Mutex<StageRegistry>, info: &CategoryInfo, map_id: u32,
         if !proxy_prefix.is_empty() {
             debug!("Fetching proxy names from {} for Z map {}", proxy_prefix, map_id);
 
-            for file in files::stage_name_targets(proxy_prefix) {
-                let names = stagename(ctx.vfs, &file);
-                if names.is_empty() { continue; }
+            let (names, file) = resolve_stage_names(ctx.vfs, proxy_prefix);
 
+            if !names.is_empty() {
                 proxy_stage_names = Some(names);
-                break;
+                proxy_name_file = file;
             }
         }
     }
 
     let active_stage_names = proxy_stage_names.as_ref().unwrap_or(&info.stage_names);
+    let active_name_file = proxy_name_file.as_deref().or(info.stage_name_file.as_deref());
 
     let map_display_name = global_map_id
         .and_then(|id| ctx.map_names.get(&id))
@@ -493,6 +494,7 @@ fn process_map(reg_mtx: &Mutex<StageRegistry>, info: &CategoryInfo, map_id: u32,
         map_id,
         &map_display_name,
         active_stage_names,
+        active_name_file,
         ctx,
         global_map_id
     );
@@ -506,6 +508,7 @@ fn load_map(
     map_id: u32,
     map_display_name: &str,
     stage_names: &HashMap<u32, StageNameEntry>,
+    name_file: Option<&str>,
     ctx: &ScanContext,
     global_map_id: Option<u32>
 ) {
@@ -590,7 +593,10 @@ fn load_map(
 
     map_struct.stages.sort();
 
+    let address = MapAddress { global: global_map_id, name_file: name_file.map(Box::from) };
+
     if let Ok(mut reg) = reg_mtx.lock() {
+        reg.addresses.insert(map_key.clone(), address);
         reg.maps.insert(map_key, map_struct);
         reg.stages.extend(stage_structs);
         reg.grounds.extend(ground_files);
@@ -771,30 +777,14 @@ fn build_base_stage(
     ctx: &ScanContext,
     global_map_id: Option<u32>,
 ) -> Stage {
-    let is_story_name = matches!(map.category.map_prefix().as_str(), "EC" | "W" | "Space" | "Z");
+    let (name_key, name_cell) = names::stage_name_address(&map.category.map_prefix(), map.map_id, stage_id);
 
-    let stage_display_name = if is_story_name {
-        let mut lookup_id = stage_id;
-
-        let is_ec = map.category.map_prefix() == "EC";
-        let is_z_ec = map.category.map_prefix() == "Z" && map.map_id <= 2;
-
-        if (is_ec || is_z_ec) && matches!(stage_id, 48..=50) {
-            lookup_id = 47;
-        }
-
-        stage_names.get(&lookup_id)
-            .and_then(|entry| entry.names.first())
-            .filter(|name| !name.is_empty())
-            .cloned()
-            .unwrap_or_else(|| format!("{:02}", stage_id))
-    } else {
-        stage_names.get(&map.map_id)
-            .and_then(|entry| entry.names.get(stage_id as usize))
-            .filter(|name| !name.is_empty())
-            .cloned()
-            .unwrap_or_else(|| format!("{:02}", stage_id))
-    };
+    let stage_display_name = stage_names
+        .get(&name_key)
+        .and_then(|entry| entry.names.get(name_cell))
+        .filter(|name| !name.is_empty())
+        .cloned()
+        .unwrap_or_else(|| format!("{:02}", stage_id));
 
     let stage_opts: &[StageOptionEntry] = global_map_id
         .and_then(|id| ctx.stage_options.get(&id))

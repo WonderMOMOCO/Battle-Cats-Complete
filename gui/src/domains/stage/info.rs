@@ -128,14 +128,8 @@ impl State {
             .and_then(|path| self.texture(&stage_key, &path));
 
         let banner_row = row![
-            editor::target(
-                banner_element(map_texture, MAP_IMG_HEIGHT, &map.name),
-                editor::Target::MapBanner,
-            ),
-            editor::target(
-                banner_element(stage_texture, STAGE_IMG_HEIGHT, &stage.name),
-                editor::Target::StageBanner,
-            ),
+            plate(map_texture, MAP_IMG_HEIGHT, &map.name, editor::Target::MapBanner, editor::Target::MapName),
+            plate(stage_texture, STAGE_IMG_HEIGHT, &stage.name, editor::Target::StageBanner, editor::Target::StageName),
         ]
             .spacing(BANNER_GAP)
             .align_y(Alignment::End);
@@ -225,6 +219,20 @@ impl State {
             .spacing(8)
             .into()
     }
+}
+
+// The plate and the name it stands in for are different things to edit, so the target
+// follows whichever one actually got drawn.
+fn plate<'a, Message: 'a>(
+    texture: Option<(Handle, u32, u32)>,
+    target_height: f32,
+    fallback_name: &str,
+    drawn: editor::Target,
+    named: editor::Target,
+) -> Element<'a, Message> {
+    let claim = if texture.is_some() { drawn } else { named };
+
+    editor::target(banner_element(texture, target_height, fallback_name), claim)
 }
 
 fn banner_element<'a, Message: 'a>(texture: Option<(Handle, u32, u32)>, target_height: f32, fallback_name: &str) -> Element<'a, Message> {

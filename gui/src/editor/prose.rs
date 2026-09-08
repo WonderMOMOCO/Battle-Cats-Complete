@@ -12,6 +12,7 @@ use tracing::warn;
 use kore::common::preview::{self, Stamp};
 use kore::Vfs;
 use kore::domains::mods;
+use kore::domains::stage::names;
 
 use crate::app::{theme, Page};
 use crate::common::feedback::{Slot, CONFIRM_LABEL};
@@ -34,6 +35,10 @@ const EXPLANATION_LABELS: &[&str] = &[
 const ENEMY_NAME_LABELS: &[&str] = &["Name..."];
 
 const COMBO_NAME_LABELS: &[&str] = &["Combo Name..."];
+
+const MAP_NAME_LABELS: &[&str] = &["Map Name..."];
+
+const STAGE_NAME_LABELS: &[&str] = &["Stage Name..."];
 
 const TALENT_TEXT_LABELS: &[&str] = &["Description Line 1...", "Description Line 2..."];
 
@@ -65,7 +70,7 @@ fn next_token() -> u64 {
     NEXT_TOKEN.fetch_add(1, Ordering::Relaxed)
 }
 
-pub(super) const COUNT: usize = 5;
+pub(super) const COUNT: usize = 7;
 
 pub(super) const SUBJECTS: [Subject; COUNT] = [
     Subject::Explanation,
@@ -73,6 +78,8 @@ pub(super) const SUBJECTS: [Subject; COUNT] = [
     Subject::EnemyDescription,
     Subject::ComboName,
     Subject::TalentText,
+    Subject::MapName,
+    Subject::StageName,
 ];
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -82,6 +89,8 @@ pub enum Subject {
     EnemyDescription,
     ComboName,
     TalentText,
+    MapName,
+    StageName,
 }
 
 impl Subject {
@@ -93,6 +102,7 @@ impl Subject {
         match self {
             Self::Explanation | Self::ComboName | Self::TalentText => Page::Cats,
             Self::EnemyName | Self::EnemyDescription => Page::Enemies,
+            Self::MapName | Self::StageName => Page::Stages,
         }
     }
 
@@ -103,6 +113,8 @@ impl Subject {
             Self::EnemyDescription => ENEMY_DESCRIPTION_LABELS,
             Self::ComboName => COMBO_NAME_LABELS,
             Self::TalentText => TALENT_TEXT_LABELS,
+            Self::MapName => MAP_NAME_LABELS,
+            Self::StageName => STAGE_NAME_LABELS,
         }
     }
 
@@ -113,11 +125,20 @@ impl Subject {
             Self::EnemyDescription => popup::Kind::EnemyDescription,
             Self::ComboName => popup::Kind::ComboName,
             Self::TalentText => popup::Kind::TalentText,
+            Self::MapName => popup::Kind::MapName,
+            Self::StageName => popup::Kind::StageName,
         }
     }
 
     fn delimited(self) -> bool {
         !matches!(self, Self::EnemyName | Self::ComboName)
+    }
+
+    // The head is only borrowed from a neighbouring line for subjects whose skipped cells
+    // are an id the row may leave blank. A name row's head is its siblings' own names, so
+    // borrowing one would splice another map's names into this line.
+    fn borrows(self) -> bool {
+        matches!(self, Self::EnemyDescription | Self::TalentText)
     }
 
     fn pins(self) -> bool {
@@ -138,14 +159,14 @@ impl Subject {
 
     fn skipped(self) -> usize {
         match self {
-            Self::EnemyDescription | Self::TalentText => 1,
-            Self::Explanation | Self::EnemyName | Self::ComboName => 0,
+            Self::EnemyDescription | Self::TalentText | Self::MapName => 1,
+            Self::Explanation | Self::EnemyName | Self::ComboName | Self::StageName => 0,
         }
     }
 
     fn width(self) -> f32 {
         match self {
-            Self::EnemyName | Self::ComboName => NARROW_WIDTH,
+            Self::EnemyName | Self::ComboName | Self::MapName | Self::StageName => NARROW_WIDTH,
             Self::Explanation | Self::EnemyDescription | Self::TalentText => POPUP_WIDTH,
         }
     }
@@ -174,11 +195,32 @@ pub enum Message {
     Persisted(u64, PathBuf, Option<Stamp>),
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Keyed {
+    Map(u32),
+    Stage(u32),
+}
+
+impl Keyed {
+    // The line a name sits on is not the same in every localized file -- Map_Name_en.csv
+    // holds 1,282 rows and Map_Name_ja.csv 1,290 -- so the address is resolved against the
+    // body the draft actually read, never once against whichever file happened to resolve.
+    fn locate(self, body: &str, delimiter: char) -> Option<usize> {
+        match self {
+            Self::Map(id) => names::map_name_rows(body, delimiter).get(&id).copied(),
+            Self::Stage(id) => names::stage_name_rows(body, delimiter).get(&id).copied(),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub(crate) struct Plan {
     subject: Subject,
     row: usize,
+    keyed: Option<Keyed>,
     rows: Vec<usize>,
+    cell: Option<usize>,
+    stated: Option<char>,
     label: String,
     file: String,
     game: PathBuf,
@@ -194,8 +236,38 @@ impl Plan {
         Plan { rows, ..self }
     }
 
+    pub(super) fn at(self, cell: usize) -> Plan {
+        Plan { cell: Some(cell), ..self }
+    }
+
+    pub(super) fn keyed(self, keyed: Keyed) -> Plan {
+        Plan { keyed: Some(keyed), ..self }
+    }
+
+    // A file the importer strips loses its language suffix on the way into a mod, and the
+    // suffix is the only thing the filename rule reads, so a Japanese Map_Name.csv would be
+    // split on a bar. The source keeps its suffix either way, so the delimiter comes off that.
+    pub(super) fn sourced(self) -> Plan {
+        let named = self.game.file_name().map(|name| name.to_string_lossy().into_owned());
+
+        Plan { stated: named.as_deref().map(separator), ..self }
+    }
+
+    fn delimiter(&self) -> Option<char> {
+        self.subject
+            .delimited()
+            .then(|| self.stated.unwrap_or_else(|| separator(&self.file)))
+    }
+
+    fn skip(&self) -> usize {
+        self.cell.unwrap_or_else(|| self.subject.skipped())
+    }
+
     fn matches(&self, other: &Plan) -> bool {
         self.row == other.row
+            && self.keyed == other.keyed
+            && self.cell == other.cell
+            && self.stated == other.stated
             && self.game == other.game
             && self.target_mod == other.target_mod
             && self.label == other.label
@@ -219,6 +291,7 @@ pub(super) struct State {
 
 struct Draft {
     plan: Plan,
+    row: usize,
     read_from: PathBuf,
     stamp: Stamp,
     delimiter: Option<char>,
@@ -396,12 +469,14 @@ impl Draft {
 
         let stamp = preview::stamp(&read_from)?;
         let body = common::scrub(&bytes);
-        let delimiter = plan.subject.delimited().then(|| separator(&plan.file));
+        let delimiter = plan.delimiter();
         let lines: Vec<String> = body.lines().map(str::to_owned).collect();
-        let (head, fields, tail) = parse(&body, plan.row, delimiter, plan.subject);
+        let row = seat(&plan, &body, delimiter)?;
+        let (head, fields, tail) = parse(&body, row, plan.skip(), delimiter, plan.subject);
 
         Some(Draft {
             plan,
+            row,
             read_from,
             stamp,
             delimiter,
@@ -438,8 +513,15 @@ impl Draft {
         };
 
         let body = common::scrub(&bytes);
-        let delimiter = self.plan.subject.delimited().then(|| separator(&self.plan.file));
-        let (head, fields, tail) = parse(&body, self.plan.row, delimiter, self.plan.subject);
+        let delimiter = self.plan.delimiter();
+        let Some(row) = seat(&self.plan, &body, delimiter) else {
+            warn!(path = %self.plan.game.display(), "Prose editor could not find the row in the vanilla file");
+            self.failed = true;
+
+            return;
+        };
+
+        let (head, fields, tail) = parse(&body, row, self.plan.skip(), delimiter, self.plan.subject);
         self.head = head;
         self.fields = fields;
         self.tail = tail;
@@ -463,13 +545,13 @@ impl Draft {
     }
 
     fn stage(&mut self) {
-        while self.lines.len() <= self.plan.row {
+        while self.lines.len() <= self.row {
             self.lines.push(String::new());
         }
 
         let joined =
             join(&self.head, &self.fields, &self.tail, self.delimiter, self.plan.subject.wrapped());
-        let Some(slot) = self.lines.get_mut(self.plan.row) else {
+        let Some(slot) = self.lines.get_mut(self.row) else {
             self.failed = true;
 
             return;
@@ -543,7 +625,7 @@ impl Draft {
         }
 
         let held: Vec<Aim> = self.plan.rows.iter().map(|row| self.aim(*row)).collect();
-        let current = held.iter().find(|aim| aim.row == self.plan.row).cloned()?;
+        let current = held.iter().find(|aim| aim.row == self.row).cloned()?;
 
         Some(
             pick_list(held, Some(current), |aim: Aim| Message::Aimed(aim.row))
@@ -645,7 +727,7 @@ fn fitted(label: &str) -> String {
 
 const JAPANESE: &str = "ja";
 
-fn separator(name: &str) -> char {
+pub(super) fn separator(name: &str) -> char {
     localized(name).char()
 }
 
@@ -655,12 +737,43 @@ fn localized(name: &str) -> Separator {
     if japanese { Separator::Comma } else { Separator::Pipe }
 }
 
-fn parse(body: &str, index: usize, delimiter: Option<char>, subject: Subject) -> (Vec<String>, Vec<String>, Vec<String>) {
-    let skip = subject.skipped();
+// A localized file need not carry every row: Map_Name_ja.csv holds maps 1097-1101 and
+// 34034 that no other language ships, and two StageName files are the same shape. The menu
+// therefore asks whether the address lands before it offers an Edit, so a variant that has
+// no line for this map shows its file actions without a dead Edit above them.
+pub(super) fn seated(plan: &Plan) -> bool {
+    let Some(keyed) = plan.keyed else {
+        return true;
+    };
+
+    let Some(delimiter) = plan.delimiter() else {
+        return true;
+    };
+
+    fs::read(&plan.game)
+        .ok()
+        .is_some_and(|bytes| keyed.locate(&common::scrub(&bytes), delimiter).is_some())
+}
+
+fn seat(plan: &Plan, body: &str, delimiter: Option<char>) -> Option<usize> {
+    let Some(keyed) = plan.keyed else {
+        return Some(plan.row);
+    };
+
+    keyed.locate(body, delimiter.unwrap_or(Separator::Comma.char()))
+}
+
+fn parse(
+    body: &str,
+    index: usize,
+    skip: usize,
+    delimiter: Option<char>,
+    subject: Subject,
+) -> (Vec<String>, Vec<String>, Vec<String>) {
     let source = body.lines().nth(index).unwrap_or_default();
     let (head, fields, tail) = row(source, delimiter, skip, subject.labels().len(), subject.wrapped());
 
-    if skip == 0 || filled(&head) {
+    if !subject.borrows() || filled(&head) {
         return (head, fields, tail);
     }
 
@@ -741,7 +854,18 @@ pub(super) fn plan(
     game: &Path,
     target_mod: Option<String>,
 ) -> Plan {
-    Plan { subject, row, rows: Vec::new(), label, file, game: game.to_path_buf(), target_mod }
+    Plan {
+        subject,
+        row,
+        keyed: None,
+        rows: Vec::new(),
+        cell: None,
+        stated: None,
+        label,
+        file,
+        game: game.to_path_buf(),
+        target_mod,
+    }
 }
 
 #[cfg(test)]

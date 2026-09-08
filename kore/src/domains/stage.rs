@@ -2,6 +2,7 @@ pub mod cost;
 pub mod filter;
 pub mod fixedlineup;
 pub mod materials;
+pub mod names;
 pub mod navigate;
 pub mod files;
 pub(crate) mod patterns;
@@ -41,6 +42,13 @@ pub struct StageRegistry {
     pub maps: HashMap<GlobalMapId, Map>,
     pub stages: HashMap<GlobalStageId, Stage>,
     pub grounds: HashMap<GlobalStageId, Box<str>>,
+    pub addresses: HashMap<GlobalMapId, MapAddress>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct MapAddress {
+    pub global: Option<u32>,
+    pub name_file: Option<Box<str>>,
 }
 
 #[derive(Default, Deserialize, Serialize)]

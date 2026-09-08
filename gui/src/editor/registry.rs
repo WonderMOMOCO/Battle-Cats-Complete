@@ -688,7 +688,19 @@ fn plans(target: &ProseTarget, scopes: &[Scope<'_>], target_mod: Option<&str>) -
                 target_mod.map(str::to_owned),
             );
 
-            Some(made.over(target.rows.clone()))
+            let made = match target.keyed {
+                Some(keyed) => made.keyed(keyed),
+                None => made,
+            };
+
+            let made = match target.cell {
+                Some(cell) => made.at(cell),
+                None => made,
+            };
+
+            let made = made.sourced();
+
+            prose::seated(&made).then(|| made.over(target.rows.clone()))
         })
         .collect()
 }

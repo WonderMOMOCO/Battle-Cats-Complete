@@ -12,11 +12,11 @@ use nyanko::chapter::stage::{
 };
 use serde::{Deserialize, Serialize};
 
+use crate::domains::stage::files::MAP_NAME;
 use crate::Vfs;
 
 use super::Slot;
 
-const MAP_NAME: &str = "Map_Name.csv";
 const MAP_OPTION: &str = "Map_option.csv";
 const STAGE_OPTION: &str = "Stage_option.csv";
 const CHARA_GROUP: &str = "Charagroup.csv";

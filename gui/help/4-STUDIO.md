@@ -1,36 +1,34 @@
 # Studio
-The `Studio` page edits an entity's animation files directly: its sprite sheet (`.png`), its cut list (`.imgcut`), its model (`.mamodel`), and its animations (`.maanim`). Every change is written to disk as you make it.
+The `Studio` page edits an Entity's animation files directly: its sprite sheet (`.png`), its cut list (`.imgcut`), its model (`.mamodel`), and its animations (`.maanim`). Every change is written to disk as you make it.
 
 **Disclaimer:** Studio writes files in place and has no save step, only a per-set 25-change-history undo. Back up a set before working on it.
 
 ## Sets
-A **set** is the group of files that make up one entity. Sets live in the `studio` folder, one folder per set. A set under `studio` is edited in place.
+A **set** is the group of files that make up one entity. Sets live in the `Studio` folder, one folder per set. A set under `Studio` is edited in place.
 
 Files from anywhere else are copied before the first edit, never written where they sit:
 - **Mod Enabled:** the files are copied into that Mod, then edited there.
 - **No Mod, `game` Unlocked:** the files are edited in place. Unlock through `Settings > Files > Editor`.
-- **Anything Else:** the files are copied into `studio` under the set's name.
+- **Anything Else:** the files are copied into `Studio` under the set's name.
 
-Renaming a set renames its folder, and is only allowed while the set is in `studio`.
+Renaming a set renames its folder, and is only allowed while the set is in `Studio`.
 
 ### Manage
 `Manage` handles the files in a set, split into `Set` and `Animation`.
 
 `Set` holds the three files that define the entity.
 - The name field renames the set, and is read-only for a set living in a Mod.
-- **Import Set** copies an existing entity's files in from the database.
+- **Import Set** copies an existing entity's files input into it.
 - **New Set** creates an empty set to build from scratch.
-- The folder list picks any set already in `studio`.
+- The folder list picks any set already in `Studio`.
 - **PNG**, **IMGCUT**, and **MAMODEL** replace a single file. A loaded file shows green with its name.
-- **Open Folder** reveals the set on disk, and is only available for sets in `studio`.
+- **Open Folder** reveals the set on disk, and is only available for sets in `Studio`.
 
 `Animation` holds the set's `.maanim` files.
 - The name field renames the selected animation.
 - **Add MAANIM** brings existing animation files into the set.
 - **New MAANIM** creates an empty animation and loads it.
-- **Remove MAANIM** drops the selected animation, and deletes the file for a set in `studio`.
-
-`Export` zips the loaded set into the `exports` folder.
+- **Remove MAANIM** drops the selected animation, and deletes the file for a set in `Studio`.
 
 ## Atlas
 `Atlas` edits the sprite sheet's cut list. `Add Cut` appends a new region.
@@ -40,6 +38,11 @@ Renaming a set renames its folder, and is only allowed while the set is in `stud
 - **Select:** Selects the part, making its row entry blue and outline bold.
 
 You can also Select parts by clicking on them in the Atlas viewer.
+
+## Export
+Unless a mod is enabled, `Export` zips the loaded set into the `exports` folder.
+
+When a Mod is enabled, export will instead ask for you to give the zip a name, or to input the name or ID for a Cat or Enemy. If given a Cat or Enemy, the exporter will copy the target Entities file names as well as sheet ID and be added to the enabled Mod under the target Entities' identity.
 
 ## Entity
 `Entity` edits the model and the selected animation together. The left tree lists the model's parts; expanding a part lists the **channels** animating it. Selecting either fills the table on the right.

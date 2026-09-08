@@ -25,7 +25,7 @@ use kore::domains::enemy::scanner::EnemyEntry;
 use kore::common::architecture;
 use kore::domains::mods;
 use kore::domains::stage::files as stage_files;
-use kore::domains::stage::GlobalMapId;
+use kore::domains::stage::{names, GlobalMapId, GlobalStageId};
 use kore::domains::settings::{ContextScope, EditorMode};
 use kore::Vfs;
 use nyanko::graphics::tools::crash::Side;
@@ -63,6 +63,10 @@ pub enum Target {
     EnemyIcon,
     MapBanner,
     StageBanner,
+    MapName,
+    StageName,
+    MapRow(u32),
+    StageRow(u32),
     CatExplanation,
     EnemyName,
     EnemyDescription,
@@ -306,8 +310,21 @@ struct ProseTarget {
     label: String,
     row: usize,
     rows: Vec<usize>,
+    keyed: Option<prose::Keyed>,
+    cell: Option<usize>,
     unlocked: bool,
     active_mod: Option<String>,
+}
+
+impl ProseTarget {
+    fn keyed(self, keyed: prose::Keyed) -> ProseTarget {
+        ProseTarget { keyed: Some(keyed), ..self }
+    }
+
+    fn celled(self, cell: usize) -> ProseTarget {
+        ProseTarget { cell: Some(cell), ..self }
+    }
+
 }
 
 struct IconTarget {
@@ -1365,6 +1382,16 @@ fn prose_payloads(app: &BattleCatsApp, target: Option<Target>, broad: bool) -> V
         return combo_name_target(app, Some(line)).into_iter().collect();
     }
 
+    // A list row is the one place a name is offered for something that is not the
+    // selection, so the row's own id wins over it -- right-click does not select.
+    if let Some(Target::MapRow(map)) = target {
+        return map_name_target(app, Some(map)).into_iter().collect();
+    }
+
+    if let Some(Target::StageRow(stage)) = target {
+        return stage_name_target(app, Some(stage)).into_iter().collect();
+    }
+
     if !broad {
         let Some(subject) = prose_subject(target) else {
             return Vec::new();
@@ -1376,6 +1403,7 @@ fn prose_payloads(app: &BattleCatsApp, target: Option<Target>, broad: bool) -> V
     prose::SUBJECTS
         .into_iter()
         .filter(|subject| subject.page() == app.current_page && prose_tab(app, *subject))
+        .filter(|subject| prose_offered(app, *subject))
         .flat_map(|subject| prose_targets(app, subject))
         .collect()
 }
@@ -1551,6 +1579,8 @@ fn talent_text_target(app: &BattleCatsApp) -> Option<ProseTarget> {
         label: [cat_label(app, id).as_str(), cat_files::SKILL_DESCRIPTIONS].join(theme::HEADER_SEPARATOR),
         row: rows.first().copied().unwrap_or(FIRST_TALENT_TEXT),
         rows,
+        keyed: None,
+        cell: None,
         unlocked: app.settings.files.unlock_game_mount,
         active_mod: app.mods_state.active_mod(),
     })
@@ -1626,8 +1656,47 @@ fn prose_tab(app: &BattleCatsApp, subject: prose::Subject) -> bool {
         prose::Subject::EnemyDescription => app.enemy_state.selected_tab == EnemyTab::Details,
         prose::Subject::ComboName => app.cat_state.selected_tab == DetailTab::Details,
         prose::Subject::TalentText => talents_tab(app),
-        prose::Subject::Explanation | prose::Subject::EnemyName => true,
+        prose::Subject::Explanation
+        | prose::Subject::EnemyName
+        | prose::Subject::MapName
+        | prose::Subject::StageName => true,
     }
+}
+
+// Whether a broad right-click offers the subject at all, which is not the same question as
+// whether an open popup still renders -- a name popup belongs to the page, so closing the
+// sidebar must not hide one. A stage's name is on screen either because its plate is missing
+// and the panel drew the name instead, or because the sidebar list is open and its rows are
+// names either way. With a plate up and the list closed there is no name anywhere to aim at.
+fn prose_offered(app: &BattleCatsApp, subject: prose::Subject) -> bool {
+    match subject {
+        prose::Subject::MapName => named(app, Target::MapBanner),
+        prose::Subject::StageName => named(app, Target::StageBanner),
+        _ => true,
+    }
+}
+
+fn named(app: &BattleCatsApp, plate: Target) -> bool {
+    app.stage_state.sidebar_open() || !plated(app, plate)
+}
+
+fn plated(app: &BattleCatsApp, plate: Target) -> bool {
+    let Some(chosen) = app.stage_state.data.selected_stage.as_ref() else {
+        return false;
+    };
+
+    let Some(entry) = app.stage_state.data.registry.stages.get(chosen) else {
+        return false;
+    };
+
+    let prefix = entry.category.image_prefix();
+
+    let wanted = match plate {
+        Target::MapBanner => stage_files::map_banner_file(entry.map_id, &prefix),
+        _ => stage_files::stage_banner_file(&entry.category, entry.map_id, entry.stage_id, &prefix),
+    };
+
+    app.vault.vfs.find(&wanted).is_some()
 }
 
 fn prose_subject(target: Option<Target>) -> Option<prose::Subject> {
@@ -1637,6 +1706,8 @@ fn prose_subject(target: Option<Target>) -> Option<prose::Subject> {
         Target::EnemyDescription => Some(prose::Subject::EnemyDescription),
         Target::CatCombo(_) => Some(prose::Subject::ComboName),
         Target::CatTalents => Some(prose::Subject::TalentText),
+        Target::MapName => Some(prose::Subject::MapName),
+        Target::StageName => Some(prose::Subject::StageName),
         _ => None,
     }
 }
@@ -1648,7 +1719,98 @@ fn prose_target(app: &BattleCatsApp, subject: prose::Subject) -> Option<ProseTar
         prose::Subject::EnemyDescription => enemy_description_target(app),
         prose::Subject::ComboName => combo_name_target(app, None),
         prose::Subject::TalentText => talent_text_target(app),
+        prose::Subject::MapName => map_name_target(app, None),
+        prose::Subject::StageName => stage_name_target(app, None),
     }
+}
+
+fn map_key(app: &BattleCatsApp, map: Option<u32>) -> Option<GlobalMapId> {
+    let Some(map) = map else {
+        return app.stage_state.data.selected_map.clone();
+    };
+
+    Some(GlobalMapId { category: app.stage_state.data.selected_category.clone()?, map })
+}
+
+fn stage_key(app: &BattleCatsApp, stage: Option<u32>) -> Option<GlobalStageId> {
+    let Some(stage) = stage else {
+        return app.stage_state.data.selected_stage.clone();
+    };
+
+    let map = app.stage_state.data.selected_map.as_ref()?;
+
+    Some(GlobalStageId { category: map.category.clone(), map: map.map, stage })
+}
+
+fn map_name_target(app: &BattleCatsApp, map: Option<u32>) -> Option<ProseTarget> {
+    if app.current_page != Page::Stages {
+        return None;
+    }
+
+    let key = map_key(app, map)?;
+    let registry = &app.stage_state.data.registry;
+    let global = registry.addresses.get(&key)?.global?;
+
+    let label = registry
+        .maps
+        .get(&key)
+        .map(|found| found.name.trim())
+        .filter(|name| !name.is_empty())
+        .map_or_else(|| format!("{:03}", key.map), str::to_owned);
+
+    Some(ProseTarget {
+        subject: prose::Subject::MapName,
+        asset: Asset::Exception(exception(app, stage_files::MAP_NAME.to_owned())?),
+        label,
+        row: 0,
+        rows: Vec::new(),
+        keyed: None,
+        cell: None,
+        unlocked: app.settings.files.unlock_game_mount,
+        active_mod: app.mods_state.active_mod(),
+    })
+    .map(|target| target.keyed(prose::Keyed::Map(global)))
+}
+
+// The story chapters put one stage per line and read the first cell; every other chapter
+// puts a whole map on one line and reads the cell at the stage index.
+fn stage_name_target(app: &BattleCatsApp, stage: Option<u32>) -> Option<ProseTarget> {
+    if app.current_page != Page::Stages {
+        return None;
+    }
+
+    let key = stage_key(app, stage)?;
+    let registry = &app.stage_state.data.registry;
+    let map = GlobalMapId { category: key.category.clone(), map: key.map };
+    let file = registry.addresses.get(&map)?.name_file.as_deref()?;
+
+    let (keyed, cell) = names::stage_name_address(&key.category.map_prefix(), key.map, key.stage);
+
+    let label = registry
+        .stages
+        .get(&key)
+        .map(|found| found.name.trim())
+        .filter(|name| !name.is_empty())
+        .map_or_else(|| format!("{:02}", key.stage), str::to_owned);
+
+    let files = asset_files(app, file);
+
+    if files.is_empty() {
+        return None;
+    }
+
+    Some(ProseTarget {
+        subject: prose::Subject::StageName,
+        asset: Asset::Variants { key: file.to_owned(), files },
+        label,
+        row: 0,
+        rows: Vec::new(),
+        keyed: None,
+        cell: None,
+        unlocked: app.settings.files.unlock_game_mount,
+        active_mod: app.mods_state.active_mod(),
+    })
+    .map(|target| target.keyed(prose::Keyed::Stage(keyed)).celled(cell))
 }
 
 fn combo_name_target(app: &BattleCatsApp, line: Option<usize>) -> Option<ProseTarget> {
@@ -1670,6 +1832,8 @@ fn combo_name_target(app: &BattleCatsApp, line: Option<usize>) -> Option<ProseTa
         label: [cat_label(app, id).as_str(), cat_files::NYANCOMBO_NAME].join(theme::HEADER_SEPARATOR),
         row,
         rows: Vec::new(),
+        keyed: None,
+        cell: None,
         unlocked: app.settings.files.unlock_game_mount,
         active_mod: app.mods_state.active_mod(),
     })
@@ -1688,6 +1852,8 @@ fn enemy_name_target(app: &BattleCatsApp) -> Option<ProseTarget> {
         label: enemy_label(app, id),
         row: id as usize,
         rows: Vec::new(),
+        keyed: None,
+        cell: None,
         unlocked: app.settings.files.unlock_game_mount,
         active_mod: app.mods_state.active_mod(),
     })
@@ -1707,6 +1873,8 @@ fn enemy_description_target(app: &BattleCatsApp) -> Option<ProseTarget> {
         label: enemy_label(app, id),
         row: id as usize,
         rows: Vec::new(),
+        keyed: None,
+        cell: None,
         unlocked: app.settings.files.unlock_game_mount,
         active_mod: app.mods_state.active_mod(),
     })
@@ -1754,6 +1922,8 @@ fn explanation_target(app: &BattleCatsApp, id: u32) -> Option<ProseTarget> {
         label,
         row: form,
         rows: Vec::new(),
+        keyed: None,
+        cell: None,
         unlocked: app.settings.files.unlock_game_mount,
         active_mod: app.mods_state.active_mod(),
     })

@@ -7,9 +7,9 @@ To initialize a mod, there are two paths: `Automatic` or `Manual`.
 ### Automatic
 Under the `Mods` page there is a button on the top left labeled "Add Mod." Click on this button, it will open a popup with the following options:
 - **New**: Creates a new mod folder for you using the name you provide.
-- **Android**: Import an existing mod from an installed APK on an Android device. 
+- **Android**: Import an existing mod from an installed APK on an Android device. Requires Keys & IV.
 - **BCM**: Import files from a `.zip` or `.bcm` archive.
-- **Pack**: Import from the games proprietary `.pack` and `.list` format.
+- **Pack**: Import from the games proprietary `.pack` and `.list` format. Requires Keys & IV.
 
 All mods initialized through this avenue will have a simple internal structure containing the following folders: `patch`, `icons`, and `loose`.
 
@@ -29,3 +29,9 @@ If you are looking to modify data such as Cat & Enemy Abilities, Cat & Enemy Ima
 
 ### Studio
 If you are looking to modify data such as Entity Spritesheets, Models, as well as Animations, read the `Studio` page available on the left sidebar
+
+## Export
+You can export a mod under the `Mods` page by selecting you mod and clicking "Export Mod," in which you are given 3 options:
+- **APK**: Export directly into a `.apk` file, or optionally, if you have the APKEditor add-on, `.xapk` files as well. Requires Keys & IV.
+- **BCM**: Export into a `.bcm` archive, which is just a renamed zip file made to signify "this is a battle cats mod."
+- **Pack**: Export into the games proprietary `.pack` and `.list` format for pack-specific injection. Requires Keys & IV.

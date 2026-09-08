@@ -375,6 +375,10 @@ impl State {
         }
     }
 
+    pub(crate) fn sidebar_open(&self) -> bool {
+        self.is_sidebar_open
+    }
+
     fn sidebar_span(&self) -> f32 {
         list::sidebar_width(&self.data) + SIDEBAR_PADDING * 2.0
     }

@@ -12,6 +12,7 @@ use kore::domains::stage::{navigate, GlobalMapId, GlobalStageId, StageDataState}
 use kore::Vault;
 
 use crate::app::theme;
+use crate::editor;
 use crate::widget::{list_row, smooth_scroll};
 
 use super::category::CategoryExt;
@@ -168,7 +169,9 @@ impl State {
                 }
 
                 let is_selected = data.selected_map.as_ref() == Some(&map_key);
-                map_col = map_col.push(sidebar_button(&map.name, is_selected, COLUMN_WIDTH, Message::SelectMap(map_key)));
+                let row = sidebar_button(&map.name, is_selected, COLUMN_WIDTH, Message::SelectMap(map_key));
+
+                map_col = map_col.push(editor::target(row, editor::Target::MapRow(map.map_id)));
                 map_count += 1;
             }
 
@@ -194,7 +197,10 @@ impl State {
                 }
 
                 let is_selected = data.selected_stage.as_ref() == Some(&stage_key);
-                stage_col = stage_col.push(sidebar_button(&stage.name, is_selected, COLUMN_WIDTH, Message::SelectStage(stage_key)));
+                let id = stage.stage_id;
+                let row = sidebar_button(&stage.name, is_selected, COLUMN_WIDTH, Message::SelectStage(stage_key));
+
+                stage_col = stage_col.push(editor::target(row, editor::Target::StageRow(id)));
                 stage_count += 1;
             }
 

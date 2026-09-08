@@ -1,15 +1,16 @@
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::collections::BTreeMap;
 
 use iced::advanced::{layout, overlay, renderer, widget, Clipboard, Layout, Shell, Widget};
 use iced::border::Radius;
 use iced::mouse::{self, Interaction};
 use iced::widget::{button, column, container, mouse_area, opaque, stack, text, Space};
-use iced::{Alignment, Border, Color, Element, Event, Length, Padding, Point, Rectangle, Size, Theme, Vector};
+use iced::{Alignment, Border, Color, Element, Event, Font, Length, Padding, Point, Rectangle, Size, Theme, Vector};
 use serde::{Deserialize, Serialize};
 use tracing::warn;
 
 use crate::app::theme;
+use crate::common::glyphs::Ruler;
 
 const HEADER_HEIGHT: f32 = 28.0;
 
@@ -29,29 +30,53 @@ const GRIP_CORNER: f32 = 14.0;
 const HIGHLIGHT_CORNER: f32 = 26.0;
 const TITLE_SIZE: f32 = 14.0;
 const TITLE_RESERVE: f32 = 34.0;
-const TITLE_GLYPH_RATIO: f32 = 0.55;
 const ELLIPSIS: char = '…';
 
-fn fitted(title: &str, room: f32) -> String {
-    let budget = (room / (TITLE_SIZE * TITLE_GLYPH_RATIO)).floor() as usize;
-    let length = title.chars().count();
+// The budget used to be a character count against a flat 0.55 glyph ratio, which is an
+// average for ASCII and badly wrong for anything full-width: a Japanese map name measures
+// about twice what it was charged, so the title ran out past the header. Widths come off
+// the shaper now, at the same size, font and Auto shaping the label renders with.
+fn trimmed(title: &str, room: f32) -> String {
+    let mut ruler = Ruler::new(Font::DEFAULT, TITLE_SIZE);
 
-    if length <= budget {
+    if ruler.width(title) <= room {
         return title.to_owned();
     }
 
-    if budget < 4 {
-        return String::from(ELLIPSIS);
+    let glyphs: Vec<char> = title.chars().collect();
+    let mut low = 0;
+    let mut high = glyphs.len();
+
+    // Binary search rather than a descending walk: a fit loop that steps one glyph at a
+    // time is the shape that cost `name_box` up to 29 shapes for one label.
+    while low < high {
+        let keep = (low + high).div_ceil(2);
+
+        match ruler.width(&elided(&glyphs, keep)) <= room {
+            true => low = keep,
+            false => high = keep - 1,
+        }
     }
 
-    let keep = budget - 1;
+    elided(&glyphs, low)
+}
+
+fn elided(glyphs: &[char], keep: usize) -> String {
     let head = keep.div_ceil(2);
     let tail = keep - head;
 
-    let start: String = title.chars().take(head).collect();
-    let end: String = title.chars().skip(length - tail).collect();
+    glyphs[..head]
+        .iter()
+        .chain(std::iter::once(&ELLIPSIS))
+        .chain(&glyphs[glyphs.len() - tail..])
+        .collect()
+}
 
-    format!("{start}{ELLIPSIS}{end}")
+#[derive(Default)]
+struct Fit {
+    title: String,
+    room: f32,
+    shown: String,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -84,6 +109,8 @@ pub enum Kind {
     EnemyDescription,
     ComboName,
     TalentText,
+    MapName,
+    StageName,
     Battleground,
     EnemyPick,
     Animator,
@@ -92,7 +119,7 @@ pub enum Kind {
     StudioShipout,
 }
 
-pub(crate) const KIND_COUNT: usize = 34;
+pub(crate) const KIND_COUNT: usize = 36;
 
 const KINDS: [Kind; KIND_COUNT] = [
     Kind::CatFilter,
@@ -122,6 +149,8 @@ const KINDS: [Kind; KIND_COUNT] = [
     Kind::EnemyDescription,
     Kind::ComboName,
     Kind::TalentText,
+    Kind::MapName,
+    Kind::StageName,
     Kind::Battleground,
     Kind::EnemyPick,
     Kind::Animator,
@@ -162,6 +191,8 @@ impl Kind {
             Self::EnemyDescription => "enemy_description",
             Self::ComboName => "combo_name",
             Self::TalentText => "talent_text",
+            Self::MapName => "map_name",
+            Self::StageName => "stage_name",
             Self::Battleground => "battleground",
             Self::EnemyPick => "enemy_pick",
             Self::Animator => "animator",
@@ -326,6 +357,25 @@ pub struct State {
     drag: Drag,
     hovered: Option<Edge>,
     raised: u64,
+    fit: RefCell<Fit>,
+}
+
+impl State {
+    // `view` runs per frame and is re-entered several times during an animation, so the
+    // measured fit is kept until the title or the room it has actually changes.
+    fn fitted(&self, title: &str, room: f32) -> String {
+        let mut fit = self.fit.borrow_mut();
+
+        if fit.title == title && fit.room == room {
+            return fit.shown.clone();
+        }
+
+        let shown = trimmed(title, room);
+
+        *fit = Fit { title: title.to_owned(), room, shown: shown.clone() };
+
+        shown
+    }
 }
 
 const CASCADE_STEP: f32 = 26.0;
@@ -432,7 +482,7 @@ impl State {
 
         let room = (size.width - TITLE_RESERVE * 2.0).max(0.0);
 
-        let title_layer = container(text(fitted(title, room)).size(TITLE_SIZE).wrapping(text::Wrapping::None))
+        let title_layer = container(text(self.fitted(title, room)).size(TITLE_SIZE).wrapping(text::Wrapping::None))
             .width(Length::Fixed(room))
             .height(Length::Fill)
             .align_x(Alignment::Center)
@@ -1120,5 +1170,53 @@ mod tests {
         joined.as_widget().diff(&mut tree);
 
         assert_eq!(markers(&tree), vec![Marker(1), Marker(2)]);
+    }
+
+    // The budget was a character count against a flat 0.55 glyph ratio, so a full-width
+    // name was charged about half what it measures and the title ran out past the header.
+    #[test]
+    fn a_title_is_trimmed_to_the_room_it_actually_measures() {
+        let mut ruler = Ruler::new(Font::DEFAULT, TITLE_SIZE);
+
+        // A narrow popup: NARROW_WIDTH 252 less TITLE_RESERVE either side.
+        let room = 184.0;
+
+        for title in [
+            "\u{4f1d}\u{8aac}\u{306e}\u{306f}\u{3058}\u{307e}\u{308a} :: Map_Name_ja.csv",
+            "The Legend Begins :: Map_Name_en.csv",
+            "\u{77ed}\u{3044}",
+            "",
+        ] {
+            let shown = super::trimmed(title, room);
+
+            assert!(
+                ruler.width(&shown) <= room,
+                "{title} trimmed to {shown}, {} wide in {room}",
+                ruler.width(&shown),
+            );
+        }
+    }
+
+    #[test]
+    fn a_full_width_title_keeps_fewer_glyphs_than_a_latin_one() {
+        let room = 184.0;
+
+        let latin = super::trimmed("The Legend Begins :: Map_Name_en.csv", room);
+        let kana = super::trimmed(
+            "\u{3067}\u{3093}\u{305b}\u{3064}\u{306e}\u{306f}\u{3058}\u{307e}\u{308a} :: Map_Name_ja.csv",
+            room,
+        );
+
+        assert!(
+            kana.chars().count() < latin.chars().count(),
+            "kana kept {} glyphs, latin {}",
+            kana.chars().count(),
+            latin.chars().count(),
+        );
+    }
+
+    #[test]
+    fn a_title_that_fits_is_left_alone() {
+        assert_eq!(super::trimmed("Stage", 184.0), "Stage");
     }
 }

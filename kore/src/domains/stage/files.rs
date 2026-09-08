@@ -32,6 +32,8 @@ pub(crate) fn stage_name_targets(cat_prefix: &str) -> Vec<String> {
     targets
 }
 
+pub const MAP_NAME: &str = "Map_Name.csv";
+
 pub fn map_banner_file(map_id: u32, image_prefix: &str) -> String {
     format!("mapname{:03}{}.png", map_id, artwork_suffix(image_prefix))
 }
