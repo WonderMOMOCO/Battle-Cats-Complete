@@ -36,6 +36,7 @@ pub(super) fn grid_id(subject: Subject) -> Id {
         Subject::Buy => "figures-grid-buy",
         Subject::Curve => "figures-grid-curve",
         Subject::Talents => "figures-grid-talents",
+        Subject::Costs => "figures-grid-costs",
     })
 }
 

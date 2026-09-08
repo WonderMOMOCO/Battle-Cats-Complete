@@ -3,7 +3,7 @@ use std::fmt;
 use kore::domains::settings::EditorMode;
 
 use super::combat::{cats, enemies};
-use super::{schema::Subject, talents, unitbuy, unitlevel};
+use super::{costs, schema::Subject, talents, unitbuy, unitlevel};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(super) enum Rule {
@@ -197,7 +197,7 @@ pub(super) fn note(subject: Subject, field: Option<&str>) -> Option<&'static str
     match subject {
         Subject::Cat => cats::note(field),
         Subject::Enemy => enemies::note(field),
-        Subject::Buy | Subject::Curve | Subject::Talents => None,
+        Subject::Buy | Subject::Curve | Subject::Talents | Subject::Costs => None,
     }
 }
 
@@ -208,6 +208,7 @@ pub(super) fn rule(subject: Subject, index: usize, field: Option<&str>, cells: &
         Subject::Buy => lookup(field, unitbuy::rule),
         Subject::Curve => unitlevel::rule(),
         Subject::Talents => talents::rule(index, cells),
+        Subject::Costs => costs::rule(index),
     }
 }
 

@@ -76,6 +76,7 @@ pub enum Kind {
     UnitBuy,
     LevelCurve,
     Talents,
+    TalentCosts,
     Explanation,
     EnemyName,
     EnemyDescription,
@@ -85,7 +86,7 @@ pub enum Kind {
     StudioShipout,
 }
 
-pub(crate) const KIND_COUNT: usize = 28;
+pub(crate) const KIND_COUNT: usize = 29;
 
 const KINDS: [Kind; KIND_COUNT] = [
     Kind::CatFilter,
@@ -108,6 +109,7 @@ const KINDS: [Kind; KIND_COUNT] = [
     Kind::UnitBuy,
     Kind::LevelCurve,
     Kind::Talents,
+    Kind::TalentCosts,
     Kind::Explanation,
     Kind::EnemyName,
     Kind::EnemyDescription,
@@ -141,6 +143,7 @@ impl Kind {
             Self::EnemyAttributes => "enemy_attributes",
             Self::UnitBuy => "unit_buy",
             Self::Talents => "talents",
+            Self::TalentCosts => "talent_costs",
             Self::LevelCurve => "level_curve",
             Self::Explanation => "explanation",
             Self::EnemyName => "enemy_name",

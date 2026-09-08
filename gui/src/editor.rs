@@ -108,10 +108,12 @@ const LEVEL_FILES: [(figures::Subject, &str); 2] =
 
 const FORM_FILES: [(figures::Subject, &str); 1] = [(figures::Subject::Buy, cat_files::UNIT_BUY)];
 
-const TALENT_FILES: [(figures::Subject, &str); 1] =
-    [(figures::Subject::Talents, cat_files::SKILL_ACQUISITION)];
+const TALENT_FILES: [(figures::Subject, &str); 2] = [
+    (figures::Subject::Talents, cat_files::SKILL_ACQUISITION),
+    (figures::Subject::Costs, cat_files::SKILL_LEVEL),
+];
 
-const TALENT_ASSETS: [&str; 1] = [cat_files::SKILL_LEVEL];
+const FIRST_COST: u32 = 1;
 
 struct AssetFile {
     name: String,
@@ -636,6 +638,7 @@ impl State {
     ) -> Vec<(u64, popup::Kind, Element<'a, Message>)> {
         let mut views: Vec<(u64, popup::Kind, Element<'_, Message>)> = Vec::new();
         let cap = level_cap(app);
+        let used = talent_costs(app);
 
         for subject in prose::SUBJECTS {
             if subject.page() != app.current_page || !prose_tab(app, subject) {
@@ -656,7 +659,7 @@ impl State {
 
             let slot = &self.figures[subject.slot()];
 
-            if let Some(view) = slot.view(window, cap, &app.vault) {
+            if let Some(view) = slot.view(window, cap, used, &app.vault) {
                 views.push((slot.raised(), figures::kind(subject), view.map(move |inner| Message::Figures(subject, inner))));
             }
         }
@@ -1158,7 +1161,10 @@ fn figures_tab(app: &BattleCatsApp, subject: figures::Subject) -> bool {
     match subject {
         figures::Subject::Cat => app.cat_state.selected_tab == DetailTab::Abilities,
         figures::Subject::Enemy => app.enemy_state.selected_tab == EnemyTab::Abilities,
-        figures::Subject::Buy | figures::Subject::Curve | figures::Subject::Talents => true,
+        figures::Subject::Buy
+        | figures::Subject::Curve
+        | figures::Subject::Talents
+        | figures::Subject::Costs => true,
     }
 }
 
@@ -1219,11 +1225,44 @@ fn talented(app: &BattleCatsApp) -> bool {
     app.app_state.cat.selected_cat.is_some()
 }
 
-fn address(subject: figures::Subject, id: u32) -> figures::Address {
+fn address(app: &BattleCatsApp, subject: figures::Subject, id: u32) -> figures::Address {
     match subject {
         figures::Subject::Talents => figures::Address::Keyed(id),
+        figures::Subject::Costs => {
+            figures::Address::Keyed(talent_costs(app).first().map_or(FIRST_COST, |cost| u32::from(*cost)))
+        }
         _ => figures::Address::Line(id as usize),
     }
+}
+
+fn talent_costs(app: &BattleCatsApp) -> figures::Marks {
+    let mut used = figures::Marks::default();
+
+    let Some(id) = app.app_state.cat.selected_cat else {
+        return used;
+    };
+
+    let Some(talents) =
+        app.cat_state.data.cats.iter().find(|cat| cat.id == id).and_then(|cat| cat.talent_data.as_ref())
+    else {
+        return used;
+    };
+
+    let mut costs: Vec<u8> = talents
+        .groups
+        .iter()
+        .filter(|group| group.ability_id != 0)
+        .map(|group| group.cost_id)
+        .collect();
+
+    costs.sort_unstable();
+    costs.dedup();
+
+    for (slot, cost) in used.iter_mut().zip(costs) {
+        *slot = cost;
+    }
+
+    used
 }
 
 fn roster_payloads(app: &BattleCatsApp, files: &[(figures::Subject, &str)]) -> Vec<LevelTarget> {
@@ -1251,7 +1290,7 @@ fn roster_payloads(app: &BattleCatsApp, files: &[(figures::Subject, &str)]) -> V
                 subject,
                 asset: Asset::Variants { key: name.to_owned(), files },
                 label: [label.as_str(), name].join(theme::HEADER_SEPARATOR),
-                address: address(subject, id),
+                address: address(app, subject, id),
                 unlocked: app.settings.files.unlock_game_mount,
                 active_mod: app.mods_state.active_mod(),
             })
@@ -1267,28 +1306,10 @@ fn talent_assets(app: &BattleCatsApp, reached: bool) -> Vec<AssetTarget> {
     let unlocked = app.settings.files.unlock_game_mount;
     let active_mod = app.mods_state.active_mod();
 
-    let mut targets: Vec<AssetTarget> = TALENT_ASSETS
+    exception(app, cat_files::SKILL_DESCRIPTIONS.to_owned())
+        .map(|described| AssetTarget { asset: Asset::Exception(described), unlocked, active_mod })
         .into_iter()
-        .filter_map(|name| {
-            let files = asset_files(app, name);
-
-            if files.is_empty() {
-                return None;
-            }
-
-            Some(AssetTarget {
-                asset: Asset::Variants { key: name.to_owned(), files },
-                unlocked,
-                active_mod: active_mod.clone(),
-            })
-        })
-        .collect();
-
-    if let Some(described) = exception(app, cat_files::SKILL_DESCRIPTIONS.to_owned()) {
-        targets.push(AssetTarget { asset: Asset::Exception(described), unlocked, active_mod });
-    }
-
-    targets
+        .collect()
 }
 
 fn level_cap(app: &BattleCatsApp) -> Option<i32> {
@@ -1653,9 +1674,12 @@ fn current_plan(app: &BattleCatsApp, subject: figures::Subject) -> Option<figure
 
             Some(registry::enemy_plan(&enemy, active, values))
         }
-        figures::Subject::Buy | figures::Subject::Curve | figures::Subject::Talents => {
+        figures::Subject::Buy
+        | figures::Subject::Curve
+        | figures::Subject::Talents
+        | figures::Subject::Costs => {
             let sources = match subject {
-                figures::Subject::Talents => talent_payloads(app, true),
+                figures::Subject::Talents | figures::Subject::Costs => talent_payloads(app, true),
                 _ => level_payloads(app, true, false),
             };
 

@@ -1,5 +1,6 @@
 mod cards;
 mod combat;
+mod costs;
 mod resolved;
 mod schema;
 mod talents;
@@ -37,6 +38,8 @@ const BUY_POPUP: popup::Spec = popup::Spec::new(popup::Kind::UnitBuy, POPUP_SIZE
 const CURVE_POPUP: popup::Spec = popup::Spec::new(popup::Kind::LevelCurve, POPUP_SIZE);
 const TALENT_SIZE: Size = Size::new(760.0, 540.0);
 const TALENT_POPUP: popup::Spec = popup::Spec::new(popup::Kind::Talents, TALENT_SIZE);
+const COSTS_SIZE: Size = Size::new(364.0, 520.0);
+const COSTS_POPUP: popup::Spec = popup::Spec::new(popup::Kind::TalentCosts, COSTS_SIZE);
 
 pub(super) fn kind(subject: Subject) -> popup::Kind {
     spec(subject).kind()
@@ -49,6 +52,7 @@ fn spec(subject: Subject) -> popup::Spec {
         Subject::Buy => BUY_POPUP,
         Subject::Curve => CURVE_POPUP,
         Subject::Talents => TALENT_POPUP,
+        Subject::Costs => COSTS_POPUP,
     }
 }
 
@@ -186,6 +190,7 @@ pub enum Message {
     CommentChanged(String),
     SearchChanged(String),
     HuntChanged(String),
+    Rowed(u32),
     Sync,
     SyncExpired,
     Persisted(u64, PathBuf, Option<Stamp>),
@@ -216,6 +221,12 @@ impl Address {
             .unwrap_or(lines.len());
 
         Some(at)
+    }
+
+    fn nearest(self, lines: &[String], delimiter: char) -> Option<usize> {
+        self.key()?;
+
+        lines.iter().position(|line| leading(line, delimiter).is_some())
     }
 
     fn key(self) -> Option<u32> {
@@ -253,6 +264,10 @@ impl Plan {
             && self.values == other.values
     }
 
+    fn rowed(self, id: u32) -> Plan {
+        Plan { address: Address::Keyed(id), ..self }
+    }
+
     fn source(&self, vfs: &Vfs) -> PathBuf {
         self.target_mod
             .as_deref()
@@ -261,12 +276,15 @@ impl Plan {
     }
 }
 
+pub(crate) type Marks = [u8; schema::TALENT_SLOTS];
+
 #[derive(Clone, Copy)]
 pub(super) struct Frame<'a> {
     width: f32,
     query: &'a str,
     armed: bool,
     cap: Option<i32>,
+    used: Marks,
     names: &'a talents::Names,
     vault: &'a Vault,
     picker: Option<usize>,
@@ -280,6 +298,7 @@ pub(super) struct State {
     query: String,
     offset: f32,
     confirm: Slot<()>,
+    pinned: Option<u32>,
     names: talents::Names,
     picker: Option<usize>,
     hunt: String,
@@ -292,6 +311,8 @@ struct Draft {
     read_from: PathBuf,
     stamp: Stamp,
     delimiter: char,
+    keys: Vec<u32>,
+    keyed: Option<u32>,
     lines: Vec<String>,
     cells: Vec<i32>,
     written: Vec<String>,
@@ -312,7 +333,7 @@ impl State {
         self.frame = popup::cascaded(nudge);
         self.offset = 0.0;
         self.picker = None;
-        self.draft = Draft::load(plan, vfs);
+        self.reload(plan, vfs);
     }
 
     pub(super) fn restore_scroll<M: Send + 'static>(&self) -> Option<Task<M>> {
@@ -324,6 +345,7 @@ impl State {
 
     fn reload(&mut self, plan: Plan, vfs: &Vfs) {
         self.draft = Draft::load(plan, vfs);
+        self.pinned = self.draft.as_ref().and_then(|draft| draft.keyed);
     }
 
     pub(super) fn relocalize(&self) {
@@ -373,6 +395,11 @@ impl State {
             self.draft = None;
 
             return;
+        };
+
+        let plan = match self.pinned {
+            Some(id) => plan.rowed(id),
+            None => plan,
         };
 
         if current.plan.target_mod.is_none() != plan.target_mod.is_none() {
@@ -435,6 +462,18 @@ impl State {
                 self.picker = index;
                 self.hunt.clear();
             }
+            Message::Rowed(id) => {
+                let switched = self.draft.as_mut().filter(|draft| draft.keyed != Some(id)).map(|draft| {
+                    draft.persist_now(vfs);
+
+                    draft.plan.clone().rowed(id)
+                });
+
+                if let Some(plan) = switched {
+                    self.offset = 0.0;
+                    self.reload(plan, vfs);
+                }
+            }
             Message::Scrolled(offset) => self.offset = offset,
             Message::SearchChanged(query) => self.query = query,
             Message::HuntChanged(query) => self.hunt = query,
@@ -478,6 +517,7 @@ impl State {
         &'a self,
         window: Size,
         cap: Option<i32>,
+        used: Marks,
         vault: &'a Vault,
     ) -> Option<Element<'a, Message>> {
         let draft = self.draft.as_ref()?;
@@ -490,6 +530,7 @@ impl State {
             query,
             armed,
             cap,
+            used,
             names: &self.names,
             vault,
             picker: self.picker,
@@ -531,7 +572,16 @@ impl Draft {
         let delimiter = Separator::detect(&body).unwrap_or(Separator::Comma).char();
         let lines: Vec<String> = body.lines().map(str::to_owned).collect();
 
-        let found = plan.address.locate(&lines, delimiter);
+        let switches = plan.schema.switches();
+        let keys: Vec<u32> = match switches {
+            true => lines.iter().filter_map(|line| leading(line, delimiter)).collect(),
+            false => Vec::new(),
+        };
+
+        let found = plan
+            .address
+            .locate(&lines, delimiter)
+            .or_else(|| switches.then(|| plan.address.nearest(&lines, delimiter)).flatten());
         let absent = found.is_none();
 
         let Some(row) = found.or_else(|| plan.address.insertion(&lines, delimiter)) else {
@@ -556,6 +606,8 @@ impl Draft {
             }
         };
 
+        let keyed = switches.then(|| lines.get(row).and_then(|line| leading(line, delimiter))).flatten();
+
         let Row { cells, written, stored, comment } = split_row(raw, delimiter, plan.schema);
         let rules: Vec<Rule> = (0..cells.len())
             .map(|index| resolved::rule(plan.subject(), index, plan.schema.field(index), &cells))
@@ -571,6 +623,8 @@ impl Draft {
             read_from,
             stamp,
             delimiter,
+            keys,
+            keyed,
             lines,
             cells,
             written,
@@ -735,7 +789,7 @@ impl Draft {
         let vanilla: Vec<String> = body.lines().map(str::to_owned).collect();
 
         let blank = vacant(&self.plan, delimiter);
-        let located = self.plan.address.locate(&vanilla, delimiter).and_then(|row| vanilla.get(row));
+        let located = self.address().locate(&vanilla, delimiter).and_then(|row| vanilla.get(row));
 
         let raw = match located {
             Some(line) => line.as_str(),
@@ -923,6 +977,22 @@ impl Draft {
         self.plan.schema.index_of(field).and_then(|index| self.cells.get(index).copied())
     }
 
+    fn address(&self) -> Address {
+        self.keyed.map_or(self.plan.address, Address::Keyed)
+    }
+
+    fn keys(&self) -> &[u32] {
+        &self.keys
+    }
+
+    fn keyed(&self) -> Option<u32> {
+        self.keyed
+    }
+
+    fn stored(&self) -> usize {
+        self.stored
+    }
+
     fn reads_at(&self, index: usize) -> Option<i32> {
         self.cells.get(index).copied()
     }
@@ -947,6 +1017,7 @@ impl Draft {
             Subject::Buy => unitbuy::view(self, width, query, armed),
             Subject::Curve => unitlevel::view(self, width, armed, cap),
             Subject::Talents => talents::view(self, frame),
+            Subject::Costs => costs::view(self, frame),
         }
     }
 }
@@ -1032,6 +1103,48 @@ mod tests {
         assert!(
             !schema::of(Subject::Cat).vacant(&[0; 8]),
             "only talents may delete their own row",
+        );
+    }
+
+    const VANILLA_CURVE: &str = "1,25,5,5,5,5,10,10,10,10,10,";
+    const VANILLA_ULTRA: &str = "3,50";
+
+    #[test]
+    fn a_single_level_cost_curve_is_written_back_byte_for_byte() {
+        let row = split_row(VANILLA_ULTRA, ',', schema::of(Subject::Costs));
+
+        assert_eq!(rebuild(&row, 0), VANILLA_ULTRA, "an ultra curve stores one level and must stay that wide");
+    }
+
+    #[test]
+    fn a_cost_curve_grows_only_as_far_as_the_level_edited() {
+        let row = split_row(VANILLA_ULTRA, ',', schema::of(Subject::Costs));
+
+        assert_eq!(rebuild(&row, 4), "3,50,0,0", "levels past the one typed into stay out of the file");
+    }
+
+    #[test]
+    fn a_ten_level_curve_keeps_every_cost_and_drops_only_its_trailing_empty() {
+        let row = split_row(VANILLA_CURVE, ',', schema::of(Subject::Costs));
+
+        assert_eq!(row.stored, 11, "the id plus ten levels are data; the trailing comma is not");
+        assert_eq!(rebuild(&row, 0), VANILLA_CURVE.trim_end_matches(','));
+    }
+
+    #[test]
+    fn a_missing_cost_curve_falls_back_to_the_first_one_the_file_has() {
+        let lines = rows(&["lvID", "1", "2"]);
+
+        assert_eq!(
+            Address::Keyed(7).nearest(&lines, ','),
+            Some(1),
+            "the header parses to no id, so the fallback must land on the first real curve",
+        );
+
+        assert_eq!(
+            Address::Line(0).nearest(&lines, ','),
+            None,
+            "only a keyed subject may be re-pointed at another row",
         );
     }
 
@@ -1372,6 +1485,8 @@ mod tests {
             read_from: std::path::PathBuf::new(),
             stamp: Stamp::default(),
             delimiter: ',',
+            keys: Vec::new(),
+            keyed: None,
             lines: Vec::new(),
             cells,
             writing: false,

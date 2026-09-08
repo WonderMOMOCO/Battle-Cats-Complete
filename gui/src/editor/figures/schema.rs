@@ -18,12 +18,13 @@ pub enum Subject {
     Buy,
     Curve,
     Talents,
+    Costs,
 }
 
-pub(crate) const COUNT: usize = 5;
+pub(crate) const COUNT: usize = 6;
 
 pub(crate) const SUBJECTS: [Subject; COUNT] =
-    [Subject::Cat, Subject::Enemy, Subject::Buy, Subject::Curve, Subject::Talents];
+    [Subject::Cat, Subject::Enemy, Subject::Buy, Subject::Curve, Subject::Talents, Subject::Costs];
 
 impl Subject {
     pub(crate) fn slot(self) -> usize {
@@ -33,13 +34,14 @@ impl Subject {
             Subject::Buy => 2,
             Subject::Curve => 3,
             Subject::Talents => 4,
+            Subject::Costs => 5,
         }
     }
 
     pub(crate) fn page(self) -> Page {
         match self {
             Subject::Enemy => Page::Enemies,
-            Subject::Cat | Subject::Buy | Subject::Curve | Subject::Talents => Page::Cats,
+            Subject::Cat | Subject::Buy | Subject::Curve | Subject::Talents | Subject::Costs => Page::Cats,
         }
     }
 }
@@ -59,6 +61,8 @@ pub(super) static CURVE: Schema = Schema { subject: Subject::Curve, comments: fa
 
 pub(super) static TALENTS: Schema = Schema { subject: Subject::Talents, comments: false };
 
+pub(super) static COSTS: Schema = Schema { subject: Subject::Costs, comments: false };
+
 pub(super) fn of(subject: Subject) -> &'static Schema {
     match subject {
         Subject::Cat => &CAT,
@@ -66,6 +70,7 @@ pub(super) fn of(subject: Subject) -> &'static Schema {
         Subject::Buy => &BUY,
         Subject::Curve => &CURVE,
         Subject::Talents => &TALENTS,
+        Subject::Costs => &COSTS,
     }
 }
 
@@ -76,6 +81,13 @@ pub(super) const TALENT_STRIDE: usize = 14;
 pub(super) const TALENT_SLOTS: usize = 8;
 
 const TALENT_WIDTH: usize = TALENT_HEAD + TALENT_STRIDE * TALENT_SLOTS;
+
+pub(super) const COST_HEAD: usize = 1;
+pub(super) const COST_LEVELS: usize = 10;
+
+const COST_WIDTH: usize = COST_HEAD + COST_LEVELS;
+
+const COST_HEADING: &str = "Cost ID";
 
 const TALENT_HEADINGS: [&str; TALENT_HEAD] = ["Unit ID", "Type ID"];
 
@@ -231,7 +243,7 @@ impl Schema {
             Subject::Cat => &CAT_ORDER,
             Subject::Enemy => &ENEMY_ORDER,
             Subject::Buy => &BUY_ORDER,
-            Subject::Curve | Subject::Talents => &[],
+            Subject::Curve | Subject::Talents | Subject::Costs => &[],
         }
     }
 
@@ -251,6 +263,7 @@ impl Schema {
         match self.subject {
             Subject::Curve => BRACKETS,
             Subject::Talents => TALENT_WIDTH,
+            Subject::Costs => COST_WIDTH,
             _ => self.order().len(),
         }
     }
@@ -258,6 +271,13 @@ impl Schema {
     pub(super) fn label(&self, index: usize) -> Cow<'static, str> {
         if self.subject == Subject::Talents {
             return Cow::Owned(talent_label(index));
+        }
+
+        if self.subject == Subject::Costs {
+            return match index.checked_sub(COST_HEAD) {
+                Some(level) => Cow::Owned(format!("Level {}", level + 1)),
+                None => Cow::Borrowed(COST_HEADING),
+            };
         }
 
         if self.subject == Subject::Curve {
@@ -279,6 +299,10 @@ impl Schema {
 
     pub(super) fn creates(&self) -> bool {
         self.subject == Subject::Talents
+    }
+
+    pub(super) fn switches(&self) -> bool {
+        self.subject == Subject::Costs
     }
 
     pub(super) fn vacant(&self, cells: &[i32]) -> bool {
