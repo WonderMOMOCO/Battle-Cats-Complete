@@ -1,3 +1,4 @@
+mod ground;
 mod menu;
 mod registry;
 mod figures;
@@ -22,6 +23,7 @@ use kore::domains::enemy::files as enemy_files;
 use kore::domains::enemy::scanner::EnemyEntry;
 use kore::common::architecture;
 use kore::domains::mods;
+use kore::domains::stage::GlobalMapId;
 use kore::domains::settings::{ContextScope, EditorMode};
 use kore::Vfs;
 use nyanko::graphics::tools::crash::Side;
@@ -47,6 +49,7 @@ pub enum Target {
     CatForms,
     CatTalents,
     CatCombo(usize),
+    StageGround,
     CatAttributes,
     EnemyAttributes,
     CatAnimation,
@@ -76,6 +79,15 @@ pub(crate) struct Context {
     animation: Option<AnimTarget>,
     channels: Option<ChannelTarget>,
     offsets: Option<studio::Offsets>,
+    ground: Option<GroundTarget>,
+}
+
+struct GroundTarget {
+    file: String,
+    game: PathBuf,
+    label: String,
+    unlocked: bool,
+    active_mod: Option<String>,
 }
 
 struct ChannelTarget {
@@ -371,6 +383,7 @@ pub enum Message {
     FailureExpired,
     Replaced(bool),
     Figures(figures::Subject, figures::Message),
+    Ground(ground::Message),
     Prose(prose::Subject, prose::Message),
 }
 
@@ -450,6 +463,7 @@ enum Action {
     DropPart { part: usize },
     EditAnimation(AnimPlan),
     EditFigures(figures::Plan),
+    EditGround(ground::Plan),
     EditProse(prose::Plan),
     Replace { file: String, target_mod: Option<String>, game: Option<PathBuf> },
     Sync { file: String, target_mod: String, game: PathBuf },
@@ -535,6 +549,7 @@ pub(crate) struct State {
     failed: Slot<Trail>,
     figures: [figures::State; figures::COUNT],
     prose: [prose::State; prose::COUNT],
+    ground: ground::State,
     synced: Option<Key>,
 }
 
@@ -542,6 +557,7 @@ struct Snapshot {
     page: Page,
     figures: [Option<figures::Plan>; figures::COUNT],
     prose: [Vec<prose::Plan>; prose::COUNT],
+    ground: Option<ground::Plan>,
 }
 
 #[derive(PartialEq)]
@@ -632,6 +648,7 @@ impl State {
                 .subject_mut(subject)
                 .update(msg, vfs)
                 .map(move |inner| Message::Figures(subject, inner)),
+            Message::Ground(msg) => self.ground.update(msg, vfs).map(Message::Ground),
             Message::Opened(..) => Task::none(),
         }
     }
@@ -673,6 +690,18 @@ impl State {
             }
         }
 
+        if app.current_page == Page::Stages {
+            let enemies = &app.stage_state.data.enemy_registry;
+
+            if let Some(view) = self.ground.view(window, enemies) {
+                views.push((self.ground.raised(), ground::kind(), view.map(Message::Ground)));
+            }
+
+            if let Some(view) = self.ground.picker_view(window, enemies) {
+                views.push((self.ground.raised() + 1, ground::pick_kind(), view.map(Message::Ground)));
+            }
+        }
+
         views
     }
 
@@ -682,6 +711,7 @@ impl State {
             .into_iter()
             .map(prose::Subject::kind)
             .chain(figures::SUBJECTS.into_iter().map(figures::kind))
+            .chain([ground::kind(), ground::pick_kind()])
             .collect()
     }
 
@@ -696,6 +726,8 @@ impl State {
         for slot in &self.figures {
             slot.relocalize();
         }
+
+        self.ground.forget();
     }
 
     pub(crate) fn flush_now(&mut self, vfs: &Vfs) {
@@ -706,6 +738,8 @@ impl State {
         for slot in &mut self.prose {
             slot.flush_now(vfs);
         }
+
+        self.ground.flush_now(vfs);
     }
 
     pub(crate) fn flush_drafts(&mut self, vfs: &Vfs) -> Task<Message> {
@@ -723,6 +757,7 @@ impl State {
     fn drafting(&self) -> bool {
         self.figures.iter().any(figures::State::drafting)
             || self.prose.iter().any(prose::State::drafting)
+            || self.ground.drafting()
     }
 
     fn figures_drafting(&self, subject: figures::Subject) -> bool {
@@ -740,6 +775,7 @@ impl State {
     fn drifted(&self) -> bool {
         self.figures.iter().any(figures::State::drifted)
             || self.prose.iter().any(prose::State::drifted)
+            || self.ground.drifted()
     }
 
     pub(crate) fn apply(&mut self, update: Update, vfs: &Vfs) {
@@ -753,6 +789,8 @@ impl State {
 
             self.prose[subject.slot()].sync(&snapshot.prose[subject.slot()], vfs);
         }
+
+        self.ground.sync(snapshot.ground, vfs);
 
         for (slot, plan) in snapshot.figures.into_iter().enumerate() {
             if figures::SUBJECTS[slot].page() != snapshot.page {
@@ -888,6 +926,13 @@ impl State {
 
                 Outcome::Done
             }
+            Action::EditGround(plan) => {
+                let nudge = usize::from(self.ground.drafting());
+
+                self.ground.begin(plan.clone(), nudge, vfs);
+
+                Outcome::Done
+            }
             Action::EditProse(plan) => {
                 let subject = plan.subject();
                 let already = self.prose[subject.slot()].drafting();
@@ -1008,6 +1053,7 @@ pub(crate) fn context(app: &BattleCatsApp, target: Option<Target>) -> Context {
             offsets: matches!(target, Some(Target::AnimFields))
                 .then(|| app.studio_state.offsets())
                 .flatten(),
+            ground: None,
         };
     }
 
@@ -1030,7 +1076,48 @@ pub(crate) fn context(app: &BattleCatsApp, target: Option<Target>) -> Context {
         animation: anim_target(app, reached(Target::CatAnimation), reached(Target::EnemyAnimation)),
         channels: None,
         offsets: None,
+        ground: ground_target(app, reached(Target::StageGround)),
     }
+}
+
+fn ground_target(app: &BattleCatsApp, reached: bool) -> Option<GroundTarget> {
+    if !reached || app.current_page != Page::Stages {
+        return None;
+    }
+
+    ground_source(app)
+}
+
+fn ground_source(app: &BattleCatsApp) -> Option<GroundTarget> {
+    let chosen = app.stage_state.data.selected_stage.as_ref()?;
+    let file = app.stage_state.data.registry.grounds.get(chosen)?.to_string();
+    let game = app.vault.vfs.rooted(architecture::GAME, &file)?;
+
+    let registry = &app.stage_state.data.registry;
+
+    let chapter = registry
+        .maps
+        .get(&GlobalMapId { category: chosen.category.clone(), map: chosen.map })
+        .map(|map| map.name.trim())
+        .filter(|name| !name.is_empty());
+
+    let named =
+        registry.stages.get(chosen).map(|stage| stage.name.trim()).filter(|name| !name.is_empty());
+
+    let label = chapter
+        .into_iter()
+        .chain(named)
+        .chain(std::iter::once(file.as_str()))
+        .collect::<Vec<&str>>()
+        .join(theme::HEADER_SEPARATOR);
+
+    Some(GroundTarget {
+        label,
+        file,
+        game,
+        unlocked: app.settings.files.unlock_game_mount,
+        active_mod: app.mods_state.active_mod(),
+    })
 }
 
 fn named_files(app: &BattleCatsApp, names: Vec<String>) -> Vec<AssetFile> {
@@ -1792,7 +1879,19 @@ fn snapshot(app: &BattleCatsApp, editor: &State) -> Snapshot {
 
             prose_target(app, subject).map(|target| registry::prose_plans(&target)).unwrap_or_default()
         }),
+        ground: current_ground(app),
     }
+}
+
+fn current_ground(app: &BattleCatsApp) -> Option<ground::Plan> {
+    let target = ground_source(app)?;
+
+    Some(ground::plan(
+        target.label,
+        &target.game,
+        target.active_mod,
+        app.settings.files.editor_mode,
+    ))
 }
 
 fn current_plan(app: &BattleCatsApp, subject: figures::Subject) -> Option<figures::Plan> {

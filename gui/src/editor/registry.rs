@@ -10,7 +10,7 @@ use kore::systems::animation::authoring;
 
 use crate::domains::studio;
 
-use super::{classify, figures, prose, Action, AnimTarget, CatTarget, Context, EnemyTarget, FileTarget, Format, Item, LevelTarget, ProseTarget, Scope};
+use super::{classify, figures, ground, prose, Action, AnimTarget, CatTarget, Context, EnemyTarget, FileTarget, Format, GroundTarget, Item, LevelTarget, ProseTarget, Scope};
 
 const BINARY_NOTICE: &str = "Cannot open binary format";
 const NO_CHANNEL_NOTICE: &str = "This part has no channels in this animation";
@@ -137,6 +137,7 @@ enum Primary<'a> {
     Enemy(&'a EnemyTarget),
     Prose(&'a ProseTarget),
     Level(&'a LevelTarget),
+    Ground(&'a GroundTarget),
     Unsupported(Verb),
 }
 
@@ -357,6 +358,23 @@ fn payloads(context: &Context) -> Vec<Payload<'_>> {
         });
     }
 
+    if let Some(target) = context.ground.as_ref() {
+        let mount = mount(target.active_mod.as_deref(), target.unlocked);
+        let scopes = vec![Scope {
+            name: target.file.as_str(),
+            source: Some(target.game.as_path()),
+            present: Some(target.game.as_path()),
+        }];
+
+        payloads.push(Payload {
+            key: target.file.as_str(),
+            scopes,
+            mount,
+            primary: Primary::Ground(target),
+            values: context.values,
+        });
+    }
+
     for target in &context.prose {
         let mount = mount(target.active_mod.as_deref(), target.unlocked);
 
@@ -475,6 +493,23 @@ impl Payload<'_> {
         match self.primary {
             Primary::Unsupported(verb) => {
                 items.push((verb, Item::unsupported(verb.label(scope.name, &self.mount, labelling))));
+            }
+            Primary::Ground(target) => {
+                let plan = ground::plan(
+                    target.label.clone(),
+                    scope.source.or(scope.present).unwrap_or(&target.game),
+                    target_mod.clone(),
+                    self.values,
+                );
+
+                items.push((
+                    Verb::Edit,
+                    self.mount.item(
+                        Verb::Edit.label(scope.name, &self.mount, labelling),
+                        Action::EditGround(plan),
+                        Confirm::Never,
+                    ),
+                ));
             }
             Primary::Level(level) => {
                 if let Some(plan) = level_plan(level, scope, target_mod, self.values) {

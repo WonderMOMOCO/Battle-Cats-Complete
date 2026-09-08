@@ -6,7 +6,7 @@ use super::combat::{cats, enemies};
 use super::{combos, costs, schema::Subject, talents, unitbuy, unitlevel};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub(super) enum Rule {
+pub(in crate::editor) enum Rule {
     Plain,
     Opaque,
     Flag,
@@ -20,28 +20,28 @@ pub(super) enum Rule {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub(in crate::editor::figures) struct Gate {
-    pub(in crate::editor::figures) field: &'static str,
-    pub(in crate::editor::figures) blocked: i32,
-    pub(in crate::editor::figures) reason: &'static str,
+pub(in crate::editor) struct Gate {
+    pub(in crate::editor) field: &'static str,
+    pub(in crate::editor) blocked: i32,
+    pub(in crate::editor) reason: &'static str,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub(in crate::editor::figures) struct Choice {
+pub(in crate::editor) struct Choice {
     raw: i32,
     label: &'static str,
 }
 
 impl Choice {
-    pub(in crate::editor::figures) const fn new(raw: i32, label: &'static str) -> Choice {
+    pub(in crate::editor) const fn new(raw: i32, label: &'static str) -> Choice {
         Choice { raw, label }
     }
 
-    pub(super) fn raw(self) -> i32 {
+    pub(in crate::editor) fn raw(self) -> i32 {
         self.raw
     }
 
-    pub(super) fn label(self) -> &'static str {
+    pub(in crate::editor) fn label(self) -> &'static str {
         self.label
     }
 }
@@ -53,13 +53,13 @@ impl fmt::Display for Choice {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub(super) enum Toggle {
+pub(in crate::editor) enum Toggle {
     No,
     Yes,
 }
 
 impl Toggle {
-    pub(super) fn flip(self) -> Toggle {
+    pub(in crate::editor) fn flip(self) -> Toggle {
         match self {
             Toggle::No => Toggle::Yes,
             Toggle::Yes => Toggle::No,
@@ -92,7 +92,7 @@ impl fmt::Display for Toggle {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub(super) enum Face {
+pub(in crate::editor) enum Face {
     Number,
     Danger,
     Toggle(Toggle),
@@ -104,14 +104,14 @@ pub(super) const PERCENT_FLOOR: i32 = 0;
 pub(super) const PERCENT_CEILING: i32 = 100;
 
 impl Rule {
-    pub(super) fn gate(self) -> Option<Gate> {
+    pub(in crate::editor) fn gate(self) -> Option<Gate> {
         match self {
             Rule::Gated(_, gate) => Some(gate),
             _ => None,
         }
     }
 
-    pub(super) fn to_display(self, raw: i32, values: EditorMode) -> i32 {
+    pub(in crate::editor) fn to_display(self, raw: i32, values: EditorMode) -> i32 {
         if values == EditorMode::Raw {
             return raw;
         }
@@ -124,7 +124,7 @@ impl Rule {
         }
     }
 
-    pub(super) fn to_raw(self, display: i32, values: EditorMode) -> i32 {
+    pub(in crate::editor) fn to_raw(self, display: i32, values: EditorMode) -> i32 {
         if values == EditorMode::Raw {
             return display;
         }
@@ -137,7 +137,7 @@ impl Rule {
         }
     }
 
-    pub(super) fn signed(self, values: EditorMode) -> bool {
+    pub(in crate::editor) fn signed(self, values: EditorMode) -> bool {
         if values == EditorMode::Raw {
             return true;
         }
@@ -149,7 +149,7 @@ impl Rule {
         }
     }
 
-    pub(super) fn clamp(self, raw: i32, values: EditorMode) -> i32 {
+    pub(in crate::editor) fn clamp(self, raw: i32, values: EditorMode) -> i32 {
         if values == EditorMode::Raw {
             return raw;
         }
@@ -163,7 +163,7 @@ impl Rule {
         }
     }
 
-    pub(super) fn face(self, raw: i32, values: EditorMode) -> Face {
+    pub(in crate::editor) fn face(self, raw: i32, values: EditorMode) -> Face {
         if values == EditorMode::Raw {
             return Face::Number;
         }

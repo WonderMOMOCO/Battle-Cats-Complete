@@ -84,13 +84,15 @@ pub enum Kind {
     EnemyDescription,
     ComboName,
     TalentText,
+    Battleground,
+    EnemyPick,
     Animator,
     StudioManage,
     StudioOnion,
     StudioShipout,
 }
 
-pub(crate) const KIND_COUNT: usize = 32;
+pub(crate) const KIND_COUNT: usize = 34;
 
 const KINDS: [Kind; KIND_COUNT] = [
     Kind::CatFilter,
@@ -120,6 +122,8 @@ const KINDS: [Kind; KIND_COUNT] = [
     Kind::EnemyDescription,
     Kind::ComboName,
     Kind::TalentText,
+    Kind::Battleground,
+    Kind::EnemyPick,
     Kind::Animator,
     Kind::UtilityAnimationSettings,
     Kind::StudioManage,
@@ -158,6 +162,8 @@ impl Kind {
             Self::EnemyDescription => "enemy_description",
             Self::ComboName => "combo_name",
             Self::TalentText => "talent_text",
+            Self::Battleground => "battleground",
+            Self::EnemyPick => "enemy_pick",
             Self::Animator => "animator",
             Self::StudioManage => "studio_manage",
             Self::StudioOnion => "studio_onion",

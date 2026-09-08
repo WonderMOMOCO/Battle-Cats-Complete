@@ -15,6 +15,7 @@ use kore::domains::enemy::scanner::EnemyEntry;
 use kore::domains::stage::{restrictions, Map, Stage};
 
 use crate::app::theme;
+use crate::editor;
 use crate::common::item_icon;
 use crate::widget::{section, subsection};
 
@@ -268,7 +269,10 @@ impl State {
         }
 
         if stage.enemies.is_empty() {
-            return section("Battleground", Length::Fixed(super::CONTENT_WIDTH), content.push(text("No enemies defined for this stage.")));
+            return editor::target(
+                section("Battleground", Length::Fixed(super::CONTENT_WIDTH), content.push(text("No enemies defined for this stage."))),
+                editor::Target::StageGround,
+            );
         }
 
         let crown_mag = stage.crown_magnification(selected_crown.saturating_add(1)).unwrap_or(100);
@@ -367,6 +371,9 @@ impl State {
             );
         }
 
-        section("Battleground", Length::Fixed(super::CONTENT_WIDTH), content.push(grid))
+        editor::target(
+            section("Battleground", Length::Fixed(super::CONTENT_WIDTH), content.push(grid)),
+            editor::Target::StageGround,
+        )
     }
 }

@@ -256,12 +256,12 @@ impl State {
         };
 
         column![
-            text("Information").size(18.0),
+            text("Game").size(18.0),
             Space::new().height(10.0),
             nav_row(&[("Cats", Page::Cats), ("Enemies", Page::Enemies), ("Stages", Page::Stages)]),
             Space::new().height(SPACE_BETWEEN_SECTIONS),
 
-            text("Database").size(18.0),
+            text("Data").size(18.0),
             Space::new().height(10.0),
             nav_row(&[("Mods", Page::Mods), ("Files", Page::Files), ("Import", Page::Import), ("Mining", Page::Mining)]),
             Space::new().height(SPACE_BETWEEN_SECTIONS),

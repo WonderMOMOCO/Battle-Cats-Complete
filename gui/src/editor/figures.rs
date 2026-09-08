@@ -2,7 +2,7 @@ mod cards;
 mod combat;
 mod combos;
 mod costs;
-mod resolved;
+pub(super) mod resolved;
 mod schema;
 mod talents;
 mod unitbuy;

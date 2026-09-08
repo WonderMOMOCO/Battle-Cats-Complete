@@ -100,6 +100,8 @@ pub struct StageBundle {
     pub dictionaries: StageDictionaries,
 }
 
+type StageHarvest = (Vec<u32>, Vec<(GlobalStageId, Stage)>, Vec<(GlobalStageId, Box<str>)>);
+
 struct CategoryInfo {
     prefix: String,
     data_prefix: String,
@@ -570,7 +572,7 @@ fn load_map(
         .map(|id| (3000..=3008).contains(&id))
         .unwrap_or(true);
 
-    let (stage_ids, stage_structs) = if is_story {
+    let (stage_ids, stage_structs, ground_files) = if is_story {
         load_story_stages(&map_struct, stage_names, ctx, global_map_id)
     } else {
         load_legend_stages(info, &map_struct, stage_names, ctx, global_map_id)
@@ -591,6 +593,7 @@ fn load_map(
     if let Ok(mut reg) = reg_mtx.lock() {
         reg.maps.insert(map_key, map_struct);
         reg.stages.extend(stage_structs);
+        reg.grounds.extend(ground_files);
     }
 }
 
@@ -599,9 +602,10 @@ fn load_story_stages(
     stage_names: &HashMap<u32, StageNameEntry>,
     ctx: &ScanContext,
     global_map_id: Option<u32>,
-) -> (Vec<u32>, Vec<(GlobalStageId, Stage)>) {
+) -> StageHarvest {
     let mut id_list = Vec::new();
     let mut stage_list = Vec::new();
+    let mut ground_list = Vec::new();
 
     let story_file = if map.category.map_prefix() == "Z" {
         match global_map_id {
@@ -673,6 +677,7 @@ fn load_story_stages(
         }
 
         let stage_key = GlobalStageId { category: map.category.clone(), map: map.map_id, stage: stage_id };
+        ground_list.push((stage_key.clone(), file_name.clone()));
         stage_list.push((stage_key, stage_struct));
         id_list.push(stage_id);
     }
@@ -697,6 +702,7 @@ fn load_story_stages(
             }
 
             let stage_key = GlobalStageId { category: map.category.clone(), map: map.map_id, stage: inv_stage_id };
+            ground_list.push((stage_key.clone(), inv_file.clone()));
             stage_list.push((stage_key, stage_struct));
             id_list.push(inv_stage_id);
         } else {
@@ -704,7 +710,7 @@ fn load_story_stages(
         }
     }
 
-    (id_list, stage_list)
+    (id_list, stage_list, ground_list)
 }
 
 fn load_legend_stages(
@@ -713,9 +719,10 @@ fn load_legend_stages(
     stage_names: &HashMap<u32, StageNameEntry>,
     ctx: &ScanContext,
     global_map_id: Option<u32>,
-) -> (Vec<u32>, Vec<(GlobalStageId, Stage)>) {
+) -> StageHarvest {
     let mut id_list = Vec::new();
     let mut stage_list = Vec::new();
+    let mut ground_list = Vec::new();
     let mut map_data = MapStageData::default();
 
     for prefix in [info.data_prefix.as_str(), info.prefix.as_str()] {
@@ -747,11 +754,12 @@ fn load_legend_stages(
         }
 
         let stage_key = GlobalStageId { category: map.category.clone(), map: map.map_id, stage: stage_id };
+        ground_list.push((stage_key.clone(), file_name.clone()));
         stage_list.push((stage_key, stage_struct));
         id_list.push(stage_id);
     }
 
-    (id_list, stage_list)
+    (id_list, stage_list, ground_list)
 }
 
 fn build_base_stage(

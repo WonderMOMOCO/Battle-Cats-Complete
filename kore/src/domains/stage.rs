@@ -40,6 +40,7 @@ pub struct GlobalStageId {
 pub struct StageRegistry {
     pub maps: HashMap<GlobalMapId, Map>,
     pub stages: HashMap<GlobalStageId, Stage>,
+    pub grounds: HashMap<GlobalStageId, Box<str>>,
 }
 
 #[derive(Default, Deserialize, Serialize)]
