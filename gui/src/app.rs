@@ -1228,6 +1228,7 @@ impl BattleCatsApp {
                 }
                 self.stage_state.sync_state(&mut self.app_state.stage);
                 self.sync_popup(ActivePopup::StageFilter, self.stage_state.filter_popup_open());
+                self.sync_editor(stages_loaded);
 
                 if stages_loaded {
                     let mined = self.restock_mining();

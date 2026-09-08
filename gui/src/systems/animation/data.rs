@@ -179,6 +179,14 @@ impl State {
         }
     }
 
+    // Showcase composes the standard walk/idle/attack/knockback clips, so it only means
+    // anything once those roles resolved. They resolve from a unit's own slot numbering, so
+    // a Studio set in its own workspace and every Utilities rig carry none -- the export
+    // would render the resting pose for every frame and read as "the animation is missing".
+    pub fn showcasable(&self) -> bool {
+        self.clips.iter().any(|clip| clip.role.is_some() && clip.anim.is_some())
+    }
+
     pub fn role_paths(&self) -> Vec<(Role, PathBuf)> {
         self.clips
             .iter()
@@ -776,6 +784,55 @@ mod tests {
     use kore::systems::animation::SLOT_MODEL;
 
     use super::*;
+
+    fn rigging() -> Arc<Rigging> {
+        Arc::new(Rigging {
+            id: "test".to_owned(),
+            png: PathBuf::from("t.png"),
+            cut: PathBuf::from("t.imgcut"),
+            model: PathBuf::from("t.mamodel"),
+        })
+    }
+
+    fn clip(role: Option<Role>, anim: Option<&str>) -> Clip {
+        Clip {
+            name: None,
+            slot: None,
+            role,
+            looping: Loop::Auto,
+            rig: rigging(),
+            anim: anim.map(PathBuf::from),
+        }
+    }
+
+    fn seeded(key: &str, clips: Vec<Clip>) -> State {
+        let mut held = State::default();
+
+        held.sync(key, || ClipSet { name: key.to_owned(), clips, offsets: Vec::new() });
+
+        held
+    }
+
+    // Showcase composes the four standard role clips. A Studio set in its own workspace and
+    // every Utilities rig carry no roles at all, so the export rendered the resting pose for
+    // every frame and read as "the animation never loaded".
+    #[test]
+    fn a_rig_with_no_roles_cannot_be_showcased() {
+        let unit = seeded("unit", vec![
+            clip(Some(Role::Walk), Some("000_f00.maanim")),
+            clip(Some(Role::Idle), Some("000_f01.maanim")),
+        ]);
+
+        assert!(unit.showcasable(), "a rig whose slots resolved is a unit we can compose");
+
+        let loose = seeded("loose", vec![clip(None, Some("something.maanim")), clip(None, None)]);
+
+        assert!(!loose.showcasable(), "no role resolved means we do not know what any clip is");
+
+        let modelled = seeded("modelled", vec![clip(Some(Role::Walk), None)]);
+
+        assert!(!modelled.showcasable(), "a role with no file on disk cannot be loaded either");
+    }
 
     #[test]
     fn a_label_no_row_answers_to_leaves_the_choice_alone() {

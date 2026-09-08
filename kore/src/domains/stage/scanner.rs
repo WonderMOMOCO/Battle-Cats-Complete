@@ -28,6 +28,7 @@ use super::{GlobalMapId, GlobalStageId, Map, MapAddress, Stage, StageRegistry};
 const MAP_STAGE_DATA: &str = "MapStageData";
 const STAGE: &str = "stage";
 const CSV: &str = ".csv";
+const STAGE_FALLBACK: &str = "stage.csv";
 const PREFIX_EC: &str = "EC";
 const STORY_PREFIXES: [&str; 4] = [PREFIX_EC, "W", "Space", "Z"];
 const EC_CHAPTERS: [u32; 3] = [0, 1, 2];
@@ -101,7 +102,12 @@ pub struct StageBundle {
     pub dictionaries: StageDictionaries,
 }
 
-type StageHarvest = (Vec<u32>, Vec<(GlobalStageId, Stage)>, Vec<(GlobalStageId, Box<str>)>);
+struct StageHarvest {
+    ids: Vec<u32>,
+    stages: Vec<(GlobalStageId, Stage)>,
+    grounds: Vec<(GlobalStageId, Box<str>)>,
+    data_file: Option<String>,
+}
 
 struct CategoryInfo {
     prefix: String,
@@ -575,11 +581,13 @@ fn load_map(
         .map(|id| (3000..=3008).contains(&id))
         .unwrap_or(true);
 
-    let (stage_ids, stage_structs, ground_files) = if is_story {
+    let harvest = if is_story {
         load_story_stages(&map_struct, stage_names, ctx, global_map_id)
     } else {
         load_legend_stages(info, &map_struct, stage_names, ctx, global_map_id)
     };
+
+    let StageHarvest { ids: stage_ids, stages: stage_structs, grounds: ground_files, data_file } = harvest;
 
     if stage_ids.is_empty() {
         warn!("Map {:03} (Category: {:?}) returned zero parsed stages!", map_id, category);
@@ -593,7 +601,11 @@ fn load_map(
 
     map_struct.stages.sort();
 
-    let address = MapAddress { global: global_map_id, name_file: name_file.map(Box::from) };
+    let address = MapAddress {
+        global: global_map_id,
+        name_file: name_file.map(Box::from),
+        data_file: data_file.map(Box::from),
+    };
 
     if let Ok(mut reg) = reg_mtx.lock() {
         reg.addresses.insert(map_key.clone(), address);
@@ -652,6 +664,7 @@ fn load_story_stages(
     };
 
     let story_data = mapstagedata(ctx.vfs, story_file);
+    let data_file = (!story_file.is_empty()).then(|| story_file.to_owned());
     let inv_story_data = mapstagedata(ctx.vfs, inv_story_file);
 
     for (stage_id, file_name) in battlegrounds(&ctx.globs, &map.category, map.map_id) {
@@ -716,7 +729,7 @@ fn load_story_stages(
         }
     }
 
-    (id_list, stage_list, ground_list)
+    StageHarvest { ids: id_list, stages: stage_list, grounds: ground_list, data_file }
 }
 
 fn load_legend_stages(
@@ -730,14 +743,19 @@ fn load_legend_stages(
     let mut stage_list = Vec::new();
     let mut ground_list = Vec::new();
     let mut map_data = MapStageData::default();
+    let mut data_file = None;
 
     for prefix in [info.data_prefix.as_str(), info.prefix.as_str()] {
-        map_data = mapstagedata(ctx.vfs, &format!("{}{}_{:03}{}", MAP_STAGE_DATA, prefix, map.map_id, CSV));
+        let named = format!("{}{}_{:03}{}", MAP_STAGE_DATA, prefix, map.map_id, CSV);
+        map_data = mapstagedata(ctx.vfs, &named);
+        data_file = Some(named);
+
         if !map_data.entries.is_empty() { break; }
     }
 
     if map_data.entries.is_empty() {
-        map_data = mapstagedata(ctx.vfs, "stage.csv");
+        map_data = mapstagedata(ctx.vfs, STAGE_FALLBACK);
+        data_file = Some(STAGE_FALLBACK.to_owned());
     }
 
     for (stage_id, file_name) in battlegrounds(&ctx.globs, &map.category, map.map_id) {
@@ -765,7 +783,7 @@ fn load_legend_stages(
         id_list.push(stage_id);
     }
 
-    (id_list, stage_list, ground_list)
+    StageHarvest { ids: id_list, stages: stage_list, grounds: ground_list, data_file }
 }
 
 fn build_base_stage(

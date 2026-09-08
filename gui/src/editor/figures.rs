@@ -2,12 +2,14 @@ mod cards;
 mod combat;
 mod combos;
 mod costs;
+mod mapdata;
 pub(super) mod resolved;
 mod schema;
 mod talents;
 mod unitbuy;
 mod unitlevel;
 
+pub(crate) use mapdata::MAP_HEADER_LINES;
 pub(crate) use schema::{Subject, COUNT, FORMS, SUBJECTS};
 
 use std::fs;
@@ -44,6 +46,8 @@ const COSTS_SIZE: Size = Size::new(364.0, 520.0);
 const COSTS_POPUP: popup::Spec = popup::Spec::new(popup::Kind::TalentCosts, COSTS_SIZE);
 pub(super) const COMBO_SIZE: Size = Size::new(420.0, 296.0);
 const COMBO_POPUP: popup::Spec = popup::Spec::new(popup::Kind::Combos, COMBO_SIZE);
+const MAP_STAGE_SIZE: Size = Size::new(364.0, 520.0);
+const MAP_STAGE_POPUP: popup::Spec = popup::Spec::new(popup::Kind::MapStage, MAP_STAGE_SIZE);
 
 pub(super) fn kind(subject: Subject) -> popup::Kind {
     spec(subject).kind()
@@ -58,6 +62,7 @@ fn spec(subject: Subject) -> popup::Spec {
         Subject::Talents => TALENT_POPUP,
         Subject::Costs => COSTS_POPUP,
         Subject::Combo => COMBO_POPUP,
+        Subject::MapStage => MAP_STAGE_POPUP,
     }
 }
 
@@ -97,6 +102,10 @@ struct Row {
 }
 
 fn split_row(line: &str, delimiter: char, schema: &schema::Schema) -> Row {
+    split_span(line, delimiter, schema, 0, schema.known())
+}
+
+fn split_span(line: &str, delimiter: char, schema: &schema::Schema, first: usize, len: usize) -> Row {
     let (numeric, comment) = match line.find(COMMENT) {
         Some(at) => {
             let (head, tail) = line.split_at(at);
@@ -116,13 +125,51 @@ fn split_row(line: &str, delimiter: char, schema: &schema::Schema) -> Row {
     let mut written: Vec<String> = fields.iter().map(|field| (*field).to_owned()).collect();
     let mut cells: Vec<i32> = fields.iter().map(|field| field.trim().parse::<i32>().unwrap_or(0)).collect();
 
-    while cells.len() < schema.known() {
-        let fallback = schema.fallback(cells.len());
+    while cells.len() < len {
+        let fallback = schema.fallback(first + cells.len());
         written.push(fallback.to_string());
         cells.push(fallback);
     }
 
     Row { cells, written, stored, comment }
+}
+
+// A cell that lives on a line other than the addressed one. MapStageData's two map-wide
+// rows are the only users: they lead the draft's flat cell space and are drawn above the
+// scroll, so the popup is one draft and one menu entry rather than three of each.
+struct Slab {
+    line: usize,
+    len: usize,
+    written: Vec<String>,
+    stored: usize,
+    touched: usize,
+    comment: String,
+}
+
+fn chrome_rows(
+    schema: &schema::Schema,
+    lines: &[String],
+    delimiter: char,
+) -> (Vec<Slab>, Vec<i32>) {
+    let mut slabs = Vec::new();
+    let mut cells = Vec::new();
+
+    for (line, len) in schema.chrome().iter().copied() {
+        let raw = lines.get(line).map(String::as_str).unwrap_or_default();
+        let row = split_span(raw, delimiter, schema, cells.len(), len);
+
+        cells.extend(row.cells);
+        slabs.push(Slab {
+            line,
+            len,
+            written: row.written,
+            stored: row.stored,
+            touched: 0,
+            comment: row.comment,
+        });
+    }
+
+    (slabs, cells)
 }
 
 fn vacant(plan: &Plan, lines: &[String], delimiter: char) -> String {
@@ -340,6 +387,7 @@ pub(super) struct State {
 
 struct Draft {
     plan: Plan,
+    chrome: Vec<Slab>,
     absent: bool,
     row: usize,
     read_from: PathBuf,
@@ -684,7 +732,15 @@ impl Draft {
 
         let keyed = switches.then(|| lines.get(row).and_then(|line| leading(line, delimiter))).flatten();
 
-        let Row { cells, written, stored, comment } = split_row(raw, delimiter, plan.schema);
+        let (chrome, lead) = chrome_rows(plan.schema, &lines, delimiter);
+        let span = plan.schema.known() - lead.len();
+        let Row { mut cells, written, stored, comment } =
+            split_span(raw, delimiter, plan.schema, lead.len(), span);
+
+        let mut held = lead;
+        held.append(&mut cells);
+        let cells = held;
+
         let rules: Vec<Rule> = (0..cells.len())
             .map(|index| resolved::rule(plan.subject(), index, plan.schema.field(index), &cells))
             .collect();
@@ -694,6 +750,7 @@ impl Draft {
 
         Some(Draft {
             plan,
+            chrome,
             absent,
             row,
             read_from,
@@ -815,11 +872,54 @@ impl Draft {
     }
 
     fn record(&mut self, index: usize, raw: i32) {
-        if let Some(slot) = self.written.get_mut(index) {
+        let mut first = 0;
+
+        for slab in &mut self.chrome {
+            if index < first + slab.len {
+                let at = index - first;
+
+                if let Some(slot) = slab.written.get_mut(at) {
+                    *slot = raw.to_string();
+                }
+
+                slab.touched = slab.touched.max(at + 1);
+
+                return;
+            }
+
+            first += slab.len;
+        }
+
+        let at = index - first;
+
+        if let Some(slot) = self.written.get_mut(at) {
             *slot = raw.to_string();
         }
 
-        self.touched = self.touched.max(index + 1);
+        self.touched = self.touched.max(at + 1);
+    }
+
+    fn lead(&self) -> usize {
+        self.chrome.iter().map(|slab| slab.len).sum()
+    }
+
+    fn restage_chrome(&mut self) {
+        for slab in &self.chrome {
+            let width = slab.stored.max(slab.touched);
+            let mut line = slab.written[..width].join(&self.delimiter.to_string());
+
+            if !slab.comment.is_empty() {
+                line.push(self.delimiter);
+                line.push(' ');
+                line.push_str(COMMENT);
+                line.push(' ');
+                line.push_str(&slab.comment);
+            }
+
+            if let Some(slot) = self.lines.get_mut(slab.line) {
+                *slot = line;
+            }
+        }
     }
 
     fn pick(&mut self, index: usize, raw: i32) {
@@ -877,8 +977,19 @@ impl Draft {
             }
         };
 
-        let Row { cells, written, stored, comment } = split_row(raw, delimiter, self.plan.schema);
-        self.cells = cells;
+        // Sync is row-scoped, and for a subject with chrome the "row" is every line the draft
+        // owns -- restoring the stage row while leaving edited map settings behind would put
+        // the popup in a state the file never had.
+        let (chrome, lead) = chrome_rows(self.plan.schema, &vanilla, delimiter);
+        let span = self.plan.schema.known() - lead.len();
+        let Row { mut cells, written, stored, comment } =
+            split_span(raw, delimiter, self.plan.schema, lead.len(), span);
+
+        let mut held = lead;
+        held.append(&mut cells);
+
+        self.chrome = chrome;
+        self.cells = held;
         self.written = written;
         self.stored = stored;
         self.touched = 0;
@@ -892,6 +1003,8 @@ impl Draft {
     }
 
     fn stage(&mut self) {
+        self.restage_chrome();
+
         let width = self.stored.max(self.touched);
         let mut line = self.written[..width].join(&self.delimiter.to_string());
 
@@ -1223,6 +1336,18 @@ impl Draft {
         self.stored
     }
 
+    // The reward block's names depend on the row's own contents, which the static table
+    // cannot see, so the label is asked of the draft rather than of the schema.
+    fn label(&self, index: usize) -> std::borrow::Cow<'static, str> {
+        if self.plan.subject() == Subject::MapStage
+            && let Some(named) = mapdata::label(index, &self.cells)
+        {
+            return named;
+        }
+
+        self.plan.schema.label(index)
+    }
+
     fn reads_at(&self, index: usize) -> Option<i32> {
         self.cells.get(index).copied()
     }
@@ -1249,6 +1374,7 @@ impl Draft {
             Subject::Talents => talents::view(self, frame),
             Subject::Costs => costs::view(self, frame),
             Subject::Combo => combos::view(self, frame),
+            Subject::MapStage => mapdata::view(self, width, armed),
         }
     }
 }
@@ -1595,6 +1721,59 @@ mod tests {
         assert_eq!(draft.input(index), "150");
     }
 
+    // The map-wide cells and the stage's own row are one draft over three lines of the file,
+    // so an edit above the scroll has to land on line 0 or 1 and leave the stage row alone.
+    #[test]
+    fn a_map_wide_edit_lands_on_its_own_line_and_not_the_stage_row() {
+        let dir = scratch_dir("mapdata-chrome-lines");
+        let path = dir.join("MapStageDataS_002.csv");
+        let schema = schema::of(Subject::MapStage);
+
+        let seeded = "19,194,-1,-1,-1,0\n3\n80,1520,3,99,33,100,2,1\n";
+        std::fs::write(&path, seeded).expect("failed to seed the temp fixture file");
+
+        let stage = 0;
+        let seed = plan(
+            Subject::MapStage,
+            Address::Line(super::MAP_HEADER_LINES + stage),
+            "test".to_owned(),
+            &path,
+            None,
+            EditorMode::Raw,
+        );
+
+        let vfs = Vfs::with_priority(&[]);
+        let mut state = State { draft: Draft::load(seed, &vfs), ..State::default() };
+        assert!(state.draft.is_some(), "the draft should load from the temp fixture");
+
+        let Some(map_number) = schema.index_of("map_number") else {
+            panic!("nyanko no longer publishes map_number");
+        };
+        let Some(pattern) = schema.index_of(schema::MAP_PATTERN_FIELD) else {
+            panic!("the joined table lost its map pattern column");
+        };
+        let Some(xp) = schema.index_of("xp") else {
+            panic!("nyanko no longer publishes xp");
+        };
+
+        assert!(map_number < pattern && pattern < xp, "the map-wide cells must lead the stage row");
+
+        let _ = state.update(Message::Changed(map_number, "42".to_owned()), &vfs);
+        let _ = state.update(Message::Changed(pattern, "7".to_owned()), &vfs);
+        let _ = state.update(Message::Changed(xp, "9999".to_owned()), &vfs);
+
+        complete_write(&mut state, &vfs);
+
+        let body = std::fs::read_to_string(&path).expect("the completed write should have landed");
+        let lines: Vec<&str> = body.lines().collect();
+
+        assert_eq!(lines[0], "42,194,-1,-1,-1,0", "the header edit belongs on line 0, padded no further");
+        assert_eq!(lines[1], "7", "the pattern edit belongs on line 1");
+        assert_eq!(lines[2], "80,9999,3,99,33,100,2,1", "the stage row keeps every column it had");
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
     #[test]
     fn rapid_keystrokes_never_write_synchronously_and_coalesce_into_one_task() {
         let dir = scratch_dir("keystrokes-defer-disk");
@@ -1752,6 +1931,7 @@ mod tests {
 
         Draft {
             plan,
+            chrome: Vec::new(),
             absent: false,
             row: 0,
             read_from: std::path::PathBuf::new(),

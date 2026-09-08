@@ -28,6 +28,7 @@ use super::offscreen::{self, Camera};
 use super::overlay::Region;
 
 const MODE_OPTIONS: [&str; 3] = ["Manual", "Loop", "Showcase"];
+const PLAIN_MODE_OPTIONS: [&str; 2] = ["Manual", "Loop"];
 const FORMAT_OPTIONS: [&str; 8] = ["GIF", "WebP", "AVIF", "PNG", "MP4", "MKV", "WebM", "ZIP"];
 
 const CONTENT_PADDING: f32 = 20.0;
@@ -46,8 +47,8 @@ const RULE_HEIGHT: f32 = 1.0;
 const SCROLLBAR_GAP: f32 = 2.0;
 const CONTROL_TEXT_SIZE: f32 = 13.0;
 
-const DEFAULT_WALK_LEN: i32 = 90;
-const DEFAULT_IDLE_LEN: i32 = 90;
+const DEFAULT_WALK_LEN: i32 = 115;
+const DEFAULT_IDLE_LEN: i32 = 115;
 const DEFAULT_KB_LEN: i32 = 60;
 const DEFAULT_CULL: i32 = 100;
 const PERCENT_MIN: i32 = 0;
@@ -105,6 +106,7 @@ struct ExportForm {
     frame_end_str: String,
     export_mode: ExportMode,
     loop_supported: bool,
+    showcasable: bool,
     loop_tolerance: i32,
     loop_tolerance_str: String,
     loop_min: i32,
@@ -159,6 +161,7 @@ impl Default for ExportForm {
             frame_end_str: String::new(),
             export_mode: ExportMode::Manual,
             loop_supported: false,
+            showcasable: false,
             loop_tolerance: 30,
             loop_tolerance_str: String::new(),
             loop_min: 15,
@@ -330,8 +333,15 @@ impl State {
             }
 
             self.exporter.loop_supported = data.loop_supported();
+            self.exporter.showcasable = data.showcasable();
 
-            if self.exporter.export_mode == ExportMode::Loop && !self.exporter.loop_supported {
+            let unsupported = (self.exporter.export_mode == ExportMode::Loop
+                && !self.exporter.loop_supported)
+                || (self.exporter.export_mode == ExportMode::Showcase && !self.exporter.showcasable);
+
+            // Arriving on a rig the mode cannot describe drops back to Manual rather than
+            // leaving a mode selected that would export the resting pose over and over.
+            if unsupported {
                 self.exporter.export_mode = ExportMode::Manual;
                 self.exporter.frame_start = 0;
                 self.exporter.frame_end = 0;
@@ -405,6 +415,15 @@ impl State {
             Animation::parse(&bytes).ok()
         };
 
+        // A role the rig has no clip for contributes only the resting pose, so its segment is
+        // dropped rather than left on the settings default. Measured on the shipped corpus,
+        // 142 of 3,027 rigs carry some of the four standard slots but not all four.
+        for role in [Role::Walk, Role::Idle, Role::Attack, Role::Knockback] {
+            if data.role_path(role).is_none() {
+                self.length_of(role, 0);
+            }
+        }
+
         if let Some(attack) = parse_anim(Role::Attack) {
             let total_attack_frames = attack.declared_frames();
             self.exporter.detected_attack_len = total_attack_frames;
@@ -433,6 +452,15 @@ impl State {
                 || self.exporter.showcase_idle_len == settings.animation.default_showcase_idle {
                 self.exporter.showcase_idle_len = new_idle_length;
             }
+        }
+    }
+
+    fn length_of(&mut self, role: Role, frames: i32) {
+        match role {
+            Role::Walk => self.exporter.showcase_walk_len = frames,
+            Role::Idle => self.exporter.showcase_idle_len = frames,
+            Role::Attack => self.exporter.showcase_attack_len = frames,
+            Role::Knockback => self.exporter.showcase_kb_len = frames,
         }
     }
 
@@ -1093,19 +1121,21 @@ impl State {
             ExportMode::Showcase => "Showcase",
         };
 
-        let mode_picker = field_row(
-            "Mode",
-            pick_list(&MODE_OPTIONS[..], Some(selected_mode), |selected: &str| {
-                Message::SetMode(match selected {
-                    "Loop" => ExportMode::Loop,
-                    "Showcase" => ExportMode::Showcase,
-                    _ => ExportMode::Manual,
-                })
+        let modes: &[&str] =
+            if self.exporter.showcasable { &MODE_OPTIONS[..] } else { &PLAIN_MODE_OPTIONS[..] };
+
+        let modes = pick_list(modes, Some(selected_mode), |selected: &str| {
+            Message::SetMode(match selected {
+                "Loop" => ExportMode::Loop,
+                "Showcase" => ExportMode::Showcase,
+                _ => ExportMode::Manual,
             })
-                .width(Length::Fixed(COMBO_WIDTH))
-                .style(theme::combo_box)
-                .menu_style(theme::combo_box_menu),
-        );
+        })
+            .width(Length::Fixed(COMBO_WIDTH))
+            .style(theme::combo_box)
+            .menu_style(theme::combo_box_menu);
+
+        let mode_picker = field_row("Mode", modes);
 
         let selected_format = match self.exporter.format {
             ExportFormat::Gif => "GIF",
@@ -1591,3 +1621,64 @@ fn derive_name_prefix(raw_id: &str, type_string: &str) -> String {
     format!("{}.{}", clean_id, type_string)
 }
 
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+    use std::sync::Arc;
+
+    use kore::systems::animation::{Clip, ClipSet, Loop, Rigging, Role};
+
+    use super::*;
+
+    fn clip(role: Option<Role>) -> Clip {
+        Clip {
+            name: None,
+            slot: None,
+            role,
+            looping: Loop::Auto,
+            rig: Arc::new(Rigging {
+                id: "test".to_owned(),
+                png: PathBuf::from("t.png"),
+                cut: PathBuf::from("t.imgcut"),
+                model: PathBuf::from("t.mamodel"),
+            }),
+            anim: Some(PathBuf::from("000_f00.maanim")),
+        }
+    }
+
+    fn seeded(key: &str, role: Option<Role>) -> data::State {
+        let mut held = data::State::default();
+
+        held.sync(key, || ClipSet {
+            name: key.to_owned(),
+            clips: vec![clip(role)],
+            offsets: Vec::new(),
+        });
+
+        held
+    }
+
+    // Selecting Showcase and then navigating to a rig it cannot describe has to drop the
+    // mode, the same way an unsupported Loop already does. Left selected it would export the
+    // resting pose over and over with nothing saying why.
+    #[test]
+    fn arriving_on_a_rig_with_no_roles_drops_showcase() {
+        let settings = Settings::default();
+        let anim_state = AnimState::default();
+
+        let mut held = State::new(popup::Kind::CatAnimationExport);
+        held.sync(&seeded("unit", Some(Role::Walk)), &settings, &anim_state);
+        held.exporter.export_mode = ExportMode::Showcase;
+
+        assert!(held.exporter.showcasable, "a unit rig offers the mode");
+
+        held.sync(&seeded("loose", None), &settings, &anim_state);
+
+        assert!(!held.exporter.showcasable, "a rig with no roles does not");
+        assert_eq!(
+            held.exporter.export_mode,
+            ExportMode::Manual,
+            "and the mode it can no longer honour is dropped",
+        );
+    }
+}

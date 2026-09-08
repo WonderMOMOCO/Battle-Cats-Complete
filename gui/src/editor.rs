@@ -52,6 +52,7 @@ pub enum Target {
     CatTalents,
     CatCombo(usize),
     StageGround,
+    StageData,
     CatAttributes,
     EnemyAttributes,
     CatAnimation,
@@ -144,6 +145,7 @@ const FIRST_COST: u32 = 1;
 
 const FIRST_TALENT_TEXT: usize = 1;
 
+#[derive(Clone)]
 struct AssetFile {
     name: String,
     game: Option<PathBuf>,
@@ -596,6 +598,10 @@ struct Snapshot {
     ground: Option<ground::Plan>,
 }
 
+// Every selection an open popup follows. A subject missing from here is a popup that goes
+// stale on the selection it belongs to, because `stale` is what decides whether a snapshot
+// is taken at all -- the map is here as well as the stage because picking a map clears the
+// stage to None, and two maps in a row would otherwise look like no change.
 #[derive(PartialEq)]
 struct Key {
     page: Page,
@@ -603,6 +609,8 @@ struct Key {
     cat: Option<u32>,
     form: usize,
     enemy: Option<u32>,
+    map: Option<GlobalMapId>,
+    stage: Option<GlobalStageId>,
     unlocked: bool,
     active_mod: Option<String>,
 }
@@ -1110,6 +1118,7 @@ pub(crate) fn context(app: &BattleCatsApp, target: Option<Target>) -> Context {
             .into_iter()
             .chain(talent_payloads(app, reached(Target::CatTalents)))
             .chain(combo_payloads(app, target, broad))
+            .chain(stage_data_payloads(app, reached(Target::StageData)))
             .collect(),
         animation: anim_target(app, reached(Target::CatAnimation), reached(Target::EnemyAnimation)),
         channels: None,
@@ -1172,6 +1181,63 @@ fn padded(mut files: Vec<AssetFile>, candidates: Vec<String>) -> Vec<AssetFile> 
     }
 
     files
+}
+
+fn stage_data_payloads(app: &BattleCatsApp, reached: bool) -> Vec<LevelTarget> {
+    if !reached {
+        return Vec::new();
+    }
+
+    stage_data_targets(app)
+}
+
+fn stage_data_targets(app: &BattleCatsApp) -> Vec<LevelTarget> {
+    if app.current_page != Page::Stages {
+        return Vec::new();
+    }
+
+    let Some(chosen) = app.stage_state.data.selected_stage.as_ref() else {
+        return Vec::new();
+    };
+
+    let registry = &app.stage_state.data.registry;
+    let map = GlobalMapId { category: chosen.category.clone(), map: chosen.map };
+
+    let Some(name) = registry.addresses.get(&map).and_then(|held| held.data_file.as_deref()) else {
+        return Vec::new();
+    };
+
+    let files = asset_files(app, name);
+
+    if files.is_empty() {
+        return Vec::new();
+    }
+
+    let chapter = registry
+        .maps
+        .get(&map)
+        .map(|found| found.name.trim())
+        .filter(|found| !found.is_empty())
+        .map_or_else(|| format!("{:03}", map.map), str::to_owned);
+
+    let stage = registry
+        .stages
+        .get(chosen)
+        .map(|found| found.name.trim())
+        .filter(|found| !found.is_empty())
+        .map_or_else(|| format!("{:02}", chosen.stage), str::to_owned);
+
+    let line = figures::MAP_HEADER_LINES + chosen.stage as usize;
+
+    vec![LevelTarget {
+        subject: figures::Subject::MapStage,
+        asset: Asset::Variants { key: name.to_owned(), files },
+        label: [chapter.as_str(), stage.as_str(), name].join(theme::HEADER_SEPARATOR),
+        address: figures::Address::Line(line),
+        anchor: None,
+        unlocked: app.settings.files.unlock_game_mount,
+        active_mod: app.mods_state.active_mod(),
+    }]
 }
 
 fn ground_target(app: &BattleCatsApp, reached: bool) -> Option<GroundTarget> {
@@ -1354,7 +1420,10 @@ fn figures_tab(app: &BattleCatsApp, subject: figures::Subject) -> bool {
         figures::Subject::Enemy => app.enemy_state.selected_tab == EnemyTab::Abilities,
         figures::Subject::Combo => app.cat_state.selected_tab == DetailTab::Details,
         figures::Subject::Costs => talents_tab(app),
-        figures::Subject::Buy | figures::Subject::Curve | figures::Subject::Talents => true,
+        figures::Subject::Buy
+        | figures::Subject::Curve
+        | figures::Subject::Talents
+        | figures::Subject::MapStage => true,
     }
 }
 
@@ -2104,6 +2173,8 @@ fn key(app: &BattleCatsApp) -> Key {
         cat: app.app_state.cat.selected_cat,
         form: app.app_state.cat.selected_form,
         enemy: app.app_state.enemy.selected_enemy,
+        map: app.stage_state.data.selected_map.clone(),
+        stage: app.stage_state.data.selected_stage.clone(),
         unlocked: app.settings.files.unlock_game_mount,
         active_mod: app.mods_state.active_mod(),
     }
@@ -2161,13 +2232,15 @@ fn current_plan(app: &BattleCatsApp, subject: figures::Subject) -> Option<figure
         | figures::Subject::Curve
         | figures::Subject::Talents
         | figures::Subject::Costs
-        | figures::Subject::Combo => {
+        | figures::Subject::Combo
+        | figures::Subject::MapStage => {
             let sources = match subject {
                 figures::Subject::Talents | figures::Subject::Costs => match talented(app) {
                     true => roster_payloads(app, &TALENT_FILES),
                     false => Vec::new(),
                 },
                 figures::Subject::Combo => combo_target(app, None).into_iter().collect(),
+                figures::Subject::MapStage => stage_data_targets(app),
                 _ => level_payloads(app, true, false),
             };
 

@@ -49,6 +49,7 @@ pub struct StageRegistry {
 pub struct MapAddress {
     pub global: Option<u32>,
     pub name_file: Option<Box<str>>,
+    pub data_file: Option<Box<str>>,
 }
 
 #[derive(Default, Deserialize, Serialize)]

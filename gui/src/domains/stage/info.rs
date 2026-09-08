@@ -214,7 +214,10 @@ impl State {
             banner_row,
             rule::horizontal(RULE_HEIGHT),
             crown_row,
-            section("Information", Length::Fixed(super::CONTENT_WIDTH), grids),
+            editor::target(
+                section("Information", Length::Fixed(super::CONTENT_WIDTH), grids),
+                editor::Target::StageData,
+            ),
         ]
             .spacing(8)
             .into()

@@ -2,6 +2,7 @@ use std::borrow::Cow;
 use std::sync::LazyLock;
 
 use nyanko::cat::unit::{NyancomboData, UnitBuy};
+use nyanko::chapter::stage::{MapStageDataEntry, MapStageDataHeader};
 use nyanko::cat::unitid;
 use nyanko::combat::Scale;
 use nyanko::common::{Column, FromColumn};
@@ -10,6 +11,8 @@ use nyanko::enemy::t_unit;
 use kore::domains::settings::EditorMode;
 
 use crate::app::Page;
+
+use super::mapdata;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Subject {
@@ -20,9 +23,10 @@ pub enum Subject {
     Talents,
     Costs,
     Combo,
+    MapStage,
 }
 
-pub(crate) const COUNT: usize = 7;
+pub(crate) const COUNT: usize = 8;
 
 pub(crate) const SUBJECTS: [Subject; COUNT] = [
     Subject::Cat,
@@ -32,6 +36,7 @@ pub(crate) const SUBJECTS: [Subject; COUNT] = [
     Subject::Talents,
     Subject::Costs,
     Subject::Combo,
+    Subject::MapStage,
 ];
 
 impl Subject {
@@ -44,6 +49,7 @@ impl Subject {
             Subject::Talents => 4,
             Subject::Costs => 5,
             Subject::Combo => 6,
+            Subject::MapStage => 7,
         }
     }
 
@@ -56,6 +62,7 @@ impl Subject {
             | Subject::Talents
             | Subject::Costs
             | Subject::Combo => Page::Cats,
+            Subject::MapStage => Page::Stages,
         }
     }
 }
@@ -79,6 +86,10 @@ pub(super) static COSTS: Schema = Schema { subject: Subject::Costs, comments: fa
 
 pub(super) static COMBO: Schema = Schema { subject: Subject::Combo, comments: false };
 
+// MapStageData rows carry trailing `//` documentation in the story chapters and in plenty of
+// event maps, so the subject keeps its comments.
+pub(super) static MAP_STAGE: Schema = Schema { subject: Subject::MapStage, comments: true };
+
 pub(super) fn of(subject: Subject) -> &'static Schema {
     match subject {
         Subject::Cat => &CAT,
@@ -88,6 +99,7 @@ pub(super) fn of(subject: Subject) -> &'static Schema {
         Subject::Talents => &TALENTS,
         Subject::Costs => &COSTS,
         Subject::Combo => &COMBO,
+        Subject::MapStage => &MAP_STAGE,
     }
 }
 
@@ -202,6 +214,27 @@ const BUY_NAMES: &[(&str, &str)] = &[
     ("egg_id_evolved", "Egg ID Evolved"),
 ];
 
+const MAP_STAGE_NAMES: &[(&str, &str)] = &[
+    ("item_reward_setting", "Item Reward Set"),
+    ("score_reward_setting", "Score Reward Set"),
+    ("user_rank_threshold", "User Rank Needed"),
+    ("map_pattern", "Map Pattern"),
+    ("cost", "Entry Cost"),
+    ("xp", "XP Reward"),
+    ("init_track", "Music Track"),
+    ("bgm_change_percent", "Boss Music At"),
+    ("boss_track", "Boss Music Track"),
+];
+
+pub(super) const MAP_PATTERN_FIELD: &str = "map_pattern";
+const MAP_PATTERN_DEFAULT: &str = "0";
+
+// (line, width) for every cell that comes off a line other than the addressed one.
+const MAP_STAGE_CHROME: [(usize, usize); 2] = [(0, 7), (1, 1)];
+
+// Where the stage's own row starts in the joined table.
+pub(super) const MAP_STAGE_LEAD: usize = 8;
+
 const COMBO_NAMES: &[(&str, &str)] = &[
     ("combo_id", "Combo ID"),
     ("charagroup_id", "Restriction Group"),
@@ -237,6 +270,27 @@ static ENEMY_ORDER: LazyLock<Vec<Entry>> = LazyLock::new(|| order(t_unit::COLUMN
 static BUY_ORDER: LazyLock<Vec<Entry>> = LazyLock::new(|| order(UnitBuy::COLUMNS));
 
 static COMBO_ORDER: LazyLock<Vec<Entry>> = LazyLock::new(|| order(NyancomboData::COLUMNS));
+
+// The popup is one draft over three lines of the file, so the three column tables are one
+// table: the map-wide header, then the map pattern, then the stage's own row. `CHROME`
+// says how many leading cells come off a line other than the addressed one.
+static MAP_STAGE_ORDER: LazyLock<Vec<Entry>> = LazyLock::new(|| {
+    let mut joined = order(MapStageDataHeader::COLUMNS);
+
+    joined.push(Entry {
+        field: MAP_PATTERN_FIELD,
+        index: 0,
+        scale: Scale::Raw,
+        default: MAP_PATTERN_DEFAULT,
+    });
+
+    joined.extend(order(MapStageDataEntry::COLUMNS));
+
+    joined
+});
+
+static MAP_STAGE_LABELS: LazyLock<Vec<String>> =
+    LazyLock::new(|| labels(&MAP_STAGE_ORDER, MAP_STAGE_NAMES));
 
 static COMBO_LABELS: LazyLock<Vec<String>> = LazyLock::new(|| labels(&COMBO_ORDER, COMBO_NAMES));
 
@@ -287,6 +341,7 @@ impl Schema {
             Subject::Enemy => &ENEMY_ORDER,
             Subject::Buy => &BUY_ORDER,
             Subject::Combo => &COMBO_ORDER,
+            Subject::MapStage => &MAP_STAGE_ORDER,
             Subject::Curve | Subject::Talents | Subject::Costs => &[],
         }
     }
@@ -334,12 +389,21 @@ impl Schema {
             Subject::Cat => &CAT_LABELS,
             Subject::Enemy => &ENEMY_LABELS,
             Subject::Combo => &COMBO_LABELS,
+            Subject::MapStage => &MAP_STAGE_LABELS,
             _ => &BUY_LABELS,
         };
 
         table
             .get(index)
             .map_or_else(|| Cow::Owned(format!("Column {}", index + 1)), |label| Cow::Borrowed(label.as_str()))
+    }
+
+    // The cells that live on a line other than the addressed one, always leading.
+    pub(super) fn chrome(&self) -> &'static [(usize, usize)] {
+        match self.subject {
+            Subject::MapStage => &MAP_STAGE_CHROME,
+            _ => &[],
+        }
     }
 
     pub(super) fn creates(&self) -> bool {
@@ -397,6 +461,10 @@ impl Schema {
                 Some(_) if (index - TALENT_HEAD) % TALENT_STRIDE == NAME_ID => -1,
                 _ => 0,
             };
+        }
+
+        if let Some(held) = self.field(index).and_then(mapdata::fallback) {
+            return held;
         }
 
         self.column(index).and_then(|column| i32::from_column(column.default)).unwrap_or(0)

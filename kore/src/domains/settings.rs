@@ -716,8 +716,8 @@ impl Default for AnimSettings {
         Self {
             auto_set_camera_region: false,
             bounds_cull: 100,
-            default_showcase_walk: 90,
-            default_showcase_idle: 90,
+            default_showcase_walk: 115,
+            default_showcase_idle: 115,
             default_showcase_kb: 60,
             show_rig: false,
             show_origin: false,

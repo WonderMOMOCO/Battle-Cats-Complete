@@ -1,5 +1,5 @@
 use iced::alignment::{Horizontal, Vertical};
-use iced::widget::{button, column, container, pick_list, scrollable, text, text_input, Column, Id, Row};
+use iced::widget::{button, column, container, pick_list, scrollable, text, text_input, Column, Container, Id, Row};
 use iced::{Element, Length, Padding, Theme};
 
 use crate::app::theme;
@@ -38,6 +38,7 @@ pub(super) fn grid_id(subject: Subject) -> Id {
         Subject::Talents => "figures-grid-talents",
         Subject::Costs => "figures-grid-costs",
         Subject::Combo => "figures-grid-combo",
+        Subject::MapStage => "figures-grid-map-stage",
     })
 }
 
@@ -51,6 +52,29 @@ pub(super) fn grid<'a>(
     shown: &[usize],
     dim_from: Option<usize>,
 ) -> Element<'a, Message> {
+    let area = scrollable(centred(lay(draft, width, shown, dim_from)))
+        .id(grid_id(draft.schema().subject()))
+        .on_scroll(|viewport| Message::Scrolled(viewport.absolute_offset().y))
+        .width(Length::Fill)
+        .height(Length::Fill);
+
+    smooth_scroll(area).into()
+}
+
+// The same cards without the scroll area, for rows that stay pinned above it. `header`
+// supplies the surrounding padding, so this one only centres.
+pub(super) fn band<'a>(draft: &'a Draft, width: f32, shown: &[usize]) -> Element<'a, Message> {
+    container(lay(draft, width, shown, None)).width(Length::Fill).center_x(Length::Fill).into()
+}
+
+fn centred<'a>(rows: Column<'a, Message>) -> Container<'a, Message> {
+    container(rows)
+        .width(Length::Fill)
+        .center_x(Length::Fill)
+        .padding(Padding::ZERO.left(BODY_PADDING).right(BODY_PADDING).bottom(BODY_PADDING))
+}
+
+fn lay<'a>(draft: &'a Draft, width: f32, shown: &[usize], dim_from: Option<usize>) -> Column<'a, Message> {
     let per_row = (((usable(width) + CARD_GAP) / (CARD_WIDTH + CARD_GAP)).floor() as usize).max(1);
 
     let mut rows = Column::new().spacing(CARD_GAP);
@@ -70,18 +94,7 @@ pub(super) fn grid<'a>(
         used += span;
     }
 
-    let centered = container(rows.push(line))
-        .width(Length::Fill)
-        .center_x(Length::Fill)
-        .padding(Padding::ZERO.left(BODY_PADDING).right(BODY_PADDING).bottom(BODY_PADDING));
-
-    let area = scrollable(centered)
-        .id(grid_id(draft.schema().subject()))
-        .on_scroll(|viewport| Message::Scrolled(viewport.absolute_offset().y))
-        .width(Length::Fill)
-        .height(Length::Fill);
-
-    smooth_scroll(area).into()
+    rows.push(line)
 }
 
 fn span(face: Face) -> usize {
@@ -108,7 +121,7 @@ fn card(draft: &Draft, index: usize, dimmed: bool) -> Element<'_, Message> {
         Face::Number | Face::Danger => number_field(draft, index),
     };
 
-    let caption = text(schema.label(index))
+    let caption = text(draft.label(index))
         .size(LABEL_SIZE)
         .align_x(Horizontal::Center)
         .width(Length::Fill)
