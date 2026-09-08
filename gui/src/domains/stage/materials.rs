@@ -13,6 +13,7 @@ use kore::{ItemStore, Vfs};
 
 use crate::app::theme;
 use crate::common::item_icon;
+use crate::editor;
 use crate::widget::section;
 
 const MAT_TABLE_WIDTH: f32 = 345.0;
@@ -87,9 +88,10 @@ impl State {
             grid_col = self.push_chunks(grid_col, z_mats, 8, items, vfs);
         }
 
-        container(section(format!("Materials | Amount: {} ({}×{:.2})", final_amount, base_amount, multiplier), Length::Fill, grid_col))
-            .width(Length::Fixed(MAT_TABLE_WIDTH))
-            .into()
+        let panel = container(section(format!("Materials | Amount: {} ({}×{:.2})", final_amount, base_amount, multiplier), Length::Fill, grid_col))
+            .width(Length::Fixed(MAT_TABLE_WIDTH));
+
+        editor::target(panel, editor::Target::MapDrops)
     }
 
     fn push_chunks<'a>(

@@ -25,9 +25,12 @@ use kore::domains::enemy::scanner::EnemyEntry;
 use kore::common::architecture;
 use kore::domains::mods;
 use kore::domains::stage::files as stage_files;
+use kore::domains::stage::materials as stage_materials;
+
 use kore::domains::stage::{names, GlobalMapId, GlobalStageId};
 use kore::domains::settings::{ContextScope, EditorMode};
 use kore::Vfs;
+use nyanko::chapter::stage::RewardStructure;
 use nyanko::graphics::tools::crash::Side;
 
 use crate::app::{theme, BattleCatsApp, Page};
@@ -53,6 +56,9 @@ pub enum Target {
     CatCombo(usize),
     StageGround,
     StageData,
+    MapDrops,
+    StageDrops,
+    TreasureDrop(u32),
     CatAttributes,
     EnemyAttributes,
     CatAnimation,
@@ -116,6 +122,7 @@ struct LevelTarget {
     subject: figures::Subject,
     asset: Asset,
     label: String,
+    columns: Vec<String>,
     address: figures::Address,
     anchor: Option<(i32, i32)>,
     unlocked: bool,
@@ -1118,7 +1125,10 @@ pub(crate) fn context(app: &BattleCatsApp, target: Option<Target>) -> Context {
             .into_iter()
             .chain(talent_payloads(app, reached(Target::CatTalents)))
             .chain(combo_payloads(app, target, broad))
-            .chain(stage_data_payloads(app, reached(Target::StageData)))
+            .chain(stage_data_payloads(app, reached(Target::StageData) || reached(Target::StageDrops)))
+            .chain(map_drop_payloads(app, reached(Target::MapDrops)))
+            .chain(drop_chara_payloads(app, reached(Target::StageDrops)))
+            .chain(item_buy_payloads(app, target, broad))
             .collect(),
         animation: anim_target(app, reached(Target::CatAnimation), reached(Target::EnemyAnimation)),
         channels: None,
@@ -1233,11 +1243,239 @@ fn stage_data_targets(app: &BattleCatsApp) -> Vec<LevelTarget> {
         subject: figures::Subject::MapStage,
         asset: Asset::Variants { key: name.to_owned(), files },
         label: [chapter.as_str(), stage.as_str(), name].join(theme::HEADER_SEPARATOR),
+        columns: Vec::new(),
         address: figures::Address::Line(line),
         anchor: None,
         unlocked: app.settings.files.unlock_game_mount,
         active_mod: app.mods_state.active_mod(),
     }]
+}
+
+fn drop_chara_payloads(app: &BattleCatsApp, reached: bool) -> Vec<LevelTarget> {
+    if !reached {
+        return Vec::new();
+    }
+
+    drop_chara_targets(app)
+}
+
+fn map_drop_payloads(app: &BattleCatsApp, reached: bool) -> Vec<LevelTarget> {
+    if !reached {
+        return Vec::new();
+    }
+
+    map_drop_targets(app)
+}
+
+// DropItem.csv holds one row per map, addressed by the routed global id in its leading cell.
+// The eight material slots are named by the items `MAT_IDS` points them at, read from the
+// game's own item table rather than translated here.
+fn map_drop_targets(app: &BattleCatsApp) -> Vec<LevelTarget> {
+    if app.current_page != Page::Stages {
+        return Vec::new();
+    }
+
+    let Some(map) = app.stage_state.data.selected_map.as_ref() else {
+        return Vec::new();
+    };
+
+    let registry = &app.stage_state.data.registry;
+
+    let Some(global) = registry.addresses.get(map).and_then(|held| held.global) else {
+        return Vec::new();
+    };
+
+    // The file covers a little over a hundred maps and is keyed by the routed global id, so
+    // a story chapter's 3000-3008 reaches no row at all. The scanner already looked the row
+    // up, so asking it costs nothing and stops the menu offering an Edit that opens nothing.
+    if registry.maps.get(map).is_none_or(|found| found.drop_items.is_none()) {
+        return Vec::new();
+    }
+
+    let files = asset_files(app, stage_files::DROP_ITEM);
+
+    if files.is_empty() {
+        return Vec::new();
+    }
+
+    let chapter = registry
+        .maps
+        .get(map)
+        .map(|found| found.name.trim())
+        .filter(|found| !found.is_empty())
+        .map_or_else(|| format!("{:03}", map.map), str::to_owned);
+
+    vec![LevelTarget {
+        subject: figures::Subject::MapDrops,
+        asset: Asset::Variants { key: stage_files::DROP_ITEM.to_owned(), files },
+        label: [chapter.as_str(), stage_files::DROP_ITEM].join(theme::HEADER_SEPARATOR),
+        columns: material_names(app),
+        address: figures::Address::Keyed(global),
+        anchor: None,
+        unlocked: app.settings.files.unlock_game_mount,
+        active_mod: app.mods_state.active_mod(),
+    }]
+}
+
+// What a broad right-click aims the item editors at when no treasure row was hit.
+fn first_drop(app: &BattleCatsApp) -> Option<u32> {
+    let chosen = app.stage_state.data.selected_stage.as_ref()?;
+    let stage = app.stage_state.data.registry.stages.get(chosen)?;
+
+    drop_ids(stage).next()
+}
+
+fn item_buy_payloads(app: &BattleCatsApp, target: Option<Target>, broad: bool) -> Vec<LevelTarget> {
+    let item = match target {
+        Some(Target::TreasureDrop(item)) => Some(item),
+        _ if broad || target == Some(Target::StageDrops) => first_drop(app),
+        _ => None,
+    };
+
+    item_buy_targets(app, item)
+}
+
+// Gatyaitembuy.csv names the item in its fourth column, so the row is found by that rather
+// than by counting past a header the file need not carry.
+fn item_buy_targets(app: &BattleCatsApp, item: Option<u32>) -> Vec<LevelTarget> {
+    if app.current_page != Page::Stages {
+        return Vec::new();
+    }
+
+    let Some(item) = item.or_else(|| first_drop(app)) else {
+        return Vec::new();
+    };
+
+    if app.vault.vds.items.line(&app.vault.vfs, item).is_none() {
+        return Vec::new();
+    }
+
+    let files = asset_files(app, stage_files::GATYA_ITEM_BUY);
+
+    if files.is_empty() {
+        return Vec::new();
+    }
+
+    vec![LevelTarget {
+        subject: figures::Subject::ItemBuy,
+        asset: Asset::Variants { key: stage_files::GATYA_ITEM_BUY.to_owned(), files },
+        label: [item_label(app, item).as_str(), stage_files::GATYA_ITEM_BUY].join(theme::HEADER_SEPARATOR),
+        columns: Vec::new(),
+        address: figures::Address::Column { at: figures::ITEM_ID_COLUMN, id: item },
+        anchor: None,
+        unlocked: app.settings.files.unlock_game_mount,
+        active_mod: app.mods_state.active_mod(),
+    }]
+}
+
+// The name file has no header, so an item's catalogue line is its line here outright --
+// nyanko's own `icon_index` doc states that pairing.
+fn item_name_target(app: &BattleCatsApp, item: Option<u32>) -> Option<ProseTarget> {
+    if app.current_page != Page::Stages {
+        return None;
+    }
+
+    let item = item.or_else(|| first_drop(app))?;
+    let row = app.vault.vds.items.line(&app.vault.vfs, item)?;
+
+    Some(ProseTarget {
+        subject: prose::Subject::ItemName,
+        asset: Asset::Exception(exception(app, stage_files::GATYA_ITEM_NAME.to_owned())?),
+        label: item_label(app, item),
+        row,
+        rows: Vec::new(),
+        keyed: None,
+        cell: None,
+        unlocked: app.settings.files.unlock_game_mount,
+        active_mod: app.mods_state.active_mod(),
+    })
+}
+
+fn item_label(app: &BattleCatsApp, item: u32) -> String {
+    app.vault
+        .vds
+        .items
+        .name(&app.vault.vfs, item)
+        .filter(|name| !name.trim().is_empty())
+        .unwrap_or_else(|| format!("Item {item}"))
+}
+
+// A stage unlocks a unit when one of its reward ids has a row in drop_chara.csv. Measured on
+// the shipped corpus, 327 stages reference exactly one and none reference two, so the row is
+// addressed outright; a stage that drops no unit offers nothing.
+fn drop_chara_targets(app: &BattleCatsApp) -> Vec<LevelTarget> {
+    if app.current_page != Page::Stages {
+        return Vec::new();
+    }
+
+    let Some(chosen) = app.stage_state.data.selected_stage.as_ref() else {
+        return Vec::new();
+    };
+
+    let data = &app.stage_state.data;
+
+    let Some(stage) = data.registry.stages.get(chosen) else {
+        return Vec::new();
+    };
+
+    let Some(drop) = drop_ids(stage).find(|id| data.drop_chara_registry.contains_key(id)) else {
+        return Vec::new();
+    };
+
+    let files = asset_files(app, stage_files::DROP_CHARA);
+
+    if files.is_empty() {
+        return Vec::new();
+    }
+
+    let unit = data
+        .drop_chara_registry
+        .get(&drop)
+        .and_then(|id| data.cat_name_registry.get(id))
+        .and_then(|names| names.first())
+        .filter(|name| !name.trim().is_empty())
+        .map_or_else(|| format!("Drop {drop}"), |name| name.clone());
+
+    vec![LevelTarget {
+        subject: figures::Subject::DropChara,
+        asset: Asset::Variants { key: stage_files::DROP_CHARA.to_owned(), files },
+        label: [unit.as_str(), stage_files::DROP_CHARA].join(theme::HEADER_SEPARATOR),
+        columns: Vec::new(),
+        address: figures::Address::Keyed(drop),
+        anchor: None,
+        unlocked: app.settings.files.unlock_game_mount,
+        active_mod: app.mods_state.active_mod(),
+    }]
+}
+
+fn drop_ids(stage: &kore::domains::stage::Stage) -> impl Iterator<Item = u32> + '_ {
+    let treasure = match &stage.rewards {
+        RewardStructure::Treasure { drops, .. } => Some(drops.iter().map(|drop| drop.item_id)),
+        _ => None,
+    };
+
+    let timed = match &stage.rewards {
+        RewardStructure::Timed(scores) => Some(scores.iter().map(|score| score.item_id)),
+        _ => None,
+    };
+
+    treasure.into_iter().flatten().chain(timed.into_iter().flatten())
+}
+
+fn material_names(app: &BattleCatsApp) -> Vec<String> {
+    let items = &app.vault.vds.items;
+    let vfs = &app.vault.vfs;
+
+    (0..figures::MAP_DROPS_WIDTH)
+        .map(|index| {
+            let slot = index.checked_sub(figures::MAP_DROPS_MATERIALS);
+
+            slot.and_then(|slot| stage_materials::MAT_IDS.get(slot))
+                .and_then(|id| items.name(vfs, *id))
+                .filter(|name| !name.trim().is_empty())
+                .map_or_else(String::new, |name| format!("{name} %"))
+        })
+        .collect()
 }
 
 fn ground_target(app: &BattleCatsApp, reached: bool) -> Option<GroundTarget> {
@@ -1423,7 +1661,10 @@ fn figures_tab(app: &BattleCatsApp, subject: figures::Subject) -> bool {
         figures::Subject::Buy
         | figures::Subject::Curve
         | figures::Subject::Talents
-        | figures::Subject::MapStage => true,
+        | figures::Subject::MapStage
+        | figures::Subject::MapDrops
+        | figures::Subject::DropChara
+        | figures::Subject::ItemBuy => true,
     }
 }
 
@@ -1459,6 +1700,10 @@ fn prose_payloads(app: &BattleCatsApp, target: Option<Target>, broad: bool) -> V
 
     if let Some(Target::StageRow(stage)) = target {
         return stage_name_target(app, Some(stage)).into_iter().collect();
+    }
+
+    if let Some(Target::TreasureDrop(item)) = target {
+        return item_name_target(app, Some(item)).into_iter().collect();
     }
 
     if !broad {
@@ -1524,6 +1769,7 @@ fn combo_target(app: &BattleCatsApp, line: Option<usize>) -> Option<LevelTarget>
         subject: figures::Subject::Combo,
         asset: Asset::Variants { key: cat_files::NYANCOMBO_DATA.to_owned(), files },
         label: [cat_label(app, id).as_str(), cat_files::NYANCOMBO_DATA].join(theme::HEADER_SEPARATOR),
+        columns: Vec::new(),
         address,
         anchor: combo_anchor(app, id),
         unlocked: app.settings.files.unlock_game_mount,
@@ -1625,6 +1871,7 @@ fn roster_payloads(app: &BattleCatsApp, files: &[(figures::Subject, &str)]) -> V
                 subject,
                 asset: Asset::Variants { key: name.to_owned(), files },
                 label: [label.as_str(), name].join(theme::HEADER_SEPARATOR),
+                columns: Vec::new(),
                 address: address(app, subject, id),
                 anchor: None,
                 unlocked: app.settings.files.unlock_game_mount,
@@ -1728,7 +1975,8 @@ fn prose_tab(app: &BattleCatsApp, subject: prose::Subject) -> bool {
         prose::Subject::Explanation
         | prose::Subject::EnemyName
         | prose::Subject::MapName
-        | prose::Subject::StageName => true,
+        | prose::Subject::StageName
+        | prose::Subject::ItemName => true,
     }
 }
 
@@ -1777,6 +2025,7 @@ fn prose_subject(target: Option<Target>) -> Option<prose::Subject> {
         Target::CatTalents => Some(prose::Subject::TalentText),
         Target::MapName => Some(prose::Subject::MapName),
         Target::StageName => Some(prose::Subject::StageName),
+        Target::TreasureDrop(_) => Some(prose::Subject::ItemName),
         _ => None,
     }
 }
@@ -1790,6 +2039,7 @@ fn prose_target(app: &BattleCatsApp, subject: prose::Subject) -> Option<ProseTar
         prose::Subject::TalentText => talent_text_target(app),
         prose::Subject::MapName => map_name_target(app, None),
         prose::Subject::StageName => stage_name_target(app, None),
+        prose::Subject::ItemName => item_name_target(app, None),
     }
 }
 
@@ -2233,7 +2483,10 @@ fn current_plan(app: &BattleCatsApp, subject: figures::Subject) -> Option<figure
         | figures::Subject::Talents
         | figures::Subject::Costs
         | figures::Subject::Combo
-        | figures::Subject::MapStage => {
+        | figures::Subject::MapStage
+        | figures::Subject::MapDrops
+        | figures::Subject::DropChara
+        | figures::Subject::ItemBuy => {
             let sources = match subject {
                 figures::Subject::Talents | figures::Subject::Costs => match talented(app) {
                     true => roster_payloads(app, &TALENT_FILES),
@@ -2241,6 +2494,9 @@ fn current_plan(app: &BattleCatsApp, subject: figures::Subject) -> Option<figure
                 },
                 figures::Subject::Combo => combo_target(app, None).into_iter().collect(),
                 figures::Subject::MapStage => stage_data_targets(app),
+                figures::Subject::MapDrops => map_drop_targets(app),
+                figures::Subject::DropChara => drop_chara_targets(app),
+                figures::Subject::ItemBuy => item_buy_targets(app, None),
                 _ => level_payloads(app, true, false),
             };
 

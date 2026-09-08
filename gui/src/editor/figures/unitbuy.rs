@@ -1,22 +1,59 @@
-use iced::Element;
+use iced::alignment::Horizontal;
+use iced::widget::{column, container, text};
+use iced::{Element, Length};
 
 use super::resolved::{Choice, Rule};
 use super::{cards, Draft, Message};
 
 pub(super) fn view<'a>(draft: &'a Draft, width: f32, query: &'a str, armed: bool) -> Element<'a, Message> {
-    let schema = draft.schema();
+    searched(draft, width, query, armed, None, 0.0)
+}
+
+// A wide table behind a search box. The needle runs against the label the *draft* shows, so
+// a column named from the game's own data is findable by that name.
+pub(super) fn searched<'a>(
+    draft: &'a Draft,
+    width: f32,
+    query: &'a str,
+    armed: bool,
+    notice: Option<&'a str>,
+    notice_size: f32,
+) -> Element<'a, Message> {
+    bounded(draft, width, query, armed, notice, notice_size, draft.len())
+}
+
+pub(super) fn bounded<'a>(
+    draft: &'a Draft,
+    width: f32,
+    query: &'a str,
+    armed: bool,
+    notice: Option<&'a str>,
+    notice_size: f32,
+    upto: usize,
+) -> Element<'a, Message> {
     let needle = query.trim().to_lowercase();
 
-    let shown: Vec<usize> = (0..draft.len())
-        .filter(|index| needle.is_empty() || schema.label(*index).to_lowercase().contains(&needle))
+    let shown: Vec<usize> = (0..upto.min(draft.len()))
+        .filter(|index| needle.is_empty() || draft.label(*index).to_lowercase().contains(&needle))
         .collect();
 
-    cards::shell(
-        Some(cards::search(query, width, "Search Field...")),
-        cards::grid(draft, width, &shown, None),
-        cards::footer(vec![cards::sync(armed)]),
-    )
+    let search = cards::search(query, width, "Search Field...");
+
+    let top = match notice {
+        Some(notice) => cards::header(column![
+            container(text(notice).size(notice_size).align_x(Horizontal::Center).style(text::secondary))
+                .width(Length::Fill)
+                .center_x(Length::Fill),
+            search,
+        ]
+        .spacing(NOTICE_GAP)),
+        None => search,
+    };
+
+    cards::shell(Some(top), cards::grid(draft, width, &shown, None), cards::footer(vec![cards::sync(armed)]))
 }
+
+const NOTICE_GAP: f32 = 6.0;
 
 pub(super) fn rule(field: &str) -> Option<Rule> {
     match field {

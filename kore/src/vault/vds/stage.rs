@@ -12,7 +12,7 @@ use nyanko::chapter::stage::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::domains::stage::files::MAP_NAME;
+use crate::domains::stage::files::{DROP_ITEM, MAP_NAME};
 use crate::Vfs;
 
 use super::Slot;
@@ -20,7 +20,6 @@ use super::Slot;
 const MAP_OPTION: &str = "Map_option.csv";
 const STAGE_OPTION: &str = "Stage_option.csv";
 const CHARA_GROUP: &str = "Charagroup.csv";
-const DROP_ITEM: &str = "DropItem.csv";
 const SCORE_BONUS: &str = "ScoreBonusMap.json";
 const SPECIAL_RULES: &str = "SpecialRulesMap.json";
 const SPECIAL_RULE_OPTIONS: &str = "SpecialRulesMapOption.json";

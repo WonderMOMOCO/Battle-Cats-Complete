@@ -3,19 +3,23 @@ mod combat;
 mod combos;
 mod costs;
 mod mapdata;
+mod itembuy;
+mod mapdrops;
 pub(super) mod resolved;
 mod schema;
 mod talents;
 mod unitbuy;
 mod unitlevel;
 
+pub(crate) use itembuy::ITEM_ID_COLUMN;
 pub(crate) use mapdata::MAP_HEADER_LINES;
+pub(crate) use mapdrops::{MATERIAL_FIRST as MAP_DROPS_MATERIALS, WIDTH as MAP_DROPS_WIDTH};
 pub(crate) use schema::{Subject, COUNT, FORMS, SUBJECTS};
 
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::LazyLock;
+use std::sync::{Arc, LazyLock};
 
 use iced::widget::{operation, scrollable};
 use iced::{Element, Size, Task};
@@ -47,6 +51,12 @@ const COSTS_POPUP: popup::Spec = popup::Spec::new(popup::Kind::TalentCosts, COST
 pub(super) const COMBO_SIZE: Size = Size::new(420.0, 296.0);
 const COMBO_POPUP: popup::Spec = popup::Spec::new(popup::Kind::Combos, COMBO_SIZE);
 const MAP_STAGE_SIZE: Size = Size::new(364.0, 520.0);
+const MAP_DROPS_SIZE: Size = Size::new(364.0, 520.0);
+const MAP_DROPS_POPUP: popup::Spec = popup::Spec::new(popup::Kind::MapDrops, MAP_DROPS_SIZE);
+const DROP_CHARA_SIZE: Size = Size::new(364.0, 300.0);
+const DROP_CHARA_POPUP: popup::Spec = popup::Spec::new(popup::Kind::DropChara, DROP_CHARA_SIZE);
+const ITEM_BUY_SIZE: Size = Size::new(364.0, 460.0);
+const ITEM_BUY_POPUP: popup::Spec = popup::Spec::new(popup::Kind::ItemBuy, ITEM_BUY_SIZE);
 const MAP_STAGE_POPUP: popup::Spec = popup::Spec::new(popup::Kind::MapStage, MAP_STAGE_SIZE);
 
 pub(super) fn kind(subject: Subject) -> popup::Kind {
@@ -63,6 +73,9 @@ fn spec(subject: Subject) -> popup::Spec {
         Subject::Costs => COSTS_POPUP,
         Subject::Combo => COMBO_POPUP,
         Subject::MapStage => MAP_STAGE_POPUP,
+        Subject::MapDrops => MAP_DROPS_POPUP,
+        Subject::DropChara => DROP_CHARA_POPUP,
+        Subject::ItemBuy => ITEM_BUY_POPUP,
     }
 }
 
@@ -123,7 +136,11 @@ fn split_span(line: &str, delimiter: char, schema: &schema::Schema, first: usize
 
     let stored = fields.len();
     let mut written: Vec<String> = fields.iter().map(|field| (*field).to_owned()).collect();
-    let mut cells: Vec<i32> = fields.iter().map(|field| field.trim().parse::<i32>().unwrap_or(0)).collect();
+    let mut cells: Vec<i32> = fields
+        .iter()
+        .enumerate()
+        .map(|(at, field)| parse_scaled(field, schema.decimals(first + at)).unwrap_or(0))
+        .collect();
 
     while cells.len() < len {
         let fallback = schema.fallback(first + cells.len());
@@ -195,22 +212,92 @@ fn shown(schema: &schema::Schema, index: usize, raw: i32, values: EditorMode, ru
         return String::new();
     }
 
-    rule.to_display(schema.to_display(index, raw, values), values).to_string()
+    let held = rule.to_display(schema.to_display(index, raw, values), values);
+
+    format_scaled(held, schema.decimals(index))
 }
 
-fn typable(value: &str, signed: bool) -> bool {
-    typable_digits(value.strip_prefix(BUFFER_MARK).unwrap_or(value), signed)
+fn typable(value: &str, signed: bool, places: u32) -> bool {
+    typable_digits(value.strip_prefix(BUFFER_MARK).unwrap_or(value), signed, places)
 }
 
-fn typable_digits(value: &str, signed: bool) -> bool {
-    let mut chars = value.chars();
+fn typable_digits(value: &str, signed: bool, places: u32) -> bool {
+    let body = match value.strip_prefix('-') {
+        Some(_) if !signed => return false,
+        Some(rest) => rest,
+        None => value,
+    };
 
-    match chars.next() {
-        None => true,
-        Some('-') => signed && chars.all(|digit| digit.is_ascii_digit()),
-        Some(first) if first.is_ascii_digit() => chars.all(|digit| digit.is_ascii_digit()),
-        Some(_) => false,
+    let mut points = 0;
+
+    for glyph in body.chars() {
+        if glyph == '.' && places > 0 {
+            points += 1;
+
+            if points > 1 {
+                return false;
+            }
+
+            continue;
+        }
+
+        if !glyph.is_ascii_digit() {
+            return false;
+        }
     }
+
+    true
+}
+
+// A column whose cells are written with a decimal point is held as a whole number of its
+// smallest place -- DropItem's crown multipliers are hundredths -- so the whole editor keeps
+// its i32 cell model and only the text boundary knows. `places` is 0 for every other column,
+// where both of these are the plain i32 conversions.
+fn decimal_unit(places: u32) -> i32 {
+    10_i32.saturating_pow(places)
+}
+
+fn parse_scaled(text: &str, places: u32) -> Option<i32> {
+    let text = text.trim();
+
+    if places == 0 {
+        return text.parse::<i32>().ok();
+    }
+
+    let (whole, fraction) = text.split_once('.').unwrap_or((text, ""));
+    let negative = whole.starts_with('-');
+
+    let held: String = fraction.chars().take(places as usize).collect();
+    let part: i32 = format!("{:0<width$}", held, width = places as usize).parse().ok()?;
+
+    let whole: i32 = match whole {
+        "" | "-" => 0,
+        held => held.parse().ok()?,
+    };
+
+    let magnitude = whole.checked_abs()?.checked_mul(decimal_unit(places))?.checked_add(part)?;
+
+    Some(if negative { -magnitude } else { magnitude })
+}
+
+fn format_scaled(value: i32, places: u32) -> String {
+    if places == 0 {
+        return value.to_string();
+    }
+
+    let unit = decimal_unit(places);
+    let whole = value / unit;
+    let part = (value % unit).abs();
+
+    if part == 0 {
+        return whole.to_string();
+    }
+
+    let digits = format!("{:0width$}", part, width = places as usize);
+    let digits = digits.trim_end_matches('0');
+    let sign = if value < 0 && whole == 0 { "-" } else { "" };
+
+    format!("{sign}{whole}.{digits}")
 }
 
 fn wrapped_lines(label: &str, per_line: usize) -> usize {
@@ -265,6 +352,10 @@ enum Intent {
 pub enum Address {
     Line(usize),
     Keyed(u32),
+    // A row addressed by an id that is not in the leading cell. Gatyaitembuy names its item
+    // in column 3, and finding the row by that beats counting past a header the file need
+    // not carry.
+    Column { at: usize, id: u32 },
     Appended,
 }
 
@@ -273,6 +364,9 @@ impl Address {
         match self {
             Address::Line(row) => Some(row),
             Address::Keyed(id) => lines.iter().position(|line| leading(line, delimiter) == Some(id)),
+            Address::Column { at, id } => {
+                lines.iter().position(|line| cell_of(line, delimiter, at) == Some(id))
+            }
             Address::Appended => None,
         }
     }
@@ -281,7 +375,7 @@ impl Address {
         let id = match self {
             Address::Appended => return Some(lines.len()),
             Address::Keyed(id) => id,
-            Address::Line(_) => return None,
+            Address::Line(_) | Address::Column { .. } => return None,
         };
 
         let at = lines
@@ -301,18 +395,23 @@ impl Address {
     fn key(self) -> Option<u32> {
         match self {
             Address::Keyed(id) => Some(id),
-            Address::Line(_) | Address::Appended => None,
+            Address::Line(_) | Address::Column { .. } | Address::Appended => None,
         }
     }
 }
 
 fn leading(line: &str, delimiter: char) -> Option<u32> {
-    line.split(delimiter).next()?.trim().parse().ok()
+    cell_of(line, delimiter, 0)
+}
+
+fn cell_of(line: &str, delimiter: char, at: usize) -> Option<u32> {
+    line.split(delimiter).nth(at)?.trim().parse().ok()
 }
 
 #[derive(Clone)]
 pub(crate) struct Plan {
     address: Address,
+    labels: Option<Arc<[String]>>,
     label: String,
     game: PathBuf,
     target_mod: Option<String>,
@@ -328,6 +427,7 @@ impl Plan {
 
     fn matches(&self, other: &Plan) -> bool {
         self.address == other.address
+            && self.labels == other.labels
             && self.game == other.game
             && self.target_mod == other.target_mod
             && self.label == other.label
@@ -341,6 +441,13 @@ impl Plan {
 
     pub(super) fn anchored(self, anchor: Option<(i32, i32)>) -> Plan {
         Plan { anchor, ..self }
+    }
+
+    // Column names the static table cannot know, because they come from the game's own data
+    // -- DropItem's material slots are named by the items `MAT_IDS` points them at. Resolved
+    // once where the vault is in hand rather than per draw.
+    pub(super) fn named(self, labels: Vec<String>) -> Plan {
+        Plan { labels: Some(labels.into()), ..self }
     }
 
     fn source(&self, vfs: &Vfs) -> PathBuf {
@@ -819,7 +926,9 @@ impl Draft {
         let rule = self.rule(index);
         let values = self.plan.values;
 
-        if !typable(value, rule.signed(values)) {
+        let places = self.plan.schema.decimals(index);
+
+        if !typable(value, rule.signed(values), places) {
             return false;
         }
 
@@ -844,7 +953,7 @@ impl Draft {
             *slot = String::new();
             self.plan.schema.fallback(index)
         } else {
-            let Ok(display) = value.parse::<i32>() else {
+            let Some(display) = parse_scaled(value, places) else {
                 *slot = value.to_owned();
 
                 return false;
@@ -879,7 +988,7 @@ impl Draft {
                 let at = index - first;
 
                 if let Some(slot) = slab.written.get_mut(at) {
-                    *slot = raw.to_string();
+                    *slot = format_scaled(raw, self.plan.schema.decimals(index));
                 }
 
                 slab.touched = slab.touched.max(at + 1);
@@ -893,7 +1002,7 @@ impl Draft {
         let at = index - first;
 
         if let Some(slot) = self.written.get_mut(at) {
-            *slot = raw.to_string();
+            *slot = format_scaled(raw, self.plan.schema.decimals(index));
         }
 
         self.touched = self.touched.max(at + 1);
@@ -1339,6 +1448,14 @@ impl Draft {
     // The reward block's names depend on the row's own contents, which the static table
     // cannot see, so the label is asked of the draft rather than of the schema.
     fn label(&self, index: usize) -> std::borrow::Cow<'static, str> {
+        // A blank entry means the column has no name of its own in that table, not that it
+        // should render nameless.
+        if let Some(named) =
+            self.plan.labels.as_ref().and_then(|held| held.get(index)).filter(|held| !held.is_empty())
+        {
+            return std::borrow::Cow::Owned(named.clone());
+        }
+
         if self.plan.subject() == Subject::MapStage
             && let Some(named) = mapdata::label(index, &self.cells)
         {
@@ -1375,6 +1492,9 @@ impl Draft {
             Subject::Costs => costs::view(self, frame),
             Subject::Combo => combos::view(self, frame),
             Subject::MapStage => mapdata::view(self, width, armed),
+            Subject::MapDrops => mapdrops::view(self, width, query, armed),
+            Subject::DropChara => mapdrops::chara_view(self, width, armed),
+            Subject::ItemBuy => itembuy::view(self, width, query, armed),
         }
     }
 }
@@ -1389,6 +1509,7 @@ pub(super) fn plan(
 ) -> Plan {
     Plan {
         address,
+        labels: None,
         label,
         game: game.to_path_buf(),
         target_mod,
@@ -1549,19 +1670,19 @@ mod tests {
     #[test]
     fn typing_accepts_only_digits_and_a_leading_minus() {
         for good in ["", "-", "0", "42", "-7"] {
-            assert!(super::typable(good, true), "{good:?} should be typable");
+            assert!(super::typable(good, true, 0), "{good:?} should be typable");
         }
 
         for bad in ["+5", " 5", "5 ", "5a", "1.5", "--1", "1-"] {
-            assert!(!super::typable(bad, true), "{bad:?} should be rejected");
+            assert!(!super::typable(bad, true, 0), "{bad:?} should be rejected");
         }
     }
 
     #[test]
     fn an_unsigned_field_refuses_the_minus_key() {
-        assert!(!super::typable("-", false), "a non-negative column must not accept a lone minus");
-        assert!(!super::typable("-1", false), "a non-negative column must not accept a negative");
-        assert!(super::typable("1", false), "digits stay typable");
+        assert!(!super::typable("-", false, 0), "a non-negative column must not accept a lone minus");
+        assert!(!super::typable("-1", false, 0), "a non-negative column must not accept a negative");
+        assert!(super::typable("1", false, 0), "digits stay typable");
     }
 
     #[test]
@@ -1596,6 +1717,40 @@ mod tests {
         let row = split_row(&line, ',', schema);
         assert_eq!(row.written[index], "-1", "the stored text is kept verbatim");
         assert_eq!(rebuild(&row, 0), line, "opening in Resolved must not rewrite the row");
+    }
+
+    // DropItem writes its crown multipliers with a decimal point and the file ships exactly
+    // five of them, so the round trip has to reproduce each one character for character --
+    // "1" and not "1.00", or an untouched row stops matching itself.
+    #[test]
+    fn a_decimal_cell_round_trips_every_multiplier_the_file_ships() {
+        for (text, held) in [("0.5", 50), ("0.75", 75), ("1", 100), ("1.25", 125), ("1.5", 150)] {
+            assert_eq!(super::parse_scaled(text, 2), Some(held), "{text} reads as hundredths");
+            assert_eq!(super::format_scaled(held, 2), text, "{held} writes back as {text}");
+        }
+    }
+
+    #[test]
+    fn a_column_with_no_places_is_the_plain_integer_path() {
+        assert_eq!(super::parse_scaled("-42", 0), Some(-42));
+        assert_eq!(super::format_scaled(-42, 0), "-42");
+        assert_eq!(super::parse_scaled("0.75", 0), None, "a point is not an integer");
+    }
+
+    #[test]
+    fn a_negative_decimal_keeps_its_sign_either_side_of_the_point() {
+        assert_eq!(super::parse_scaled("-0.75", 2), Some(-75));
+        assert_eq!(super::format_scaled(-75, 2), "-0.75");
+        assert_eq!(super::parse_scaled("-1.5", 2), Some(-150));
+        assert_eq!(super::format_scaled(-150, 2), "-1.5");
+    }
+
+    #[test]
+    fn a_decimal_column_accepts_one_point_and_no_more() {
+        assert!(super::typable("0.7", false, 2));
+        assert!(super::typable("0.", false, 2), "a half typed value has to survive the keystroke");
+        assert!(!super::typable("0.7.5", false, 2));
+        assert!(!super::typable("0.7", false, 0), "an integer column still refuses the point");
     }
 
     #[test]

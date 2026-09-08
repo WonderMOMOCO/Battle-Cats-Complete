@@ -15,6 +15,7 @@ use kore::{ItemStore, Vfs};
 
 use crate::app::theme;
 use crate::common::item_icon;
+use crate::editor;
 use crate::widget::section;
 
 const TREASURE_TABLE_WIDTH: f32 = 345.0;
@@ -83,7 +84,7 @@ impl State {
             None => theme::centered_text(drop_name).into(),
         };
 
-        container(
+        let held = container(
             row![
                 theme::table_cell_text(left_label, Length::FillPortion(1)),
                 container(icon_element).width(Length::FillPortion(1)).align_x(Horizontal::Center),
@@ -94,8 +95,11 @@ impl State {
         )
             .style(move |theme: &Theme| theme::zebra_table_row(theme, index))
             .padding(CELL_PADDING)
-            .width(Length::Fill)
-            .into()
+            .width(Length::Fill);
+
+        // The row carries the item it awards, so right-clicking one edits that item rather
+        // than whichever the stage lists first.
+        editor::target(held, editor::Target::TreasureDrop(item_id))
     }
 
     pub fn view<'a>(
@@ -171,7 +175,8 @@ fn header_row<'a>(first_column: &'a str) -> Element<'a, super::Message> {
 }
 
 fn table<'a>(title: impl ToString, grid: Column<'a, super::Message>) -> Element<'a, super::Message> {
-    container(section(title, Length::Fill, grid.width(Length::Fill)))
-        .width(Length::Fixed(TREASURE_TABLE_WIDTH))
-        .into()
+    let panel = container(section(title, Length::Fill, grid.width(Length::Fill)))
+        .width(Length::Fixed(TREASURE_TABLE_WIDTH));
+
+    editor::target(panel, editor::Target::StageDrops)
 }

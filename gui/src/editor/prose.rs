@@ -38,6 +38,9 @@ const COMBO_NAME_LABELS: &[&str] = &["Combo Name..."];
 
 const MAP_NAME_LABELS: &[&str] = &["Map Name..."];
 
+const ITEM_NAME_LABELS: &[&str] =
+    &["Item Name...", "Description Line 1...", "Description Line 2...", "Description Line 3..."];
+
 const STAGE_NAME_LABELS: &[&str] = &["Stage Name..."];
 
 const TALENT_TEXT_LABELS: &[&str] = &["Description Line 1...", "Description Line 2..."];
@@ -70,7 +73,7 @@ fn next_token() -> u64 {
     NEXT_TOKEN.fetch_add(1, Ordering::Relaxed)
 }
 
-pub(super) const COUNT: usize = 7;
+pub(super) const COUNT: usize = 8;
 
 pub(super) const SUBJECTS: [Subject; COUNT] = [
     Subject::Explanation,
@@ -80,6 +83,7 @@ pub(super) const SUBJECTS: [Subject; COUNT] = [
     Subject::TalentText,
     Subject::MapName,
     Subject::StageName,
+    Subject::ItemName,
 ];
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -91,6 +95,7 @@ pub enum Subject {
     TalentText,
     MapName,
     StageName,
+    ItemName,
 }
 
 impl Subject {
@@ -102,7 +107,7 @@ impl Subject {
         match self {
             Self::Explanation | Self::ComboName | Self::TalentText => Page::Cats,
             Self::EnemyName | Self::EnemyDescription => Page::Enemies,
-            Self::MapName | Self::StageName => Page::Stages,
+            Self::MapName | Self::StageName | Self::ItemName => Page::Stages,
         }
     }
 
@@ -115,6 +120,7 @@ impl Subject {
             Self::TalentText => TALENT_TEXT_LABELS,
             Self::MapName => MAP_NAME_LABELS,
             Self::StageName => STAGE_NAME_LABELS,
+            Self::ItemName => ITEM_NAME_LABELS,
         }
     }
 
@@ -127,6 +133,7 @@ impl Subject {
             Self::TalentText => popup::Kind::TalentText,
             Self::MapName => popup::Kind::MapName,
             Self::StageName => popup::Kind::StageName,
+            Self::ItemName => popup::Kind::ItemName,
         }
     }
 
@@ -160,14 +167,18 @@ impl Subject {
     fn skipped(self) -> usize {
         match self {
             Self::EnemyDescription | Self::TalentText | Self::MapName => 1,
-            Self::Explanation | Self::EnemyName | Self::ComboName | Self::StageName => 0,
+            Self::Explanation
+            | Self::EnemyName
+            | Self::ComboName
+            | Self::StageName
+            | Self::ItemName => 0,
         }
     }
 
     fn width(self) -> f32 {
         match self {
             Self::EnemyName | Self::ComboName | Self::MapName | Self::StageName => NARROW_WIDTH,
-            Self::Explanation | Self::EnemyDescription | Self::TalentText => POPUP_WIDTH,
+            Self::Explanation | Self::EnemyDescription | Self::TalentText | Self::ItemName => POPUP_WIDTH,
         }
     }
 }

@@ -2,6 +2,7 @@ use std::borrow::Cow;
 use std::sync::LazyLock;
 
 use nyanko::cat::unit::{NyancomboData, UnitBuy};
+use nyanko::files::GatyaItemBuy;
 use nyanko::chapter::stage::{MapStageDataEntry, MapStageDataHeader};
 use nyanko::cat::unitid;
 use nyanko::combat::Scale;
@@ -12,7 +13,7 @@ use kore::domains::settings::EditorMode;
 
 use crate::app::Page;
 
-use super::mapdata;
+use super::{mapdata, mapdrops};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Subject {
@@ -24,9 +25,12 @@ pub enum Subject {
     Costs,
     Combo,
     MapStage,
+    MapDrops,
+    DropChara,
+    ItemBuy,
 }
 
-pub(crate) const COUNT: usize = 8;
+pub(crate) const COUNT: usize = 11;
 
 pub(crate) const SUBJECTS: [Subject; COUNT] = [
     Subject::Cat,
@@ -37,6 +41,9 @@ pub(crate) const SUBJECTS: [Subject; COUNT] = [
     Subject::Costs,
     Subject::Combo,
     Subject::MapStage,
+    Subject::MapDrops,
+    Subject::DropChara,
+    Subject::ItemBuy,
 ];
 
 impl Subject {
@@ -50,6 +57,9 @@ impl Subject {
             Subject::Costs => 5,
             Subject::Combo => 6,
             Subject::MapStage => 7,
+            Subject::MapDrops => 8,
+            Subject::DropChara => 9,
+            Subject::ItemBuy => 10,
         }
     }
 
@@ -62,7 +72,7 @@ impl Subject {
             | Subject::Talents
             | Subject::Costs
             | Subject::Combo => Page::Cats,
-            Subject::MapStage => Page::Stages,
+            Subject::MapStage | Subject::MapDrops | Subject::DropChara | Subject::ItemBuy => Page::Stages,
         }
     }
 }
@@ -90,6 +100,12 @@ pub(super) static COMBO: Schema = Schema { subject: Subject::Combo, comments: fa
 // event maps, so the subject keeps its comments.
 pub(super) static MAP_STAGE: Schema = Schema { subject: Subject::MapStage, comments: true };
 
+pub(super) static MAP_DROPS: Schema = Schema { subject: Subject::MapDrops, comments: true };
+
+pub(super) static DROP_CHARA: Schema = Schema { subject: Subject::DropChara, comments: true };
+
+pub(super) static ITEM_BUY: Schema = Schema { subject: Subject::ItemBuy, comments: false };
+
 pub(super) fn of(subject: Subject) -> &'static Schema {
     match subject {
         Subject::Cat => &CAT,
@@ -100,6 +116,9 @@ pub(super) fn of(subject: Subject) -> &'static Schema {
         Subject::Costs => &COSTS,
         Subject::Combo => &COMBO,
         Subject::MapStage => &MAP_STAGE,
+        Subject::MapDrops => &MAP_DROPS,
+        Subject::DropChara => &DROP_CHARA,
+        Subject::ItemBuy => &ITEM_BUY,
     }
 }
 
@@ -214,6 +233,16 @@ const BUY_NAMES: &[(&str, &str)] = &[
     ("egg_id_evolved", "Egg ID Evolved"),
 ];
 
+const ITEM_BUY_NAMES: &[(&str, &str)] = &[
+    ("reflect_or_storage", "Goes To Storage"),
+    ("stage_drop_item_id", "Drop ID"),
+    ("sever_id", "Server ID"),
+    ("src_item_id", "Source Item"),
+    ("main_menu_type", "Menu Type"),
+    ("gatya_ticket_id", "Ticket ID"),
+    ("img_id", "Sprite ID"),
+];
+
 const MAP_STAGE_NAMES: &[(&str, &str)] = &[
     ("item_reward_setting", "Item Reward Set"),
     ("score_reward_setting", "Score Reward Set"),
@@ -270,6 +299,10 @@ static ENEMY_ORDER: LazyLock<Vec<Entry>> = LazyLock::new(|| order(t_unit::COLUMN
 static BUY_ORDER: LazyLock<Vec<Entry>> = LazyLock::new(|| order(UnitBuy::COLUMNS));
 
 static COMBO_ORDER: LazyLock<Vec<Entry>> = LazyLock::new(|| order(NyancomboData::COLUMNS));
+
+static ITEM_BUY_ORDER: LazyLock<Vec<Entry>> = LazyLock::new(|| order(GatyaItemBuy::COLUMNS));
+
+static ITEM_BUY_LABELS: LazyLock<Vec<String>> = LazyLock::new(|| labels(&ITEM_BUY_ORDER, ITEM_BUY_NAMES));
 
 // The popup is one draft over three lines of the file, so the three column tables are one
 // table: the map-wide header, then the map pattern, then the stage's own row. `CHROME`
@@ -342,7 +375,8 @@ impl Schema {
             Subject::Buy => &BUY_ORDER,
             Subject::Combo => &COMBO_ORDER,
             Subject::MapStage => &MAP_STAGE_ORDER,
-            Subject::Curve | Subject::Talents | Subject::Costs => &[],
+            Subject::ItemBuy => &ITEM_BUY_ORDER,
+            Subject::Curve | Subject::Talents | Subject::Costs | Subject::MapDrops | Subject::DropChara => &[],
         }
     }
 
@@ -363,6 +397,8 @@ impl Schema {
             Subject::Curve => BRACKETS,
             Subject::Talents => TALENT_WIDTH,
             Subject::Costs => COST_WIDTH,
+            Subject::MapDrops => mapdrops::WIDTH,
+            Subject::DropChara => mapdrops::CHARA_WIDTH,
             _ => self.order().len(),
         }
     }
@@ -379,6 +415,14 @@ impl Schema {
             };
         }
 
+        if self.subject == Subject::MapDrops {
+            return Cow::Borrowed(mapdrops::label(index));
+        }
+
+        if self.subject == Subject::DropChara {
+            return Cow::Borrowed(mapdrops::chara_label(index));
+        }
+
         if self.subject == Subject::Curve {
             let first = (index * BRACKET + 1).max(FIRST_GROWTH_LEVEL);
 
@@ -390,6 +434,7 @@ impl Schema {
             Subject::Enemy => &ENEMY_LABELS,
             Subject::Combo => &COMBO_LABELS,
             Subject::MapStage => &MAP_STAGE_LABELS,
+            Subject::ItemBuy => &ITEM_BUY_LABELS,
             _ => &BUY_LABELS,
         };
 
@@ -403,6 +448,15 @@ impl Schema {
         match self.subject {
             Subject::MapStage => &MAP_STAGE_CHROME,
             _ => &[],
+        }
+    }
+
+    // How many decimal places a column's cells are written with. Everything but DropItem's
+    // crown multipliers is a plain integer.
+    pub(super) fn decimals(&self, index: usize) -> u32 {
+        match self.subject {
+            Subject::MapDrops => mapdrops::decimals(index),
+            _ => 0,
         }
     }
 
@@ -461,6 +515,10 @@ impl Schema {
                 Some(_) if (index - TALENT_HEAD) % TALENT_STRIDE == NAME_ID => -1,
                 _ => 0,
             };
+        }
+
+        if self.subject == Subject::MapDrops {
+            return mapdrops::fallback(index);
         }
 
         if let Some(held) = self.field(index).and_then(mapdata::fallback) {

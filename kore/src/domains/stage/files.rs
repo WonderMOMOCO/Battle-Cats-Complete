@@ -33,6 +33,10 @@ pub(crate) fn stage_name_targets(cat_prefix: &str) -> Vec<String> {
 }
 
 pub const MAP_NAME: &str = "Map_Name.csv";
+pub const DROP_ITEM: &str = "DropItem.csv";
+pub const DROP_CHARA: &str = "drop_chara.csv";
+pub const GATYA_ITEM_BUY: &str = "Gatyaitembuy.csv";
+pub const GATYA_ITEM_NAME: &str = "GatyaitemName.csv";
 
 pub fn map_banner_file(map_id: u32, image_prefix: &str) -> String {
     format!("mapname{:03}{}.png", map_id, artwork_suffix(image_prefix))

@@ -3,7 +3,7 @@ use crate::{ItemStore, Vfs};
 use super::files;
 use super::treasure::ResolvedDrop;
 
-pub(crate) const MAT_IDS: [u32; 16] = [
+pub const MAT_IDS: [u32; 16] = [
     85, 86, 87, 88, 89, 90, 91, 140,
     187, 188, 189, 190, 191, 192, 193, 194,
 ];

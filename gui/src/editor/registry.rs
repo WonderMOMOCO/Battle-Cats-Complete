@@ -726,8 +726,12 @@ pub(super) fn level_plan(
     let source = scope.source.or(scope.present)?;
 
     let made = figures::plan(level.subject, level.address, level.label.clone(), source, target_mod, values);
+    let made = made.anchored(level.anchor);
 
-    Some(made.anchored(level.anchor))
+    Some(match level.columns.is_empty() {
+        true => made,
+        false => made.named(level.columns.clone()),
+    })
 }
 
 fn files(items: &mut Vec<Item>, file: &FileTarget) {

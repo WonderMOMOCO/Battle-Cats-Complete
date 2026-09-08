@@ -4,12 +4,11 @@ use std::sync::Arc;
 use nyanko::files::{GatyaItemBuy, GatyaItemName};
 use serde::{Deserialize, Serialize};
 
+use crate::domains::stage::files::{GATYA_ITEM_BUY, GATYA_ITEM_NAME};
 use crate::Vfs;
 
 use super::Slot;
 
-pub(crate) const GATYA_ITEM_BUY: &str = "Gatyaitembuy.csv";
-pub(crate) const GATYA_ITEM_NAME: &str = "GatyaitemName.csv";
 
 #[derive(Default, Serialize, Deserialize)]
 pub struct ItemStore {

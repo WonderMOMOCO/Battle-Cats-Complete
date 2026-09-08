@@ -112,6 +112,10 @@ pub enum Kind {
     MapName,
     StageName,
     MapStage,
+    MapDrops,
+    DropChara,
+    ItemBuy,
+    ItemName,
     Battleground,
     EnemyPick,
     Animator,
@@ -120,7 +124,7 @@ pub enum Kind {
     StudioShipout,
 }
 
-pub(crate) const KIND_COUNT: usize = 37;
+pub(crate) const KIND_COUNT: usize = 41;
 
 const KINDS: [Kind; KIND_COUNT] = [
     Kind::CatFilter,
@@ -153,6 +157,10 @@ const KINDS: [Kind; KIND_COUNT] = [
     Kind::MapName,
     Kind::StageName,
     Kind::MapStage,
+    Kind::MapDrops,
+    Kind::DropChara,
+    Kind::ItemBuy,
+    Kind::ItemName,
     Kind::Battleground,
     Kind::EnemyPick,
     Kind::Animator,
@@ -196,6 +204,10 @@ impl Kind {
             Self::MapName => "map_name",
             Self::StageName => "stage_name",
             Self::MapStage => "map_stage",
+            Self::MapDrops => "map_drops",
+            Self::DropChara => "drop_chara",
+            Self::ItemBuy => "item_buy",
+            Self::ItemName => "item_name",
             Self::Battleground => "battleground",
             Self::EnemyPick => "enemy_pick",
             Self::Animator => "animator",

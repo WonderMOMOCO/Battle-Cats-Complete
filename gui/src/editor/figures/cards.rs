@@ -39,6 +39,9 @@ pub(super) fn grid_id(subject: Subject) -> Id {
         Subject::Costs => "figures-grid-costs",
         Subject::Combo => "figures-grid-combo",
         Subject::MapStage => "figures-grid-map-stage",
+        Subject::MapDrops => "figures-grid-map-drops",
+        Subject::DropChara => "figures-grid-drop-chara",
+        Subject::ItemBuy => "figures-grid-item-buy",
     })
 }
 
