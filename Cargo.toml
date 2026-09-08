@@ -7,7 +7,7 @@ members = [
 ]
 
 [workspace.package]
-version = "2.6.6"
+version = "3.0.0"
 edition = "2024"
 license-file = "LICENSE"
 authors = ["omochikaeri15 <251449262+omochikaeri15@users.noreply.github.com>"]
