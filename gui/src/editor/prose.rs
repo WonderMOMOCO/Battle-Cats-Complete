@@ -141,9 +141,6 @@ impl Subject {
         !matches!(self, Self::EnemyName | Self::ComboName)
     }
 
-    // The head is only borrowed from a neighbouring line for subjects whose skipped cells
-    // are an id the row may leave blank. A name row's head is its siblings' own names, so
-    // borrowing one would splice another map's names into this line.
     fn borrows(self) -> bool {
         matches!(self, Self::EnemyDescription | Self::TalentText)
     }
@@ -213,9 +210,6 @@ pub(crate) enum Keyed {
 }
 
 impl Keyed {
-    // The line a name sits on is not the same in every localized file -- Map_Name_en.csv
-    // holds 1,282 rows and Map_Name_ja.csv 1,290 -- so the address is resolved against the
-    // body the draft actually read, never once against whichever file happened to resolve.
     fn locate(self, body: &str, delimiter: char) -> Option<usize> {
         match self {
             Self::Map(id) => names::map_name_rows(body, delimiter).get(&id).copied(),
@@ -255,9 +249,6 @@ impl Plan {
         Plan { keyed: Some(keyed), ..self }
     }
 
-    // A file the importer strips loses its language suffix on the way into a mod, and the
-    // suffix is the only thing the filename rule reads, so a Japanese Map_Name.csv would be
-    // split on a bar. The source keeps its suffix either way, so the delimiter comes off that.
     pub(super) fn sourced(self) -> Plan {
         let named = self.game.file_name().map(|name| name.to_string_lossy().into_owned());
 
@@ -748,10 +739,6 @@ fn localized(name: &str) -> Separator {
     if japanese { Separator::Comma } else { Separator::Pipe }
 }
 
-// A localized file need not carry every row: Map_Name_ja.csv holds maps 1097-1101 and
-// 34034 that no other language ships, and two StageName files are the same shape. The menu
-// therefore asks whether the address lands before it offers an Edit, so a variant that has
-// no line for this map shows its file actions without a dead Edit above them.
 pub(super) fn seated(plan: &Plan) -> bool {
     let Some(keyed) = plan.keyed else {
         return true;

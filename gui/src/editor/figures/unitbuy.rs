@@ -9,8 +9,6 @@ pub(super) fn view<'a>(draft: &'a Draft, width: f32, query: &'a str, armed: bool
     searched(draft, width, query, armed, None, 0.0)
 }
 
-// A wide table behind a search box. The needle runs against the label the *draft* shows, so
-// a column named from the game's own data is findable by that name.
 pub(super) fn searched<'a>(
     draft: &'a Draft,
     width: f32,

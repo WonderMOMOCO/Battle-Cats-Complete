@@ -18,10 +18,6 @@ const NOTICE: &str = concat!(
 const NOTICE_SIZE: f32 = 11.0;
 const CHROME_GAP: f32 = 8.0;
 
-// A MapStageData file opens with two map-wide metadata lines and then one line per stage.
-// nyanko enumerates every line below them and counts a blank or comment-only one as a stage
-// index of its own, so a stage row is always at `MAP_HEADER_LINES + stage_id`; the corpus
-// test below is what holds that true.
 pub(crate) const MAP_HEADER_LINES: usize = 2;
 #[cfg(test)]
 const MAP_PATTERN_LINE: usize = 1;

@@ -531,8 +531,6 @@ enum Action {
     Find { source: PathBuf },
 }
 
-// Everything creating or removing a stage touches, resolved from siblings that already
-// exist so a category whose names break the obvious pattern still lands correctly.
 #[derive(Clone)]
 pub(crate) struct Making {
     target_mod: Option<String>,
@@ -568,8 +566,6 @@ impl Making {
 
 enum Outcome {
     Done,
-    // The registry decides which maps and stages exist by globbing their files, so writing or
-    // removing one only shows once the whole stage scan runs again.
     Rescanned,
     Opened(Page),
     Deferred(Task<Message>),
@@ -659,10 +655,6 @@ struct Snapshot {
     ground: Option<ground::Plan>,
 }
 
-// Every selection an open popup follows. A subject missing from here is a popup that goes
-// stale on the selection it belongs to, because `stale` is what decides whether a snapshot
-// is taken at all -- the map is here as well as the stage because picking a map clears the
-// stage to None, and two maps in a row would otherwise look like no change.
 #[derive(PartialEq)]
 struct Key {
     page: Page,
@@ -1906,7 +1898,6 @@ fn prose_payloads(app: &BattleCatsApp, target: Option<Target>, broad: bool) -> V
         .collect()
 }
 
-
 fn level_payloads(app: &BattleCatsApp, levels: bool, forms: bool) -> Vec<LevelTarget> {
     let files: &[(figures::Subject, &str)] = match (levels, forms) {
         (true, _) => &LEVEL_FILES,
@@ -2129,7 +2120,6 @@ fn cat_label(app: &BattleCatsApp, id: u32) -> String {
         .filter(|name| !name.is_empty())
         .unwrap_or_else(|| format!("{id:03}-C"))
 }
-
 
 fn cat_payloads(app: &BattleCatsApp, reached: bool) -> Vec<CatTarget> {
     if !reached || !figures_tab(app, figures::Subject::Cat) {

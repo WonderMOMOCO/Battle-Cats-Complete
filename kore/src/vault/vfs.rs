@@ -796,8 +796,6 @@ impl Mount for (&str, &Path) {
             return Err(VfsError::Unrooted { root: mount.root.clone(), path: file.to_path_buf() });
         };
 
-        // A vanished file must never be indexed: it would shadow the game mount with a
-        // dead path instead of letting resolution fall back to vanilla.
         let Some((mtime, len)) = walk::stat(file) else {
             return Err(VfsError::InvalidPath(file.to_path_buf()));
         };
@@ -829,7 +827,6 @@ impl Mount for (&str, &Path) {
             return Ok(Vec::new());
         };
 
-        // walk::merge applies, kept in step so an added file needs no remount.
         mount.files.remove(name);
 
         let mut paths = vec![previous, absolute];
@@ -876,7 +873,6 @@ impl Mount for (&str, &Path) {
 
                 match mount.conflicts[at].paths.len() {
                     0 => drop(mount.conflicts.remove(at)),
-                    // The last rival is gone, so the survivor becomes resolvable again.
                     1 => {
                         let survivor = mount.conflicts.remove(at).paths.remove(0);
 

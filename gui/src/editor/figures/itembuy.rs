@@ -3,9 +3,6 @@ use iced::Element;
 use super::resolved::Rule;
 use super::{Draft, Message};
 
-// Gatyaitembuy.csv, one row per catalogue item below a header line. nyanko publishes the
-// column table, and its own doc names the invariant this editor leans on: a row's position
-// below the header is also the line naming it in GatyaitemName_<lang>.csv.
 pub(crate) const ITEM_ID_COLUMN: usize = 3;
 
 const NOTICE: &str = concat!(
@@ -15,8 +12,6 @@ const NOTICE: &str = concat!(
 
 const NOTICE_SIZE: f32 = 11.0;
 
-// Measured over the 275 shipped rows: every id column reaches -1 and never goes below, the
-// storage flag holds only 0 and 1, and the rest count up from nothing.
 pub(super) fn rule(field: &str) -> Option<Rule> {
     match field {
         "reflect_or_storage" => Some(Rule::Flag),
@@ -31,9 +26,6 @@ pub(super) fn rule(field: &str) -> Option<Rule> {
     }
 }
 
-// The row's final column is the game's own Japanese comment, which is text rather than a
-// number. Showing only the published columns keeps it out of the grid, and `rebuild` writes
-// every cell the line stored, so it survives untouched.
 pub(super) fn view<'a>(draft: &'a Draft, width: f32, query: &'a str, armed: bool) -> Element<'a, Message> {
     super::unitbuy::bounded(draft, width, query, armed, Some(NOTICE), NOTICE_SIZE, draft.schema().known())
 }

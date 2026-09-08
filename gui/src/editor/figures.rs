@@ -151,9 +151,6 @@ fn split_span(line: &str, delimiter: char, schema: &schema::Schema, first: usize
     Row { cells, written, stored, comment }
 }
 
-// A cell that lives on a line other than the addressed one. MapStageData's two map-wide
-// rows are the only users: they lead the draft's flat cell space and are drawn above the
-// scroll, so the popup is one draft and one menu entry rather than three of each.
 struct Slab {
     line: usize,
     len: usize,
@@ -249,10 +246,6 @@ fn typable_digits(value: &str, signed: bool, places: u32) -> bool {
     true
 }
 
-// A column whose cells are written with a decimal point is held as a whole number of its
-// smallest place -- DropItem's crown multipliers are hundredths -- so the whole editor keeps
-// its i32 cell model and only the text boundary knows. `places` is 0 for every other column,
-// where both of these are the plain i32 conversions.
 fn decimal_unit(places: u32) -> i32 {
     10_i32.saturating_pow(places)
 }
@@ -352,9 +345,6 @@ enum Intent {
 pub enum Address {
     Line(usize),
     Keyed(u32),
-    // A row addressed by an id that is not in the leading cell. Gatyaitembuy names its item
-    // in column 3, and finding the row by that beats counting past a header the file need
-    // not carry.
     Column { at: usize, id: u32 },
     Appended,
 }
@@ -443,9 +433,6 @@ impl Plan {
         Plan { anchor, ..self }
     }
 
-    // Column names the static table cannot know, because they come from the game's own data
-    // -- DropItem's material slots are named by the items `MAT_IDS` points them at. Resolved
-    // once where the vault is in hand rather than per draw.
     pub(super) fn named(self, labels: Vec<String>) -> Plan {
         Plan { labels: Some(labels.into()), ..self }
     }
@@ -1086,9 +1073,6 @@ impl Draft {
             }
         };
 
-        // Sync is row-scoped, and for a subject with chrome the "row" is every line the draft
-        // owns -- restoring the stage row while leaving edited map settings behind would put
-        // the popup in a state the file never had.
         let (chrome, lead) = chrome_rows(self.plan.schema, &vanilla, delimiter);
         let span = self.plan.schema.known() - lead.len();
         let Row { mut cells, written, stored, comment } =
@@ -1440,16 +1424,11 @@ impl Draft {
         true
     }
 
-
     fn stored(&self) -> usize {
         self.stored
     }
 
-    // The reward block's names depend on the row's own contents, which the static table
-    // cannot see, so the label is asked of the draft rather than of the schema.
     fn label(&self, index: usize) -> std::borrow::Cow<'static, str> {
-        // A blank entry means the column has no name of its own in that table, not that it
-        // should render nameless.
         if let Some(named) =
             self.plan.labels.as_ref().and_then(|held| held.get(index)).filter(|held| !held.is_empty())
         {

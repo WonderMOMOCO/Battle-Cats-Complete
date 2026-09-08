@@ -221,8 +221,6 @@ impl State {
             .width(Length::Fixed(sidebar_width(data)))
             .height(Length::Fill);
 
-        // Creating and removing stages and maps belongs to the list they appear in. A row
-        // claims first, so right-clicking one still edits that row's name.
         editor::target(panel, editor::Target::StageMake)
     }
 }

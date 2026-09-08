@@ -17,7 +17,6 @@ use crate::common::item_icon;
 use crate::editor;
 use crate::widget::{grid_header, grid_value, section};
 
-
 const MAP_IMG_HEIGHT: f32 = 50.0;
 const STAGE_IMG_HEIGHT: f32 = 35.0;
 const BANNER_GAP: f32 = 12.0;
@@ -224,8 +223,6 @@ impl State {
     }
 }
 
-// The plate and the name it stands in for are different things to edit, so the target
-// follows whichever one actually got drawn.
 fn plate<'a, Message: 'a>(
     texture: Option<(Handle, u32, u32)>,
     target_height: f32,

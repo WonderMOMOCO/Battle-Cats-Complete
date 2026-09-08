@@ -5,8 +5,6 @@ use iced::Element;
 use super::resolved::Rule;
 use super::{Draft, Message};
 
-// DropItem.csv, measured across the 134 shipped rows. nyanko hand-parses this file and
-// publishes no column table, so the layout is restated here and pinned against its parser.
 const MAP_ID: usize = 0;
 const CROWNS: usize = 4;
 const STAGES: usize = 8;
@@ -20,8 +18,6 @@ const ZOMBIE_FIRST: usize = MATERIAL_FIRST + MATERIALS;
 
 pub(crate) const WIDTH: usize = ZOMBIE_FIRST + MATERIALS;
 
-// The crown multipliers are the only cells in the file written with a decimal point; the
-// five the corpus ships are 0.5, 0.75, 1, 1.25 and 1.5.
 const CROWN_PLACES: u32 = 2;
 const CROWN_UNIT: i32 = 100;
 
@@ -56,8 +52,6 @@ pub(super) fn decimals(index: usize) -> u32 {
     }
 }
 
-// A multiplier the file leaves out is a plain one, which is a hundred hundredths. Every
-// other column counts up from nothing.
 pub(super) fn fallback(index: usize) -> i32 {
     match (CROWN_FIRST..STAGE_FIRST).contains(&index) {
         true => CROWN_UNIT,
@@ -65,10 +59,6 @@ pub(super) fn fallback(index: usize) -> i32 {
     }
 }
 
-// Measured: No Drop runs 33-60 and the eight material chances 0-67, the two adding up to a
-// hundred on all but one shipped row, so both are percentages. A stage's cell holds only 3
-// or 4 across the whole file, which is a count of drops rather than the item identifier
-// nyanko's doc comment names -- the Materials panel reads it as a count too.
 pub(super) fn rule(index: usize) -> Rule {
     match index {
         MAP_ID => Rule::Floor(0),
@@ -82,8 +72,6 @@ pub(super) fn view<'a>(draft: &'a Draft, width: f32, query: &'a str, armed: bool
     super::unitbuy::searched(draft, width, query, armed, Some(NOTICE), NOTICE_SIZE)
 }
 
-// drop_chara.csv, one row per unit a stage can unlock. Measured: no shipped stage references
-// more than one of them, so the row is addressed outright rather than switched between.
 pub(super) const CHARA_WIDTH: usize = 3;
 
 const CHARA_NOTICE: &str =
@@ -95,8 +83,6 @@ pub(super) fn chara_label(index: usize) -> &'static str {
     CHARA_LABELS.get(index).copied().unwrap_or("Column")
 }
 
-// The file's own placeholder rows carry -1 in the leading cell, so it floors there; the
-// other two count up from nothing.
 pub(super) fn chara_rule(index: usize) -> Rule {
     match index {
         0 => Rule::Floor(-1),

@@ -339,8 +339,6 @@ impl State {
                 && !self.exporter.loop_supported)
                 || (self.exporter.export_mode == ExportMode::Showcase && !self.exporter.showcasable);
 
-            // Arriving on a rig the mode cannot describe drops back to Manual rather than
-            // leaving a mode selected that would export the resting pose over and over.
             if unsupported {
                 self.exporter.export_mode = ExportMode::Manual;
                 self.exporter.frame_start = 0;
@@ -415,9 +413,6 @@ impl State {
             Animation::parse(&bytes).ok()
         };
 
-        // A role the rig has no clip for contributes only the resting pose, so its segment is
-        // dropped rather than left on the settings default. Measured on the shipped corpus,
-        // 142 of 3,027 rigs carry some of the four standard slots but not all four.
         for role in [Role::Walk, Role::Idle, Role::Attack, Role::Knockback] {
             if data.role_path(role).is_none() {
                 self.length_of(role, 0);

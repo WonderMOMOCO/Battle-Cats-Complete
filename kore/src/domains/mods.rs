@@ -166,9 +166,6 @@ pub fn place(mod_name: &str, source: &Path, name: &str) -> Result<PathBuf, std::
     copy_into(mod_name, source, destination)
 }
 
-// The first write path that creates a file rather than copying one. A stage the game has
-// never seen has no vanilla original to place, and the engine faults on a missing asset, so
-// the placeholder has to be written outright.
 pub fn create(mod_name: &str, name: &str, bytes: &[u8]) -> Result<PathBuf, std::io::Error> {
     let root = Path::new(MODS_ROOT).join(mod_name);
     let destination = locate(&root, name).unwrap_or_else(|| slot(mod_name, OsStr::new(name)));

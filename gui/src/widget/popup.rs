@@ -32,10 +32,6 @@ const TITLE_SIZE: f32 = 14.0;
 const TITLE_RESERVE: f32 = 34.0;
 const ELLIPSIS: char = '…';
 
-// The budget used to be a character count against a flat 0.55 glyph ratio, which is an
-// average for ASCII and badly wrong for anything full-width: a Japanese map name measures
-// about twice what it was charged, so the title ran out past the header. Widths come off
-// the shaper now, at the same size, font and Auto shaping the label renders with.
 fn trimmed(title: &str, room: f32) -> String {
     let mut ruler = Ruler::new(Font::DEFAULT, TITLE_SIZE);
 
@@ -47,8 +43,6 @@ fn trimmed(title: &str, room: f32) -> String {
     let mut low = 0;
     let mut high = glyphs.len();
 
-    // Binary search rather than a descending walk: a fit loop that steps one glyph at a
-    // time is the shape that cost `name_box` up to 29 shapes for one label.
     while low < high {
         let keep = (low + high).div_ceil(2);
 
@@ -376,8 +370,6 @@ pub struct State {
 }
 
 impl State {
-    // `view` runs per frame and is re-entered several times during an animation, so the
-    // measured fit is kept until the title or the room it has actually changes.
     fn fitted(&self, title: &str, room: f32) -> String {
         let mut fit = self.fit.borrow_mut();
 

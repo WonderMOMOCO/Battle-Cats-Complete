@@ -6,9 +6,6 @@ const NAME_COLUMN: usize = 1;
 const STORY_LAST_NAMED: u32 = 47;
 const STORY_PREFIXES: [&str; 4] = ["EC", "W", "Space", "Z"];
 
-// The story chapters put one stage per line and read the first cell; every other chapter
-// puts a whole map on one line and reads the cell at the stage index. Both the scan and the
-// editor address a name through this, so the two cannot drift.
 pub fn named_by_stage(prefix: &str) -> bool {
     STORY_PREFIXES.contains(&prefix)
 }

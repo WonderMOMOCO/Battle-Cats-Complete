@@ -190,8 +190,6 @@ pub(super) fn items(context: &Context) -> Vec<Item> {
     items
 }
 
-// Creating and removing a stage or a map. Removal is confined to what the mod itself holds,
-// so a vanilla stage is never unpicked out from under the game mount.
 fn making(target: &MakeTarget) -> Vec<Item> {
     let mut items = Vec::new();
 
@@ -202,12 +200,8 @@ fn making(target: &MakeTarget) -> Vec<Item> {
         ];
     }
 
-    // Creating writes files, so it needs a mod to write them into; removing follows the same
-    // mount rules as every other Delete, which means the game mount asks to be unlocked first.
     let mut adding = |held: &Option<Making>, full: bool, what: &str| {
         let Some(held) = held else {
-            // Nothing to offer at all is not the same as every slot being taken, and only the
-            // second has a reason worth printing.
             if full {
                 items.push(Item::disabled(format!("New {what}"), FULL_NOTICE));
             }
@@ -233,8 +227,6 @@ fn making(target: &MakeTarget) -> Vec<Item> {
         let seat = mount(held.target_mod.as_deref(), held.unlocked);
         let label = format!("Remove \"{}\" from \"{}\"", held.subject(), seat.name);
 
-        // Removing a mod's copy of something the game also ships just uncovers the original,
-        // so it is refused rather than left looking like it worked.
         if seat.target.is_some() && held.vanilla {
             items.push(Item::disabled(label, VANILLA_NOTICE));
 

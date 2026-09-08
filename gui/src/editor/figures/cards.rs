@@ -64,8 +64,6 @@ pub(super) fn grid<'a>(
     smooth_scroll(area).into()
 }
 
-// The same cards without the scroll area, for rows that stay pinned above it. `header`
-// supplies the surrounding padding, so this one only centres.
 pub(super) fn band<'a>(draft: &'a Draft, width: f32, shown: &[usize]) -> Element<'a, Message> {
     container(lay(draft, width, shown, None)).width(Length::Fill).center_x(Length::Fill).into()
 }

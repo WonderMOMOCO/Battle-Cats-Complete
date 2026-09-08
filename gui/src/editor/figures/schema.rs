@@ -96,8 +96,6 @@ pub(super) static COSTS: Schema = Schema { subject: Subject::Costs, comments: fa
 
 pub(super) static COMBO: Schema = Schema { subject: Subject::Combo, comments: false };
 
-// MapStageData rows carry trailing `//` documentation in the story chapters and in plenty of
-// event maps, so the subject keeps its comments.
 pub(super) static MAP_STAGE: Schema = Schema { subject: Subject::MapStage, comments: true };
 
 pub(super) static MAP_DROPS: Schema = Schema { subject: Subject::MapDrops, comments: true };

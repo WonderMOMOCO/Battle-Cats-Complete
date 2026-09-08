@@ -97,8 +97,6 @@ impl State {
             .padding(CELL_PADDING)
             .width(Length::Fill);
 
-        // The row carries the item it awards, so right-clicking one edits that item rather
-        // than whichever the stage lists first.
         editor::target(held, editor::Target::TreasureDrop(item_id))
     }
 

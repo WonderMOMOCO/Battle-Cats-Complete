@@ -179,10 +179,6 @@ impl State {
         }
     }
 
-    // Showcase composes the standard walk/idle/attack/knockback clips, so it only means
-    // anything once those roles resolved. They resolve from a unit's own slot numbering, so
-    // a Studio set in its own workspace and every Utilities rig carry none -- the export
-    // would render the resting pose for every frame and read as "the animation is missing".
     pub fn showcasable(&self) -> bool {
         self.clips.iter().any(|clip| clip.role.is_some() && clip.anim.is_some())
     }
