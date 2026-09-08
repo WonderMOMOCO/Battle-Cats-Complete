@@ -17,7 +17,15 @@ All mods initialized through this avenue will have a simple internal structure c
 Enter the `mods` folder next to the Battle Cats Complete binary (create it if it doesn't exist) and create a new folder inside of it. The folder name will be the name of your Mod in the Mods list.
 
 ## Develop
-There are multiple different avenues that you can take to develop your Mod in different ways. Detailed below is information on how modified assets are handled by BCC as well as what modified assets BCC can help you create.
+There are multiple different avenues that you can take to develop your Mod in different ways. Detailed below is information on how modified assets are handled by BCC as well as avenues BCC can help you modify.
 
 ### Assets
 Within a mods directory, all files act as an **override** that replaces the vanilla asset, and only that one asset. This means the **only** files you need inside this directory are your **custom** modified assets, not the whole database. This behavior mimics how the game behaves when custom assets are injected.
+
+All files edited under a mod are automatically added to that mod for you. Replacing existing files will always ask you for confirmation before destroying the original.
+
+### Editor
+If you are looking to modify data such as Cat & Enemy Abilities, Cat & Enemy Images, as well as Stage Data, read the `Editor` page available on the left sidebar.
+
+### Studio
+If you are looking to modify data such as Entity Spritesheets, Models, as well as Animations, read the `Studio` page available on the left sidebar

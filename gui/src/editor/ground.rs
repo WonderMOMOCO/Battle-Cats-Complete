@@ -1,7 +1,8 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use nyanko::chapter::stage::BattlegroundEntry;
+use nyanko::chapter::stage::{Battleground, BattlegroundEntry};
+use nyanko::common::Column;
 use nyanko::combat::{Scale, Separator};
 use nyanko::common::FromColumn;
 use nyanko::common;
@@ -44,56 +45,131 @@ const LABELS: [&str; WIDTH] = [
     "Kills",
 ];
 
-pub(super) fn label(index: usize) -> String {
-    LABELS.get(index).map_or_else(|| format!("Column {}", index + 1), |held| (*held).to_owned())
+const HEAD_LABELS: [&str; 2] = ["Base ID", "No Continues"];
+
+const SETUP_LABELS: [&str; 10] = [
+    "Width",
+    "Base HP",
+    "Spawn Min",
+    "Spawn Max",
+    "Background",
+    "Max Enemies",
+    "Anim Base ID",
+    "Time Limit",
+    "Indestructible",
+    "Unknown",
+];
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(super) enum Kind {
+    Head,
+    Setup,
+    Spawn,
 }
 
-pub(super) fn fallback(index: usize) -> i32 {
-    BattlegroundEntry::COLUMNS
-        .iter()
-        .find(|column| column.index == index)
-        .and_then(|column| i32::from_column(column.default))
-        .unwrap_or_default()
+impl Kind {
+    fn labels(self) -> &'static [&'static str] {
+        match self {
+            Kind::Head => &HEAD_LABELS,
+            Kind::Setup => &SETUP_LABELS,
+            Kind::Spawn => &LABELS,
+        }
+    }
+
+    fn width(self) -> usize {
+        self.labels().len()
+    }
+}
+
+pub(super) fn label(kind: Kind, index: usize) -> String {
+    kind.labels()
+        .get(index)
+        .map_or_else(|| format!("Column {}", index + 1), |held| (*held).to_owned())
+}
+
+fn found<T>(table: &'static [Column<T>], index: usize) -> Option<&'static Column<T>> {
+    table.iter().find(|column| column.index == index)
+}
+
+pub(super) fn fallback(kind: Kind, index: usize) -> i32 {
+    let declared = match kind {
+        Kind::Head => found(Battleground::HEADER_COLUMNS, index).map(|held| held.default),
+        Kind::Setup => found(Battleground::CONFIG_COLUMNS, index).map(|held| held.default),
+        Kind::Spawn => found(BattlegroundEntry::COLUMNS, index).map(|held| held.default),
+    };
+
+    declared.and_then(i32::from_column).unwrap_or_default()
+}
+
+fn head_rule(index: usize) -> Rule {
+    match index {
+        0 => Rule::Floor(-1),
+        1 => Rule::Flag,
+        _ => Rule::Plain,
+    }
+}
+
+fn setup_rule(index: usize) -> Rule {
+    match index {
+        6 => Rule::Offset(ENEMY_OFFSET),
+        0..=7 => Rule::Floor(0),
+        8 => Rule::Flag,
+        _ => Rule::Plain,
+    }
 }
 
 fn seed(index: usize, shown: i32) -> i32 {
-    to_raw(index, rule(index).to_raw(shown, EditorMode::Resolved), EditorMode::Resolved)
+    let rule = rule(Kind::Spawn, index);
+
+    to_raw(Kind::Spawn, index, rule.to_raw(shown, EditorMode::Resolved), EditorMode::Resolved)
 }
 
-pub(super) fn hint(index: usize, values: EditorMode) -> String {
-    let held = fallback(index);
+pub(super) fn hint(kind: Kind, index: usize, values: EditorMode) -> String {
+    let held = fallback(kind, index);
+    let shown = rule(kind, index).to_display(to_display(kind, index, held, values), values);
 
-    rule(index).to_display(to_display(index, held, values), values).to_string()
+    if shown < 0 {
+        return String::new();
+    }
+
+    shown.to_string()
 }
 
-fn scale(index: usize) -> Scale {
-    BattlegroundEntry::COLUMNS
-        .iter()
-        .find(|column| column.index == index)
-        .map_or(Scale::Raw, |column| column.scale)
+fn scale(kind: Kind, index: usize) -> Scale {
+    match kind {
+        Kind::Head => found(Battleground::HEADER_COLUMNS, index).map_or(Scale::Raw, |held| held.scale),
+        Kind::Setup => found(Battleground::CONFIG_COLUMNS, index).map_or(Scale::Raw, |held| held.scale),
+        Kind::Spawn => found(BattlegroundEntry::COLUMNS, index).map_or(Scale::Raw, |held| held.scale),
+    }
 }
 
-pub(super) fn to_display(index: usize, raw: i32, values: EditorMode) -> i32 {
+pub(super) fn to_display(kind: Kind, index: usize, raw: i32, values: EditorMode) -> i32 {
     if values == EditorMode::Raw {
         return raw;
     }
 
-    scale(index).apply(raw)
+    scale(kind, index).apply(raw)
 }
 
-pub(super) fn to_raw(index: usize, display: i32, values: EditorMode) -> i32 {
+pub(super) fn to_raw(kind: Kind, index: usize, display: i32, values: EditorMode) -> i32 {
     if values == EditorMode::Raw {
         return display;
     }
 
-    match scale(index) {
+    match scale(kind, index) {
         Scale::Double => display / 2,
         Scale::Quarter => display * 4,
         _ => display,
     }
 }
 
-pub(super) fn rule(index: usize) -> Rule {
+pub(super) fn rule(kind: Kind, index: usize) -> Rule {
+    match kind {
+        Kind::Head => return head_rule(index),
+        Kind::Setup => return setup_rule(index),
+        Kind::Spawn => {}
+    }
+
     match index {
         ENEMY_ID => Rule::Offset(ENEMY_OFFSET),
         AMOUNT | 5 | 6 | 7 | 8 | 12 => Rule::Plain,
@@ -132,6 +208,7 @@ pub(super) fn split(line: &str, delimiter: char) -> Row {
 }
 
 pub(super) struct Sheet {
+    pub(super) head: Option<usize>,
     pub(super) config: usize,
     pub(super) spawns: Vec<usize>,
 }
@@ -161,9 +238,9 @@ pub(super) fn scan(lines: &[String], delimiter: char) -> Option<Sheet> {
 
     let (first, opening) = live.next()?;
 
-    let config = match heads(&cells(opening, delimiter)) {
-        true => live.next()?.0,
-        false => first,
+    let (head, config) = match heads(&cells(opening, delimiter)) {
+        true => (Some(first), live.next()?.0),
+        false => (None, first),
     };
 
     let spawns = live
@@ -173,7 +250,7 @@ pub(super) fn scan(lines: &[String], delimiter: char) -> Option<Sheet> {
         })
         .collect();
 
-    Some(Sheet { config, spawns })
+    Some(Sheet { head, config, spawns })
 }
 
 #[derive(Debug, Clone)]
@@ -221,8 +298,9 @@ pub(super) struct Draft {
     stamp: Stamp,
     delimiter: char,
     lines: Vec<String>,
-    config: usize,
-    spawns: Vec<usize>,
+    seats: Vec<usize>,
+    kinds: Vec<Kind>,
+    chrome: usize,
     rows: Vec<Row>,
     inputs: Vec<Vec<String>>,
     touched: Vec<usize>,
@@ -247,13 +325,18 @@ impl Draft {
         let lines: Vec<String> = body.lines().map(str::to_owned).collect();
 
         let sheet = scan(&lines, delimiter)?;
-        let rows: Vec<Row> = sheet
-            .spawns
+        let (seats, kinds, chrome) = seating(&sheet);
+
+        let rows: Vec<Row> = seats
             .iter()
             .filter_map(|index| lines.get(*index).map(|line| split(line, delimiter)))
             .collect();
 
-        let inputs = rows.iter().map(|row| shown_row(row, plan.values)).collect();
+        let inputs = rows
+            .iter()
+            .zip(&kinds)
+            .map(|(row, kind)| shown_row(*kind, row, plan.values))
+            .collect();
         let touched = vec![0; rows.len()];
 
         Some(Draft {
@@ -262,8 +345,9 @@ impl Draft {
             stamp,
             delimiter,
             lines,
-            config: sheet.config,
-            spawns: sheet.spawns,
+            seats,
+            kinds,
+            chrome,
             rows,
             inputs,
             touched,
@@ -285,6 +369,14 @@ impl Draft {
 
     pub(super) fn width(&self, row: usize) -> usize {
         self.rows.get(row).map_or(0, |held| held.cells.len())
+    }
+
+    pub(super) fn kind(&self, row: usize) -> Kind {
+        self.kinds.get(row).copied().unwrap_or(Kind::Spawn)
+    }
+
+    pub(super) fn chrome(&self) -> usize {
+        self.chrome
     }
 
     pub(super) fn reads(&self, row: usize, column: usize) -> i32 {
@@ -319,16 +411,19 @@ impl Draft {
             return;
         }
 
-        let rule = rule(column);
+        let kind = self.kind(row);
+        let rule = rule(kind, column);
 
         if !typable(typed, rule.signed(values)) {
             return;
         }
 
         let raw = match typed.is_empty() {
-            true => fallback(column),
+            true => fallback(kind, column),
             false => match typed.parse::<i32>() {
-                Ok(display) => to_raw(column, rule.to_raw(rule.clamp(display, values), values), values),
+                Ok(display) => {
+                    to_raw(kind, column, rule.to_raw(rule.clamp(display, values), values), values)
+                }
                 Err(_) => {
                     self.hold(row, column, typed);
 
@@ -352,9 +447,10 @@ impl Draft {
                 return;
             }
 
-            let raw = part
-                .parse::<i32>()
-                .map_or_else(|_| fallback(column), |shown| to_raw(column, shown.max(0), values));
+            let raw = part.parse::<i32>().map_or_else(
+                |_| fallback(Kind::Spawn, column),
+                |shown| to_raw(Kind::Spawn, column, shown.max(0), values),
+            );
 
             self.write(row, column, raw);
         }
@@ -414,7 +510,8 @@ impl Draft {
             *mark = (*mark).max(column + 1);
         }
 
-        let shown = shown_cell(self.rows[row].cells[column], column, values);
+        let kind = self.kind(row);
+        let shown = shown_cell(kind, self.rows[row].cells[column], column, values);
 
         if let Some(field) = self.inputs.get_mut(row).and_then(|held| held.get_mut(column)) {
             *field = shown;
@@ -432,7 +529,7 @@ impl Draft {
 
     fn stage(&mut self, row: usize) {
         let (Some(held), Some(line), Some(touched)) =
-            (self.rows.get(row), self.spawns.get(row).copied(), self.touched.get(row).copied())
+            (self.rows.get(row), self.seats.get(row).copied(), self.touched.get(row).copied())
         else {
             return;
         };
@@ -456,10 +553,13 @@ impl Draft {
             return;
         };
 
-        self.config = sheet.config;
-        self.spawns = sheet.spawns;
+        let (seats, kinds, chrome) = seating(&sheet);
+
+        self.seats = seats;
+        self.kinds = kinds;
+        self.chrome = chrome;
         self.rows = self
-            .spawns
+            .seats
             .iter()
             .filter_map(|index| self.lines.get(*index).map(|line| split(line, self.delimiter)))
             .collect();
@@ -469,26 +569,37 @@ impl Draft {
     }
 
     fn add(&mut self) {
-        let width = self.rows.iter().map(|held| held.stored).max().unwrap_or(COMMON_WIDTH).max(COMMON_WIDTH);
+        let width = self
+            .rows
+            .iter()
+            .skip(self.chrome)
+            .map(|held| held.stored)
+            .max()
+            .unwrap_or(COMMON_WIDTH)
+            .max(COMMON_WIDTH);
 
         let seeded = |column: usize| {
             SEEDS
                 .iter()
                 .find(|(held, _)| *held == column)
-                .map_or_else(|| fallback(column), |(_, shown)| seed(column, *shown))
+                .map_or_else(|| fallback(Kind::Spawn, column), |(_, shown)| seed(column, *shown))
         };
 
         let fields: Vec<String> =
             (0..width).map(|column| seeded(column).to_string()).collect();
 
-        let at = self.spawns.last().map_or(self.config, |last| *last) + 1;
+        let at = self.seats.last().copied().unwrap_or_default() + 1;
         self.lines.insert(at.min(self.lines.len()), fields.join(&self.delimiter.to_string()));
 
         self.restock();
     }
 
     fn drop(&mut self, row: usize) {
-        let Some(line) = self.spawns.get(row).copied() else {
+        if row < self.chrome {
+            return;
+        }
+
+        let Some(line) = self.seats.get(row).copied() else {
             return;
         };
 
@@ -501,7 +612,12 @@ impl Draft {
     }
 
     fn refresh(&mut self) {
-        self.inputs = self.rows.iter().map(|row| shown_row(row, self.plan.values)).collect();
+        self.inputs = self
+            .rows
+            .iter()
+            .zip(&self.kinds)
+            .map(|(row, kind)| shown_row(*kind, row, self.plan.values))
+            .collect();
     }
 
     fn sync(&mut self) {
@@ -523,10 +639,13 @@ impl Draft {
 
         self.lines = vanilla;
         self.delimiter = delimiter;
-        self.config = sheet.config;
-        self.spawns = sheet.spawns;
+
+        let (seats, kinds, chrome) = seating(&sheet);
+        self.seats = seats;
+        self.kinds = kinds;
+        self.chrome = chrome;
         self.rows = self
-            .spawns
+            .seats
             .iter()
             .filter_map(|index| self.lines.get(*index).map(|line| split(line, delimiter)))
             .collect();
@@ -594,6 +713,26 @@ impl Draft {
     }
 }
 
+fn seating(sheet: &Sheet) -> (Vec<usize>, Vec<Kind>, usize) {
+    let mut seats = Vec::new();
+    let mut kinds = Vec::new();
+
+    if let Some(head) = sheet.head {
+        seats.push(head);
+        kinds.push(Kind::Head);
+    }
+
+    seats.push(sheet.config);
+    kinds.push(Kind::Setup);
+
+    let chrome = seats.len();
+
+    seats.extend(sheet.spawns.iter().copied());
+    kinds.extend(std::iter::repeat_n(Kind::Spawn, sheet.spawns.len()));
+
+    (seats, kinds, chrome)
+}
+
 fn magnifications(typed: &str) -> (Option<&str>, Option<&str>) {
     let mut parts = typed.split(['/', '\\', '|']).map(str::trim);
     let health = parts.next();
@@ -602,18 +741,18 @@ fn magnifications(typed: &str) -> (Option<&str>, Option<&str>) {
     (health, attack.or(health))
 }
 
-fn shown_row(row: &Row, values: EditorMode) -> Vec<String> {
-    (0..WIDTH.max(row.cells.len()))
-        .map(|column| shown_cell(row.cells.get(column).copied().unwrap_or_default(), column, values))
+fn shown_row(kind: Kind, row: &Row, values: EditorMode) -> Vec<String> {
+    (0..kind.width().max(row.cells.len()))
+        .map(|column| shown_cell(kind, row.cells.get(column).copied().unwrap_or_default(), column, values))
         .collect()
 }
 
-fn shown_cell(raw: i32, column: usize, values: EditorMode) -> String {
-    if raw == fallback(column) {
+fn shown_cell(kind: Kind, raw: i32, column: usize, values: EditorMode) -> String {
+    if raw == fallback(kind, column) {
         return String::new();
     }
 
-    rule(column).to_display(to_display(column, raw, values), values).to_string()
+    rule(kind, column).to_display(to_display(kind, column, raw, values), values).to_string()
 }
 
 fn typable(value: &str, signed: bool) -> bool {
@@ -667,6 +806,9 @@ const KILLS_SPAN: u16 = 5;
 
 const RANGE_MARK: &str = "~";
 const BUFFER_MARK: char = '!';
+const SETTING_BAND: usize = 6;
+const CHROME_GAP: f32 = 6.0;
+const CHROME_RULE: f32 = 1.0;
 const CLOSE_MARK: &str = "\u{00d7}";
 const CONFIRM_MARK: &str = "?";
 const DROP_WIDTH: f32 = 18.0;
@@ -685,6 +827,7 @@ const PICK_SEAT: f32 = 216.0;
 const ENEMY_MARKS: [&str; 4] = ["_e", "_E", "-e", "-E"];
 const PICK_JOINT: &str = "::";
 const PICK_JOINT_GAP: f32 = 5.0;
+const TIP_PADDING: f32 = 6.0;
 const COMMON_WIDTH: usize = 10;
 const FIRST_ENEMY: i32 = 0;
 
@@ -734,6 +877,9 @@ impl std::fmt::Display for Treatment {
         formatter.write_str(self.label)
     }
 }
+
+const FLAGS: [Treatment; 2] =
+    [Treatment { raw: 0, label: "No" }, Treatment { raw: 1, label: "Yes" }];
 
 const TREATMENTS: [Treatment; 3] = [
     Treatment { raw: 0, label: "No" },
@@ -797,7 +943,7 @@ impl Shape {
 fn raw_columns(draft: &Draft) -> Vec<(String, u16, Cell)> {
     let widest = (0..draft.len()).map(|row| draft.width(row)).max().unwrap_or(WIDTH).max(WIDTH);
 
-    (0..widest).map(|column| (label(column), 1, Cell::One(column))).collect()
+    (0..widest).map(|column| (label(Kind::Spawn, column), 1, Cell::One(column))).collect()
 }
 
 pub(super) fn kind() -> crate::widget::popup::Kind {
@@ -1053,10 +1199,7 @@ impl State {
         let landing: iced::Element<'a, Message> = match &found {
             Some((id, name)) => iced::widget::row![
                 faded(name.clone()),
-                text(PICK_JOINT).size(PICK_LABEL).font(iced::Font {
-                    weight: iced::font::Weight::Bold,
-                    ..iced::Font::DEFAULT
-                }),
+                joint(),
                 faded(format!("{id:03}-E")),
             ]
             .spacing(PICK_JOINT_GAP)
@@ -1081,7 +1224,7 @@ impl State {
         draft: &'a Draft,
         enemies: &'a std::collections::HashMap<u32, kore::domains::enemy::scanner::EnemyEntry>,
     ) -> iced::Element<'a, Message> {
-        use iced::widget::{column, container, scrollable, Column};
+        use iced::widget::{container, scrollable, Column};
         use iced::Length;
 
         let fixed = draft.values() == EditorMode::Raw;
@@ -1094,7 +1237,7 @@ impl State {
         let mut grid = Column::new().spacing(ROW_GAP);
         grid = grid.push(headings(&shown, fixed));
 
-        for row in 0..draft.len() {
+        for row in draft.chrome()..draft.len() {
             grid = grid.push(self.spawn_row(draft, enemies, &shown, row, fixed));
         }
 
@@ -1124,7 +1267,14 @@ impl State {
             .width(Length::Fill)
             .height(Length::Fill);
 
-        column![crate::widget::smooth_scroll(area), self.footer()].height(Length::Fill).into()
+        let mut stack = Column::new().height(Length::Fill);
+
+        if draft.chrome() > 0 {
+            stack = stack.push(chrome(draft));
+            stack = stack.push(iced::widget::rule::horizontal(CHROME_RULE));
+        }
+
+        stack.push(crate::widget::smooth_scroll(area)).push(self.footer()).into()
     }
 
     fn footer<'a>(&'a self) -> iced::Element<'a, Message> {
@@ -1218,7 +1368,15 @@ impl State {
             .style(|_theme: &iced::Theme, _status| iced::widget::button::Style::default())
             .on_press(Message::Picking(Some(row)));
 
-        container(icon).width(Length::Fill).center_x(Length::Fill).into()
+        let named = u32::try_from(shown).ok().and_then(|id| enemies.get(&id)).map(|held| held.name.clone());
+
+        let bubble = iced::widget::container(spoken(named, shown))
+            .padding(TIP_PADDING)
+            .style(iced::widget::container::bordered_box);
+
+        let told = iced::widget::tooltip(icon, bubble, iced::widget::tooltip::Position::Top);
+
+        container(told).width(Length::Fill).center_x(Length::Fill).into()
     }
 
     fn icon(
@@ -1238,6 +1396,100 @@ impl State {
     }
 }
 
+fn chrome<'a>(draft: &'a Draft) -> iced::Element<'a, Message> {
+    use iced::widget::{container, Column};
+    use iced::{Length, Padding};
+
+    let mut stack = Column::new().spacing(CHROME_GAP);
+
+    for row in 0..draft.chrome() {
+        stack = stack.push(settings(draft, row));
+    }
+
+    container(stack)
+        .padding(
+            Padding::ZERO.left(BODY_PADDING).right(BODY_PADDING).top(BODY_PADDING).bottom(BODY_PADDING),
+        )
+        .width(Length::Fill)
+        .into()
+}
+
+fn settings<'a>(draft: &'a Draft, row: usize) -> iced::Element<'a, Message> {
+    use iced::widget::Column;
+    use iced::Length;
+
+    let kind = draft.kind(row);
+    let width = draft.width(row).max(kind.width());
+    let mut table = Column::new().width(Length::Fill);
+
+    for (band, first) in (0..width).step_by(SETTING_BAND).enumerate() {
+        let seats: Vec<Option<usize>> =
+            (first..first + SETTING_BAND).map(|column| (column < width).then_some(column)).collect();
+
+        table = table.push(band_labels(kind, &seats));
+        table = table.push(band_fields(draft, row, &seats, band));
+    }
+
+    table.into()
+}
+
+fn band_labels<'a>(kind: Kind, seats: &[Option<usize>]) -> iced::Element<'a, Message> {
+    use iced::alignment::Vertical;
+    use iced::widget::{container, Row, Space};
+    use iced::Length;
+
+    let mut line = Row::new().spacing(COLUMN_GAP).align_y(Vertical::Center);
+
+    for seat in seats {
+        line = match seat {
+            Some(column) => line.push(
+                crate::app::theme::table_cell_text(label(kind, *column), Length::FillPortion(1))
+                    .size(CELL_SIZE),
+            ),
+            None => line.push(Space::new().width(Length::FillPortion(1))),
+        };
+    }
+
+    container(line)
+        .padding(CELL_PADDING)
+        .width(Length::Fill)
+        .style(crate::app::theme::zebra_table_header)
+        .into()
+}
+
+fn band_fields<'a>(
+    draft: &'a Draft,
+    row: usize,
+    seats: &[Option<usize>],
+    band: usize,
+) -> iced::Element<'a, Message> {
+    use iced::alignment::Vertical;
+    use iced::widget::{container, Row, Space};
+    use iced::{Length, Theme};
+
+    let mut line = Row::new().spacing(COLUMN_GAP).align_y(Vertical::Center);
+
+    for seat in seats {
+        line = match seat {
+            Some(column) => {
+                let held = match rule(draft.kind(row), *column) {
+                    Rule::Flag if draft.values() != EditorMode::Raw => flagged(draft, row, *column),
+                    _ => field(draft, row, *column),
+                };
+
+                line.push(container(held).width(Length::FillPortion(1)))
+            }
+            None => line.push(Space::new().width(Length::FillPortion(1))),
+        };
+    }
+
+    container(line)
+        .padding(CELL_PADDING)
+        .width(Length::Fill)
+        .style(move |theme: &Theme| crate::app::theme::zebra_table_row(theme, band))
+        .into()
+}
+
 fn adding<'a>() -> iced::Element<'a, Message> {
     use iced::widget::button;
     use iced::Length;
@@ -1247,6 +1499,32 @@ fn adding<'a>() -> iced::Element<'a, Message> {
         .padding(CELL_PADDING)
         .on_press(Message::Added)
         .style(crate::app::theme::primary_button)
+        .into()
+}
+
+fn joint<'a>() -> iced::widget::Text<'a> {
+    iced::widget::text(PICK_JOINT).size(PICK_LABEL).font(iced::Font {
+        weight: iced::font::Weight::Bold,
+        ..iced::Font::DEFAULT
+    })
+}
+
+fn spoken<'a>(named: Option<String>, id: i32) -> iced::Element<'a, Message> {
+    use iced::alignment::Vertical;
+    use iced::widget::{text, Row};
+
+    let marked = format!("{id:03}-E");
+
+    let Some(name) = named.filter(|held| !held.trim().is_empty()) else {
+        return text(marked).size(PICK_LABEL).into();
+    };
+
+    Row::new()
+        .spacing(PICK_JOINT_GAP)
+        .align_y(Vertical::Center)
+        .push(text(name).size(PICK_LABEL))
+        .push(joint())
+        .push(text(marked).size(PICK_LABEL))
         .into()
 }
 
@@ -1278,16 +1556,29 @@ fn headings<'a>(shown: &[(String, u16, Cell)], fixed: bool) -> iced::Element<'a,
 }
 
 fn treatment<'a>(draft: &'a Draft, row: usize, column: usize) -> iced::Element<'a, Message> {
+    chosen(draft, row, column, &TREATMENTS)
+}
+
+fn flagged<'a>(draft: &'a Draft, row: usize, column: usize) -> iced::Element<'a, Message> {
+    chosen(draft, row, column, &FLAGS)
+}
+
+fn chosen<'a>(
+    draft: &'a Draft,
+    row: usize,
+    column: usize,
+    offered: &'static [Treatment],
+) -> iced::Element<'a, Message> {
     use iced::widget::pick_list;
     use iced::Length;
 
     let held = draft.reads(row, column);
 
-    let Some(current) = TREATMENTS.iter().find(|shown| shown.raw == held).cloned() else {
+    let Some(current) = offered.iter().find(|shown| shown.raw == held).cloned() else {
         return field(draft, row, column);
     };
 
-    pick_list(TREATMENTS.to_vec(), Some(current), move |pick: Treatment| {
+    pick_list(offered.to_vec(), Some(current), move |pick: Treatment| {
         Message::Picked(row, column, pick.raw)
     })
     .width(Length::Fill)
@@ -1317,7 +1608,7 @@ fn field<'a>(draft: &'a Draft, row: usize, column: usize) -> iced::Element<'a, M
     use iced::widget::text_input;
     use iced::Length;
 
-    text_input(&hint(column, draft.values()), draft.input(row, column))
+    text_input(&hint(draft.kind(row), column, draft.values()), draft.input(row, column))
         .on_input(move |typed| Message::Changed(row, column, typed))
         .on_submit(Message::Focused(None))
         .size(CELL_SIZE)
@@ -1342,7 +1633,7 @@ mod tests {
 
     use nyanko::chapter::stage::Battleground;
 
-    use super::{body, cells, scan};
+    use super::{body, cells, scan, Kind, Rule};
 
     // nyanko drops one row from `entries` on sight: the placeholder that is enemy 21 at
     // frame 27000 (raw id 23, raw frame 13500 before its Double scale). The editor keeps
@@ -1394,6 +1685,62 @@ mod tests {
     // editor shows them at: a spawn of 2 frames is a stored 1, because that column is Double.
     // The buffer prefix lets a half-typed value sit in the field without being committed
     // and normalised under the cursor, the way it does in the figures editor.
+    // The header and config rows are seated ahead of the spawns, so a file that opens
+    // straight into its config still leaves the spawn rows starting at the same place.
+    #[test]
+    fn the_chrome_rows_are_seated_before_the_spawns() {
+        let with_head = super::Sheet { head: Some(0), config: 1, spawns: vec![2, 3] };
+        let (seats, kinds, chrome) = super::seating(&with_head);
+
+        assert_eq!(seats, [0, 1, 2, 3]);
+        assert_eq!(chrome, 2, "a header and a config sit ahead of the spawns");
+        assert_eq!(kinds[0], Kind::Head);
+        assert_eq!(kinds[1], Kind::Setup);
+        assert_eq!(kinds[2], Kind::Spawn);
+
+        let bare = super::Sheet { head: None, config: 0, spawns: vec![1] };
+        let (seats, kinds, chrome) = super::seating(&bare);
+
+        assert_eq!(seats, [0, 1]);
+        assert_eq!(chrome, 1, "a file with no header row still seats its config");
+        assert_eq!(kinds[0], Kind::Setup);
+    }
+
+    // Each row kind reads its own published table, so the same index means different
+    // things: column 1 is the spawn count, the config's base hitpoints and the header's
+    // no-continues flag.
+    // Measured over the 6,321 shipped stages: the header's second column runs 3,842 zeros
+    // to 2,117 ones and the config's ninth 6,237 to 62, so both are booleans. The header's
+    // base id genuinely reaches -1 (449 rows), so it floors there rather than at zero.
+    #[test]
+    fn the_chrome_rules_follow_their_measured_domains() {
+        assert_eq!(super::rule(Kind::Head, 1), Rule::Flag);
+        assert_eq!(super::rule(Kind::Setup, 8), Rule::Flag);
+        assert_eq!(super::rule(Kind::Head, 0), Rule::Floor(-1));
+        assert_eq!(super::rule(Kind::Setup, 0), Rule::Floor(0));
+    }
+
+    // The column names which enemy in the battleground becomes the animated base, so it
+    // reads in the same space a spawn row's leading cell does and translates the same way.
+    // Its zero means "none" rather than enemy 000, and a default that resolves below zero
+    // offers no ghost value, so the 5,882 stages declaring none show an empty field.
+    #[test]
+    fn the_animated_base_id_translates_like_a_spawn_row() {
+        use kore::domains::settings::EditorMode;
+
+        assert_eq!(super::rule(Kind::Setup, 6), Rule::Offset(super::ENEMY_OFFSET));
+        assert_eq!(super::shown_cell(Kind::Setup, 46, 6, EditorMode::Resolved), "44");
+        assert_eq!(super::shown_cell(Kind::Setup, 46, 6, EditorMode::Raw), "46");
+        assert_eq!(super::hint(Kind::Setup, 6, EditorMode::Resolved), "");
+    }
+
+    #[test]
+    fn each_row_kind_names_its_own_columns() {
+        assert_eq!(super::label(Kind::Spawn, 1), "Count");
+        assert_eq!(super::label(Kind::Setup, 1), "Base HP");
+        assert_eq!(super::label(Kind::Head, 1), "No Continues");
+    }
+
     #[test]
     fn the_buffer_prefix_is_typable_and_plain_text_still_is() {
         for good in ["", "-", "5", "!", "!5", "!-", "!-5"] {
@@ -1412,11 +1759,11 @@ mod tests {
     fn an_odd_frame_count_snaps_because_the_file_stores_halves() {
         use kore::domains::settings::EditorMode;
 
-        let stored = super::to_raw(super::RESPAWN_MAX, 5, EditorMode::Resolved);
+        let stored = super::to_raw(Kind::Spawn, super::RESPAWN_MAX, 5, EditorMode::Resolved);
 
         assert_eq!(stored, 2, "five frames is two and a half stored, and the cell holds an integer");
-        assert_eq!(super::shown_cell(stored, super::RESPAWN_MAX, EditorMode::Resolved), "4");
-        assert_eq!(super::shown_cell(stored, super::RESPAWN_MAX, EditorMode::Raw), "2");
+        assert_eq!(super::shown_cell(Kind::Spawn, stored, super::RESPAWN_MAX, EditorMode::Resolved), "4");
+        assert_eq!(super::shown_cell(Kind::Spawn, stored, super::RESPAWN_MAX, EditorMode::Raw), "2");
     }
 
     #[test]
@@ -1427,7 +1774,7 @@ mod tests {
             let stored = super::seed(column, shown);
 
             assert_eq!(
-                super::shown_cell(stored, column, EditorMode::Resolved),
+                super::shown_cell(Kind::Spawn, stored, column, EditorMode::Resolved),
                 shown.to_string(),
                 "column {column} should read back as {shown}",
             );
@@ -1477,12 +1824,12 @@ mod tests {
         use kore::domains::settings::EditorMode;
 
         let magnification = super::MAGNIFICATION;
-        let held = super::fallback(magnification);
+        let held = super::fallback(Kind::Spawn, magnification);
 
         assert_eq!(held, 100, "nyanko declares 100 for the magnification column");
-        assert_eq!(super::shown_cell(held, magnification, EditorMode::Resolved), "");
-        assert_eq!(super::shown_cell(150, magnification, EditorMode::Resolved), "150");
-        assert_eq!(super::hint(magnification, EditorMode::Resolved), "100");
+        assert_eq!(super::shown_cell(Kind::Spawn, held, magnification, EditorMode::Resolved), "");
+        assert_eq!(super::shown_cell(Kind::Spawn, 150, magnification, EditorMode::Resolved), "150");
+        assert_eq!(super::hint(Kind::Spawn, magnification, EditorMode::Resolved), "100");
     }
 
     // The file stores the enemy's page id plus two, and translating that is the whole
@@ -1491,8 +1838,8 @@ mod tests {
     fn the_enemy_column_reads_two_below_what_the_file_stores() {
         use kore::domains::settings::EditorMode;
 
-        assert_eq!(super::shown_cell(2, super::ENEMY_ID, EditorMode::Resolved), "0");
-        assert_eq!(super::shown_cell(2, super::ENEMY_ID, EditorMode::Raw), "2");
+        assert_eq!(super::shown_cell(Kind::Spawn, 2, super::ENEMY_ID, EditorMode::Resolved), "0");
+        assert_eq!(super::shown_cell(Kind::Spawn, 2, super::ENEMY_ID, EditorMode::Raw), "2");
     }
 
     #[test]
