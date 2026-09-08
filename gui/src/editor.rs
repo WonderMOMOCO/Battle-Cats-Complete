@@ -1127,17 +1127,34 @@ fn stage_images(app: &BattleCatsApp, map: bool, stage: bool) -> Vec<ImageTarget>
     .collect();
 
     let bases: Vec<&str> = wanted.iter().map(String::as_str).collect();
+    let active_mod = app.mods_state.active_mod();
 
     variant_sets(app, &bases)
         .into_iter()
         .zip(wanted)
+        .map(|(files, key)| match active_mod.is_some() {
+            true => (padded(files, app.vault.vfs.candidates(&key)), key),
+            false => (files, key),
+        })
         .filter(|(files, _)| !files.is_empty())
         .map(|(files, key)| ImageTarget {
             asset: Asset::Variants { key, files },
             unlocked: app.settings.files.unlock_game_mount,
-            active_mod: app.mods_state.active_mod(),
+            active_mod: active_mod.clone(),
         })
         .collect()
+}
+
+fn padded(mut files: Vec<AssetFile>, candidates: Vec<String>) -> Vec<AssetFile> {
+    for name in candidates {
+        if files.iter().any(|file| file.name == name) {
+            continue;
+        }
+
+        files.push(AssetFile { name, game: None, mod_copy: None });
+    }
+
+    files
 }
 
 fn ground_target(app: &BattleCatsApp, reached: bool) -> Option<GroundTarget> {

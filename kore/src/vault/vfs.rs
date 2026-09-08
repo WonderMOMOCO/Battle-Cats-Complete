@@ -408,6 +408,16 @@ impl Vfs {
             .map_or(0, |mounts| mounts.get(mount).map_or(0, |indexed| indexed.files.len()))
     }
 
+    pub fn candidates(&self, filename: &str) -> Vec<String> {
+        let Ok(order) = self.priority.read() else {
+            return Vec::new();
+        };
+
+        let names = [filename];
+
+        regional::interleaved(&names, &order).collect()
+    }
+
     pub fn variants(&self, filename: &str) -> Vec<String> {
         let path = Path::new(filename);
         let Some(stem) = path.file_stem().and_then(OsStr::to_str) else {
