@@ -9,6 +9,7 @@ mod watch;
 use std::fs;
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
+use std::slice;
 
 use iced::{Element, Point, Size, Task};
 use rustc_hash::FxHashMap;
@@ -23,6 +24,7 @@ use kore::domains::enemy::files as enemy_files;
 use kore::domains::enemy::scanner::EnemyEntry;
 use kore::common::architecture;
 use kore::domains::mods;
+use kore::domains::stage::files as stage_files;
 use kore::domains::stage::GlobalMapId;
 use kore::domains::settings::{ContextScope, EditorMode};
 use kore::Vfs;
@@ -59,6 +61,8 @@ pub enum Target {
     AnimFields,
     CatIcon,
     EnemyIcon,
+    MapBanner,
+    StageBanner,
     CatExplanation,
     EnemyName,
     EnemyDescription,
@@ -73,6 +77,7 @@ pub(crate) struct Context {
     enemies: Vec<EnemyTarget>,
     icon: Option<IconTarget>,
     banner: Option<BannerTarget>,
+    images: Vec<ImageTarget>,
     assets: Vec<AssetTarget>,
     prose: Vec<ProseTarget>,
     levels: Vec<LevelTarget>,
@@ -142,21 +147,29 @@ struct AssetFile {
 }
 
 fn asset_files(app: &BattleCatsApp, base: &str) -> Vec<AssetFile> {
-    let names = app.vault.vfs.variants(base);
+    variant_sets(app, slice::from_ref(&base)).pop().unwrap_or_default()
+}
 
-    let copies: Vec<Option<PathBuf>> = {
-        let located = mod_copies(app, names.iter().map(String::as_str));
+fn variant_sets(app: &BattleCatsApp, bases: &[&str]) -> Vec<Vec<AssetFile>> {
+    let groups: Vec<Vec<String>> = bases.iter().map(|base| app.vault.vfs.variants(base)).collect();
 
-        names.iter().map(|name| located.get(name.as_str()).cloned()).collect()
+    let located: FxHashMap<String, PathBuf> = {
+        let names = groups.iter().flatten().map(String::as_str);
+
+        mod_copies(app, names).into_iter().map(|(name, path)| (name.to_owned(), path)).collect()
     };
 
-    names
+    groups
         .into_iter()
-        .zip(copies)
-        .map(|(name, mod_copy)| {
-            let game = app.vault.vfs.rooted(architecture::GAME, &name);
-
-            AssetFile { name, game, mod_copy }
+        .map(|group| {
+            group
+                .into_iter()
+                .map(|name| AssetFile {
+                    game: app.vault.vfs.rooted(architecture::GAME, &name),
+                    mod_copy: located.get(&name).cloned(),
+                    name,
+                })
+                .collect()
         })
         .collect()
 }
@@ -299,6 +312,12 @@ struct ProseTarget {
 
 struct IconTarget {
     asset: Exception,
+    unlocked: bool,
+    active_mod: Option<String>,
+}
+
+struct ImageTarget {
+    asset: Asset,
     unlocked: bool,
     active_mod: Option<String>,
 }
@@ -943,7 +962,7 @@ impl State {
                 Outcome::Done
             }
             Action::Replace { file, target_mod, game } => {
-                replace_icon(file, target_mod.as_deref(), game.as_deref())
+                replace_image(file, target_mod.as_deref(), game.as_deref())
             }
             Action::Sync { file, target_mod, game } => match mods::place(target_mod, game, file) {
                 Ok(path) => {
@@ -1045,6 +1064,7 @@ pub(crate) fn context(app: &BattleCatsApp, target: Option<Target>) -> Context {
             enemies: Vec::new(),
             icon: None,
             banner: None,
+            images: Vec::new(),
             assets: Vec::new(),
             prose: Vec::new(),
             levels: Vec::new(),
@@ -1066,6 +1086,7 @@ pub(crate) fn context(app: &BattleCatsApp, target: Option<Target>) -> Context {
         enemies: enemy_payloads(app, reached(Target::EnemyAttributes)),
         icon: icon_target(app, icon_subject(app, target, broad)),
         banner: banner_subject(app, target, broad).and_then(|id| banner_target(app, id)),
+        images: stage_images(app, reached(Target::MapBanner), reached(Target::StageBanner)),
         assets: Vec::new(),
         prose: prose_payloads(app, target, broad),
         levels: level_payloads(app, reached(Target::CatLevels), reached(Target::CatForms))
@@ -1078,6 +1099,45 @@ pub(crate) fn context(app: &BattleCatsApp, target: Option<Target>) -> Context {
         offsets: None,
         ground: ground_target(app, reached(Target::StageGround)),
     }
+}
+
+fn stage_images(app: &BattleCatsApp, map: bool, stage: bool) -> Vec<ImageTarget> {
+    if (!map && !stage) || app.current_page != Page::Stages {
+        return Vec::new();
+    }
+
+    let Some(chosen) = app.stage_state.data.selected_stage.as_ref() else {
+        return Vec::new();
+    };
+
+    let Some(entry) = app.stage_state.data.registry.stages.get(chosen) else {
+        return Vec::new();
+    };
+
+    let prefix = entry.category.image_prefix();
+
+    let wanted: Vec<String> = [
+        map.then(|| stage_files::map_banner_file(entry.map_id, &prefix)),
+        stage.then(|| {
+            stage_files::stage_banner_file(&entry.category, entry.map_id, entry.stage_id, &prefix)
+        }),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+
+    let bases: Vec<&str> = wanted.iter().map(String::as_str).collect();
+
+    variant_sets(app, &bases)
+        .into_iter()
+        .zip(wanted)
+        .filter(|(files, _)| !files.is_empty())
+        .map(|(files, key)| ImageTarget {
+            asset: Asset::Variants { key, files },
+            unlocked: app.settings.files.unlock_game_mount,
+            active_mod: app.mods_state.active_mod(),
+        })
+        .collect()
 }
 
 fn ground_target(app: &BattleCatsApp, reached: bool) -> Option<GroundTarget> {
@@ -1742,7 +1802,7 @@ fn banner_target(app: &BattleCatsApp, id: u32) -> Option<BannerTarget> {
     })
 }
 
-fn replace_icon(file: &str, target_mod: Option<&str>, game: Option<&Path>) -> Outcome {
+fn replace_image(file: &str, target_mod: Option<&str>, game: Option<&Path>) -> Outcome {
     let file = file.to_string();
     let target_mod = target_mod.map(str::to_string);
     let game = game.map(Path::to_path_buf);
@@ -1751,24 +1811,24 @@ fn replace_icon(file: &str, target_mod: Option<&str>, game: Option<&Path>) -> Ou
         async move {
             let Some(source) = dialog::file("PNG Image", &["png"]).await else { return true; };
 
-            place_icon(&file, target_mod.as_deref(), game.as_deref(), &source)
+            place_image(&file, target_mod.as_deref(), game.as_deref(), &source)
         },
         Message::Replaced,
     ))
 }
 
-fn place_icon(file: &str, target_mod: Option<&str>, game: Option<&Path>, source: &Path) -> bool {
+fn place_image(file: &str, target_mod: Option<&str>, game: Option<&Path>, source: &Path) -> bool {
     let placed = match target_mod {
         Some(name) => mods::place(name, source, file),
         None => match game {
             Some(path) => fs::copy(source, path).map(|_| path.to_path_buf()),
-            None => Err(io::Error::new(io::ErrorKind::NotFound, "the vanilla icon is missing")),
+            None => Err(io::Error::new(io::ErrorKind::NotFound, "the vanilla image is missing")),
         },
     };
 
     placed
-        .inspect(|path| info!(path = %path.display(), "Replaced an icon"))
-        .inspect_err(|err| warn!(file, "Failed to replace the icon: {}", err))
+        .inspect(|path| info!(path = %path.display(), "Replaced an image"))
+        .inspect_err(|err| warn!(file, "Failed to replace the image: {}", err))
         .is_ok()
 }
 

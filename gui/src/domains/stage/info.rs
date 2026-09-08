@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use iced::widget::image::Handle;
 use iced::widget::{column, container, image as iced_image, row, rule};
@@ -9,11 +9,12 @@ use nyanko::chapter::map::LockSkipDataEntry;
 use nyanko::chapter::stage::ScatCpuSetting;
 use nyanko::chapter::Category;
 
-use kore::domains::stage::{cost, Map, Stage, StageDataState};
+use kore::domains::stage::{cost, files as stage_files, Map, Stage, StageDataState};
 use kore::{ItemStore, Vfs};
 
 use crate::app::theme;
 use crate::common::item_icon;
+use crate::editor;
 use crate::widget::{grid_header, grid_value, section};
 
 
@@ -84,43 +85,6 @@ fn get_skip_status(
     "-".to_string()
 }
 
-fn get_map_file(map_id: u32, image_prefix: &str) -> String {
-    let prefix_string = if image_prefix.is_empty() { String::new() } else { format!("_{}", image_prefix) };
-    format!("mapname{:03}{}.png", map_id, prefix_string)
-}
-
-fn get_stage_file(map_id: u32, stage_id: u32, image_prefix: &str) -> String {
-    let prefix_string = if image_prefix.is_empty() { String::new() } else { format!("_{}", image_prefix) };
-    format!("mapsn{:03}_{:02}{}.png", map_id, stage_id, prefix_string)
-}
-
-fn get_story_stage_file(category: &Category, map_id: u32, stage_id: u32) -> Option<String> {
-    let file_code = match category {
-        Category::EmpireOfCats => "ec",
-        Category::IntoTheFuture => "wc",
-        Category::CatsOfTheCosmos => "sc",
-        Category::ZombieOutbreaks => match map_id {
-            0..=2 => "ec",
-            4..=6 => "wc",
-            7..=9 => "sc",
-            _ => return None,
-        },
-        _ => return None,
-    };
-
-    let image_index = match stage_id {
-        0..=45 => 45 - stage_id,
-        49 | 50 => 47,
-        id => id,
-    };
-
-    Some(format!("{}0{:02}_n.png", file_code, image_index))
-}
-
-fn find_texture(vfs: &Vfs, files: &[String]) -> Option<PathBuf> {
-    files.iter().find_map(|name| vfs.find(name))
-}
-
 #[derive(Default)]
 pub struct State {
     icon_cache: RefCell<HashMap<String, (Handle, u32, u32)>>,
@@ -155,18 +119,23 @@ impl State {
         let map_key = format!("map_img_{:?}_{}", stage.category, stage.map_id);
         let stage_key = format!("stage_img_{:?}_{}_{}", stage.category, stage.map_id, stage.stage_id);
 
-        let map_texture = find_texture(vfs, &[get_map_file(stage.map_id, &image_prefix)])
+        let map_texture = vfs
+            .find(&stage_files::map_banner_file(stage.map_id, &image_prefix))
             .and_then(|path| self.texture(&map_key, &path));
 
-        let story_files = get_story_stage_file(&stage.category, stage.map_id, stage.stage_id)
-            .map_or_else(|| vec![get_stage_file(stage.map_id, stage.stage_id, &image_prefix)], |file| vec![file]);
-
-        let stage_texture = find_texture(vfs, &story_files)
+        let stage_texture = vfs
+            .find(&stage_files::stage_banner_file(&stage.category, stage.map_id, stage.stage_id, &image_prefix))
             .and_then(|path| self.texture(&stage_key, &path));
 
         let banner_row = row![
-            banner_element(map_texture, MAP_IMG_HEIGHT, &map.name),
-            banner_element(stage_texture, STAGE_IMG_HEIGHT, &stage.name),
+            editor::target(
+                banner_element(map_texture, MAP_IMG_HEIGHT, &map.name),
+                editor::Target::MapBanner,
+            ),
+            editor::target(
+                banner_element(stage_texture, STAGE_IMG_HEIGHT, &stage.name),
+                editor::Target::StageBanner,
+            ),
         ]
             .spacing(BANNER_GAP)
             .align_y(Alignment::End);

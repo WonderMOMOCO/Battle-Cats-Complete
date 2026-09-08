@@ -322,6 +322,18 @@ fn payloads(context: &Context) -> Vec<Payload<'_>> {
         });
     }
 
+    for target in &context.images {
+        let mount = mount(target.active_mod.as_deref(), target.unlocked);
+
+        payloads.push(Payload {
+            key: target.asset.key(),
+            scopes: target.asset.scopes(mount.target.is_some()),
+            mount,
+            primary: Primary::Replace,
+            values: context.values,
+        });
+    }
+
     if let Some(banner) = context.banner.as_ref() {
         let mount = mount(banner.active_mod.as_deref(), banner.unlocked);
 
