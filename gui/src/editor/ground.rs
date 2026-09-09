@@ -261,6 +261,9 @@ pub enum Message {
     Focused(Option<usize>),
     Added,
     Dropped(usize),
+    Grabbed(usize),
+    Hauled(iced::Point),
+    Released,
     Hunted(String),
     Confirmed(u32),
     Picking(Option<usize>),
@@ -568,7 +571,41 @@ impl Draft {
         self.dirty = true;
     }
 
+    fn crowded(&self) -> bool {
+        if self.plan.values == EditorMode::Raw {
+            return false;
+        }
+
+        (self.chrome..self.rows.len())
+            .map(|row| self.reads(row, ENEMY_ID))
+            .collect::<std::collections::BTreeSet<i32>>()
+            .len()
+            >= ENEMY_CEILING
+    }
+
+    fn shift(&mut self, row: usize, onto: usize) {
+        if row == onto || row < self.chrome || onto < self.chrome {
+            return;
+        }
+
+        let (Some(from), Some(to)) = (self.seats.get(row).copied(), self.seats.get(onto).copied())
+        else {
+            return;
+        };
+
+        if from >= self.lines.len() || to >= self.lines.len() {
+            return;
+        }
+
+        self.lines.swap(from, to);
+        self.restock();
+    }
+
     fn add(&mut self) {
+        if self.crowded() {
+            return;
+        }
+
         let width = self
             .rows
             .iter()
@@ -812,8 +849,20 @@ const CHROME_RULE: f32 = 1.0;
 const CLOSE_MARK: &str = "\u{00d7}";
 const CONFIRM_MARK: &str = "?";
 const DROP_WIDTH: f32 = 18.0;
+const GRIP_WIDTH: f32 = 14.0;
+const GRIP_MARK: &str = "\u{2630}";
+const ROW_PITCH: f32 = ICON_SIZE + CELL_PADDING[0] * 2.0 + ROW_GAP;
+const RAW_PITCH: f32 = 30.0;
+const CARRIED_TINT: f32 = 0.25;
+const DRAG_SLACK: i64 = 1;
 const RAW_CELL_WIDTH: f32 = 72.0;
 const ADD_LABEL: &str = "Add Enemy";
+const ENEMY_CEILING: usize = 11;
+const CROWDED_LABEL: &str = "Too Many Enemy IDs!";
+const CROWDED_TIP: &str = concat!(
+    "There are too many Enemy IDs present on the battlefield!\n",
+    "The game faults when 11 or more Enemy IDs are defined",
+);
 const PICK_TITLE: &str = "Enemy";
 const PICK_HINT: &str = "Enter Name or ID...";
 const PICK_MISSING: &str = "No enemy by that name or id";
@@ -864,6 +913,30 @@ enum Cell {
 enum Intent {
     Sync,
     Drop(usize),
+}
+
+#[derive(Default, Clone, Copy)]
+enum Drag {
+    #[default]
+    Idle,
+    Pressed {
+        row: usize,
+    },
+    Moving {
+        seat: usize,
+        origin: usize,
+        anchor: f32,
+    },
+}
+
+impl Drag {
+    fn row(self) -> Option<usize> {
+        match self {
+            Drag::Idle => None,
+            Drag::Pressed { row } => Some(row),
+            Drag::Moving { seat, .. } => Some(seat),
+        }
+    }
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -988,6 +1061,7 @@ pub(super) struct State {
     picking: Option<usize>,
     hunt: String,
     pick_frame: crate::widget::popup::State,
+    drag: Drag,
     offset: f32,
     icons: std::cell::RefCell<std::collections::HashMap<u32, iced::widget::image::Handle>>,
 }
@@ -997,6 +1071,7 @@ impl State {
         self.frame = crate::widget::popup::cascaded(nudge);
         self.offset = 0.0;
         self.typing = None;
+        self.drag = Drag::Idle;
         self.draft = Draft::load(plan, vfs);
     }
 
@@ -1048,6 +1123,54 @@ impl State {
         }
     }
 
+    fn haul(&mut self, at: iced::Point) {
+        let Some(draft) = self.draft.as_mut() else {
+            self.drag = Drag::Idle;
+
+            return;
+        };
+
+        let (seat, origin, anchor) = match self.drag {
+            Drag::Idle => return,
+            Drag::Pressed { row } => {
+                self.drag = Drag::Moving { seat: row, origin: row, anchor: at.y };
+
+                return;
+            }
+            Drag::Moving { seat, origin, anchor } => (seat, origin, anchor),
+        };
+
+        let top = draft.chrome() as i64;
+        let bottom = draft.len().saturating_sub(1) as i64;
+        let pitch = match draft.values() == EditorMode::Raw {
+            true => RAW_PITCH,
+            false => ROW_PITCH,
+        };
+
+        let aimed = origin as i64 + ((at.y - anchor) / pitch).round() as i64;
+
+        if aimed < top - DRAG_SLACK || aimed > bottom + DRAG_SLACK {
+            self.drag = Drag::Idle;
+
+            return;
+        }
+
+        let landed = aimed.clamp(top, bottom).max(0) as usize;
+        let mut held = seat;
+
+        while held < landed {
+            draft.shift(held, held + 1);
+            held += 1;
+        }
+
+        while held > landed {
+            draft.shift(held, held - 1);
+            held -= 1;
+        }
+
+        self.drag = Drag::Moving { seat: held, origin, anchor };
+    }
+
     pub(super) fn update(&mut self, message: Message, vfs: &Vfs) -> iced::Task<Message> {
         if let Some(draft) = self.draft.as_mut() {
             let typing = matches!(&message, Message::Changed(row, column, _) if draft.buffering(*row, *column));
@@ -1064,6 +1187,7 @@ impl State {
                     self.draft = None;
                     self.offset = 0.0;
                     self.typing = None;
+                    self.drag = Drag::Idle;
                     self.confirm.expire();
                 }
             }
@@ -1117,6 +1241,12 @@ impl State {
                     draft.drop(row);
                 }
             }
+            Message::Grabbed(row) => {
+                self.typing = None;
+                self.drag = Drag::Pressed { row };
+            }
+            Message::Hauled(at) => self.haul(at),
+            Message::Released => self.drag = Drag::Idle,
             Message::Scrolled(offset) => self.offset = offset,
             Message::SyncExpired => self.confirm.expire(),
             Message::Sync => {
@@ -1241,11 +1371,13 @@ impl State {
             grid = grid.push(self.spawn_row(draft, enemies, &shown, row, fixed));
         }
 
-        grid = grid.push(adding());
+        grid = grid.push(adding(draft.crowded()));
 
         let spread = match fixed {
             true => Length::Fixed(
                 shown.len() as f32 * (RAW_CELL_WIDTH + COLUMN_GAP)
+                    + GRIP_WIDTH
+                    + COLUMN_GAP
                     + DROP_WIDTH
                     + CELL_PADDING[1] * 2.0
                     + BODY_PADDING * 2.0,
@@ -1274,7 +1406,21 @@ impl State {
             stack = stack.push(iced::widget::rule::horizontal(CHROME_RULE));
         }
 
-        stack.push(crate::widget::smooth_scroll(area)).push(self.footer()).into()
+        let seated = stack.push(crate::widget::smooth_scroll(area)).push(self.footer());
+
+        if self.drag.row().is_none() {
+            return seated.into();
+        }
+
+        let sheet = iced::widget::mouse_area(
+            iced::widget::Space::new().width(Length::Fill).height(Length::Fill),
+        )
+        .interaction(iced::mouse::Interaction::Grabbing)
+        .on_move(Message::Hauled)
+        .on_release(Message::Released)
+        .on_exit(Message::Released);
+
+        iced::widget::stack![seated, sheet].into()
     }
 
     fn footer<'a>(&'a self) -> iced::Element<'a, Message> {
@@ -1311,6 +1457,8 @@ impl State {
 
         let mut line = Row::new().spacing(COLUMN_GAP).align_y(Vertical::Center);
 
+        line = line.push(grip(row));
+
         for (_, span, cell) in shown {
             let held: iced::Element<'a, Message> = match cell {
                 Cell::Enemy => self.enemy_cell(draft, enemies, row),
@@ -1333,10 +1481,15 @@ impl State {
                 .style(crate::app::theme::danger_button),
         );
 
+        let carried = self.drag.row() == Some(row);
+
         container(line)
             .padding(CELL_PADDING)
             .width(Length::Fill)
-            .style(move |theme: &Theme| crate::app::theme::zebra_table_row(theme, row))
+            .style(move |theme: &Theme| match carried {
+                true => carried_seat(theme),
+                false => crate::app::theme::zebra_table_row(theme, row),
+            })
             .into()
     }
 
@@ -1490,16 +1643,47 @@ fn band_fields<'a>(
         .into()
 }
 
-fn adding<'a>() -> iced::Element<'a, Message> {
-    use iced::widget::button;
+fn adding<'a>(crowded: bool) -> iced::Element<'a, Message> {
+    use iced::widget::{button, container, tooltip};
     use iced::Length;
 
-    button(crate::app::theme::centered_text(ADD_LABEL).size(CELL_SIZE).width(Length::Fill))
+    if !crowded {
+        return button(crate::app::theme::centered_text(ADD_LABEL).size(CELL_SIZE).width(Length::Fill))
+            .width(Length::Fill)
+            .padding(CELL_PADDING)
+            .on_press(Message::Added)
+            .style(crate::app::theme::primary_button)
+            .into();
+    }
+
+    let barred = button(crate::app::theme::centered_text(CROWDED_LABEL).size(CELL_SIZE).width(Length::Fill))
         .width(Length::Fill)
         .padding(CELL_PADDING)
-        .on_press(Message::Added)
-        .style(crate::app::theme::primary_button)
-        .into()
+        .style(crate::app::theme::danger_status);
+
+    let bubble = container(crate::app::theme::centered_text(CROWDED_TIP).size(CELL_SIZE))
+        .padding(TIP_PADDING)
+        .style(container::bordered_box);
+
+    tooltip(barred, bubble, tooltip::Position::Top).into()
+}
+
+fn grip<'a>(row: usize) -> iced::Element<'a, Message> {
+    use iced::widget::{container, mouse_area, text};
+    use iced::Length;
+
+    let glyph = mouse_area(text(GRIP_MARK).size(CELL_SIZE))
+        .interaction(iced::mouse::Interaction::Grab)
+        .on_press(Message::Grabbed(row));
+
+    container(glyph).width(Length::Fixed(GRIP_WIDTH)).center_x(Length::Fixed(GRIP_WIDTH)).into()
+}
+
+fn carried_seat(theme: &iced::Theme) -> iced::widget::container::Style {
+    iced::widget::container::Style {
+        background: Some(iced::Color { a: CARRIED_TINT, ..theme.palette().primary }.into()),
+        ..iced::widget::container::Style::default()
+    }
 }
 
 fn joint<'a>() -> iced::widget::Text<'a> {
@@ -1541,6 +1725,8 @@ fn headings<'a>(shown: &[(String, u16, Cell)], fixed: bool) -> iced::Element<'a,
     use iced::Length;
 
     let mut line = Row::new().spacing(COLUMN_GAP).align_y(Vertical::Center);
+
+    line = line.push(crate::app::theme::table_cell_text("", Length::Fixed(GRIP_WIDTH)).size(CELL_SIZE));
 
     for (label, span, _) in shown {
         line = line.push(crate::app::theme::table_cell_text(label.clone(), reach(*span, fixed)).size(CELL_SIZE));
@@ -1632,6 +1818,8 @@ mod tests {
     use nyanko::common;
 
     use nyanko::chapter::stage::Battleground;
+
+    use kore::domains::settings::EditorMode;
 
     use super::{body, cells, scan, Kind, Rule};
 
@@ -1912,5 +2100,126 @@ mod tests {
         }
 
         assert!(checked > 5000, "only {checked} files agreed, {skipped} skipped");
+    }
+
+    fn scratch_dir(label: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("bcc-ground-test-{label}-{}", std::process::id()));
+
+        fs::create_dir_all(&dir).expect("failed to create the temp fixture dir");
+
+        dir
+    }
+
+    fn seeded(label: &str, body: &str) -> (PathBuf, super::State, kore::Vfs) {
+        let path = scratch_dir(label).join("stage00.csv");
+        fs::write(&path, body).expect("failed to seed the temp fixture file");
+
+        let seed = super::plan("test".to_owned(), &path, None, EditorMode::Resolved);
+        let vfs = kore::Vfs::with_priority(&[]);
+        let state = super::State { draft: super::Draft::load(seed, &vfs), ..super::State::default() };
+
+        assert!(state.draft.is_some(), "the draft should load from the temp fixture");
+
+        (path, state, vfs)
+    }
+
+    // A drag swaps whole file lines, so a reordered row keeps its own cells and its own
+    // trailing comment, and the config row above the spawns never moves.
+    #[test]
+    fn dragging_a_spawn_row_swaps_its_line_and_leaves_the_chrome_alone() {
+        let seeded_body = "0,0\n300,1000,30,90,0,100,9,9,0,100\n5,1,2,2,2,100,9,9,0,100 //first\n7,1,2,2,2,100,9,9,0,200\n0\n";
+        let (path, mut state, vfs) = seeded("reorder", seeded_body);
+
+        let first = state.draft.as_ref().map_or(0, |draft| draft.chrome());
+
+        let _ = state.update(super::Message::Grabbed(first), &vfs);
+        let _ = state.update(super::Message::Hauled(iced::Point::new(0.0, 0.0)), &vfs);
+        let _ = state.update(super::Message::Hauled(iced::Point::new(0.0, super::ROW_PITCH)), &vfs);
+        let _ = state.update(super::Message::Released, &vfs);
+
+        let written = fs::read_to_string(&path).expect("the editor should have written the file");
+        let lines: Vec<&str> = written.lines().collect();
+
+        assert_eq!(lines[0], "0,0", "the header row stays put");
+        assert_eq!(lines[1], "300,1000,30,90,0,100,9,9,0,100", "the config row stays put");
+        assert_eq!(lines[2], "7,1,2,2,2,100,9,9,0,200", "the second spawn rose above the first");
+        assert_eq!(lines[3], "5,1,2,2,2,100,9,9,0,100 //first", "the dragged row kept its comment");
+        assert_eq!(lines[4], "0", "the terminator stays last");
+    }
+
+    // Eleven distinct ids is where the engine faults, and duplicates do not count towards
+    // it, so a battleground of ten ids stays open however many rows it spreads them over.
+    #[test]
+    fn the_add_button_bars_an_eleventh_enemy_id_but_not_a_repeat() {
+        let mut body = String::from("0,0\n300,1000,30,90,0,100,9,9,0,100\n");
+
+        for id in 0..10 {
+            body.push_str(&format!("{},1,2,2,2,100,9,9,0,100\n", id + 2));
+        }
+
+        body.push_str("0\n");
+
+        let (_, mut state, vfs) = seeded("ceiling", &body);
+
+        let crowded = |state: &super::State| state.draft.as_ref().is_some_and(super::Draft::crowded);
+
+        assert!(!crowded(&state), "ten distinct ids is still under the ceiling");
+
+        let _ = state.update(super::Message::Added, &vfs);
+
+        assert!(!crowded(&state), "a seeded row repeats an id already on the field");
+
+        if let Some(draft) = state.draft.as_mut() {
+            let row = draft.len() - 1;
+            draft.set(row, super::ENEMY_ID, 99);
+        }
+
+        assert!(crowded(&state), "the eleventh distinct id closes the button");
+
+        let before = state.draft.as_ref().map_or(0, super::Draft::len);
+        let _ = state.update(super::Message::Added, &vfs);
+
+        assert_eq!(
+            state.draft.as_ref().map_or(0, super::Draft::len),
+            before,
+            "a barred press adds nothing",
+        );
+    }
+
+    // The seat is a function of how far the cursor has travelled from the grab, not a
+    // running tally, so wandering up and coming back lands the row where the cursor is.
+    // Past the ends of the list the hold lets go rather than following from a distance.
+    #[test]
+    fn the_hold_tracks_the_cursor_and_breaks_past_the_ends() {
+        let seeded_body = "0,0\n300,1000,30,90,0,100,9,9,0,100\n5,1,2,2,2,100,9,9,0,100\n7,1,2,2,2,100,9,9,0,100\n9,1,2,2,2,100,9,9,0,100\n0\n";
+        let (path, mut state, vfs) = seeded("tracking", seeded_body);
+
+        let first = state.draft.as_ref().map_or(0, |draft| draft.chrome());
+        let held = |state: &super::State| state.drag.row();
+
+        let haul = |state: &mut super::State, y: f32| {
+            let _ = state.update(super::Message::Hauled(iced::Point::new(0.0, y)), &vfs);
+        };
+
+        let _ = state.update(super::Message::Grabbed(first + 2), &vfs);
+        haul(&mut state, 0.0);
+        haul(&mut state, -super::ROW_PITCH * 2.0);
+
+        assert_eq!(held(&state), Some(first), "two rows of travel lifts it to the top");
+
+        haul(&mut state, -super::ROW_PITCH * 2.0 + 1.0);
+        haul(&mut state, 0.0);
+
+        assert_eq!(held(&state), Some(first + 2), "coming back returns it under the cursor");
+
+        haul(&mut state, -super::ROW_PITCH * 4.0);
+
+        assert_eq!(held(&state), None, "straying past the top lets the row go");
+
+        let written = fs::read_to_string(&path).expect("the editor should have written the file");
+        let lines: Vec<&str> = written.lines().collect();
+
+        assert_eq!(lines[2], "5,1,2,2,2,100,9,9,0,100", "the round trip left the order as it started");
+        assert_eq!(lines[4], "9,1,2,2,2,100,9,9,0,100", "the dragged row is back where it began");
     }
 }

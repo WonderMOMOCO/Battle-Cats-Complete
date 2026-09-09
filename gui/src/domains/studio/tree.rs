@@ -78,12 +78,12 @@ impl TreeRow {
             .width(Length::Fill)
             .height(Length::Fixed(ROW_HEIGHT))
             .align_y(Vertical::Center)
+            .padding(Padding::default().left(stem.inset()).right(ROW_PADDING))
             .style(move |theme: &Theme| seat(theme, carried, onto, alarm));
 
         let content = container(landed)
             .height(Length::Fixed(ROW_HEIGHT))
-            .align_y(Vertical::Center)
-            .padding(Padding::default().left(stem.inset()).right(ROW_PADDING));
+            .align_y(Vertical::Center);
 
         let held = if by_part { self.part } else { self.track };
         let selected = held.is_some() && held == picked;

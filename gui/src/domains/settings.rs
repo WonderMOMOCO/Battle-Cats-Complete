@@ -20,7 +20,6 @@ use kore::domains::settings::{
 };
 
 use crate::app::theme;
-use crate::common::feedback::NIGHTLY_ONLY_NOTICE;
 use crate::app::UpdateStatus;
 use crate::widget::{combo_row, hover_hint, list_row, smooth_scroll, toggle_row};
 
@@ -566,25 +565,24 @@ impl State {
             Some(Message::Utf8ModeSelected),
         );
 
-        let nightly = core_settings.general.enable_nightly;
         let scope = core_settings.files.context_scope;
 
         let scope_row = combo_row(
             "Context Scope",
-            if nightly { scope.hint() } else { NIGHTLY_ONLY_NOTICE },
+            scope.hint(),
             ContextScope::ALL,
             Some(scope),
-            nightly.then_some(Message::ContextScopeSelected),
+            Some(Message::ContextScopeSelected),
         );
 
         let editor_mode = core_settings.files.editor_mode;
 
         let editor_mode_row = combo_row(
             "Editor Mode",
-            if nightly { editor_mode.hint() } else { NIGHTLY_ONLY_NOTICE },
+            editor_mode.hint(),
             EditorMode::ALL,
             Some(editor_mode),
-            nightly.then_some(Message::EditorModeSelected),
+            Some(Message::EditorModeSelected),
         );
 
         column![
